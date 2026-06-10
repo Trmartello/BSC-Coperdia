@@ -1,0 +1,31 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { PrismaModule } from './common/prisma/prisma.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { IndicatorsModule } from './modules/indicators/indicators.module';
+import { FormulasModule } from './modules/formulas/formulas.module';
+import { ScenariosModule } from './modules/scenarios/scenarios.module';
+import { CalcEngineModule } from './modules/calc-engine/calc-engine.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ActionPlansModule } from './modules/action-plans/action-plans.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot({ wildcard: true, maxListeners: 20 }),
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    IndicatorsModule,
+    FormulasModule,
+    ScenariosModule,
+    CalcEngineModule,
+    DashboardModule,
+    ActionPlansModule,
+  ],
+})
+export class AppModule {}

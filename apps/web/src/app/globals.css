@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sidebar-width: 200px;
+}
+
+@layer base {
+  body {
+    @apply bg-[#0f1117] text-white;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full; }
+}
+
+@layer utilities {
+  .card-dark {
+    @apply bg-[#1a1f2e] border border-white/10 rounded-2xl;
+  }
+  .card-dark-hover {
+    @apply card-dark hover:border-white/20 transition-colors;
+  }
+  .text-muted {
+    @apply text-white/50;
+  }
+  .text-label {
+    @apply text-white/40 text-[10px] uppercase tracking-widest;
+  }
+}

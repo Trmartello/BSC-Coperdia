@@ -1,0 +1,334 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  CONTROLADORIA
+  GESTOR
+  DIRETORIA
+}
+
+enum IndicatorType {
+  INPUT      // aceita projeção manual
+  CALCULATED // calculado por fórmula
+}
+
+enum MeasureUnit {
+  CURRENCY
+  PERCENTAGE
+  NUMBER
+  DAYS
+  INDEX
+}
+
+enum Periodicity {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum IndicatorStatus {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  NO_DATA
+}
+
+enum IndicatorDirection {
+  HIGHER_IS_BETTER
+  LOWER_IS_BETTER
+}
+
+enum ActionPlanStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum ActionPlanPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ScenarioStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  SIMULATE
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(GESTOR)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  scenarios      Scenario[]
+  forecastValues ForecastValue[]
+  auditLogs      AuditLog[]
+  actionPlans    ActionPlan[]
+  attachments    Attachment[]
+  comments       IndicatorComment[]
+
+  @@map("users")
+}
+
+// ─── Indicators ──────────────────────────────────────────────────────────────
+
+model Indicator {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  name        String
+  description String?
+  category    String
+  type        IndicatorType
+  unit        MeasureUnit
+  periodicity Periodicity
+  responsible String?
+  active      Boolean            @default(true)
+  sortOrder   Int                @default(0)
+  direction   IndicatorDirection @default(HIGHER_IS_BETTER)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  formula         Formula?
+  realizedValues  RealizedValue[]
+  forecastValues  ForecastValue[]
+  goals           Goal[]
+
+  // tree relations
+  parents   IndicatorRelation[] @relation("ChildRelations")
+  children  IndicatorRelation[] @relation("ParentRelations")
+
+  scenarioValues ScenarioValue[]
+  actionPlans    ActionPlan[]
+  attachments    Attachment[]
+  comments       IndicatorComment[]
+
+  @@map("indicators")
+}
+
+// ─── Action Plans ─────────────────────────────────────────────────────────────
+
+model ActionPlan {
+  id          String            @id @default(cuid())
+  indicatorId String
+  title       String
+  description String?
+  responsible String?
+  dueDate     DateTime?
+  status      ActionPlanStatus  @default(PENDING)
+  priority    ActionPlanPriority @default(MEDIUM)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  userId      String
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("action_plans")
+}
+
+// ─── Attachments ─────────────────────────────────────────────────────────────
+
+model Attachment {
+  id          String   @id @default(cuid())
+  indicatorId String
+  filename    String
+  url         String
+  size        Int
+  mimeType    String
+  createdAt   DateTime @default(now())
+  userId      String
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("attachments")
+}
+
+// ─── Comments ────────────────────────────────────────────────────────────────
+
+model IndicatorComment {
+  id          String   @id @default(cuid())
+  indicatorId String
+  content     String
+  createdAt   DateTime @default(now())
+  userId      String
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("indicator_comments")
+}
+
+// ─── Formula ─────────────────────────────────────────────────────────────────
+
+model Formula {
+  id            String    @id @default(cuid())
+  indicatorId   String    @unique
+  expression    String    // ex: "RECEITA - CUSTOS - DESPESAS"
+  variables     Json      // { "RECEITA": "ind_xxx", "CUSTOS": "ind_yyy" }
+  description   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@map("formulas")
+}
+
+// ─── Tree Relations ───────────────────────────────────────────────────────────
+
+model IndicatorRelation {
+  id         String @id @default(cuid())
+  parentId   String
+  childId    String
+  weight     Float  @default(1.0) // peso do filho na fórmula do pai
+  sortOrder  Int    @default(0)
+
+  parent Indicator @relation("ParentRelations", fields: [parentId], references: [id], onDelete: Cascade)
+  child  Indicator @relation("ChildRelations",  fields: [childId],  references: [id], onDelete: Cascade)
+
+  @@unique([parentId, childId])
+  @@map("indicator_relations")
+}
+
+// ─── Realized Values ─────────────────────────────────────────────────────────
+
+model RealizedValue {
+  id          String   @id @default(cuid())
+  indicatorId String
+  period      DateTime // sempre primeiro dia do período
+  value       Decimal  @db.Decimal(20, 6)
+  createdAt   DateTime @default(now())
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@unique([indicatorId, period])
+  @@map("realized_values")
+}
+
+// ─── Forecast Values ─────────────────────────────────────────────────────────
+
+model ForecastValue {
+  id          String   @id @default(cuid())
+  indicatorId String
+  scenarioId  String?
+  period      DateTime
+  value       Decimal  @db.Decimal(20, 6)
+  isManual    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  scenario  Scenario? @relation(fields: [scenarioId],  references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId],      references: [id])
+
+  @@unique([indicatorId, scenarioId, period])
+  @@map("forecast_values")
+}
+
+// ─── Goals ───────────────────────────────────────────────────────────────────
+
+model Goal {
+  id          String   @id @default(cuid())
+  indicatorId String
+  period      DateTime
+  value       Decimal  @db.Decimal(20, 6)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@unique([indicatorId, period])
+  @@map("goals")
+}
+
+// ─── Scenarios ───────────────────────────────────────────────────────────────
+
+model Scenario {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  status      ScenarioStatus @default(DRAFT)
+  isBaseline  Boolean        @default(false)
+  period      DateTime
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  userId      String
+
+  user           User            @relation(fields: [userId], references: [id])
+  forecastValues ForecastValue[]
+  scenarioValues ScenarioValue[]
+
+  @@map("scenarios")
+}
+
+// ─── Scenario Computed Values (cache de resultados calculados) ────────────────
+
+model ScenarioValue {
+  id          String   @id @default(cuid())
+  scenarioId  String
+  indicatorId String
+  period      DateTime
+  value       Decimal  @db.Decimal(20, 6)
+  delta       Decimal  @db.Decimal(20, 6) @default(0) // diferença vs baseline
+  deltaPercent Decimal @db.Decimal(10, 4) @default(0)
+  status      IndicatorStatus @default(NO_DATA)
+  computedAt  DateTime @default(now())
+
+  scenario  Scenario  @relation(fields: [scenarioId],  references: [id], onDelete: Cascade)
+  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, indicatorId, period])
+  @@map("scenario_values")
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  userId      String
+  action      AuditAction
+  entity      String      // "Indicator", "Scenario", etc.
+  entityId    String
+  before      Json?
+  after       Json?
+  scenarioId  String?
+  createdAt   DateTime    @default(now())
+  ipAddress   String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

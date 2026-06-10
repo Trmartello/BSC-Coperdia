@@ -1,0 +1,117 @@
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { CalcEngineService } from '../calc-engine/calc-engine.service';
+import { CreateIndicatorDto } from './dto/create-indicator.dto';
+import { UpdateForecastDto } from './dto/update-forecast.dto';
+
+@Injectable()
+export class IndicatorsService {
+  constructor(
+    private prisma: PrismaService,
+    private calcEngine: CalcEngineService,
+  ) {}
+
+  async findAll() {
+    return this.prisma.indicator.findMany({
+      where: { active: true },
+      include: {
+        formula: true,
+        parents: { include: { parent: { select: { id: true, code: true, name: true } } } },
+        children: { include: { child: { select: { id: true, code: true, name: true } } } },
+      },
+      orderBy: { sortOrder: 'asc' },
+    });
+  }
+
+  async findOne(id: string) {
+    const indicator = await this.prisma.indicator.findUnique({
+      where: { id },
+      include: {
+        formula: true,
+        parents: { include: { parent: true } },
+        children: { include: { child: true } },
+        realizedValues: { orderBy: { period: 'desc' }, take: 12 },
+        goals: { orderBy: { period: 'desc' }, take: 12 },
+      },
+    });
+    if (!indicator) throw new NotFoundException(`Indicator ${id} not found`);
+    return indicator;
+  }
+
+  async create(dto: CreateIndicatorDto) {
+    return this.prisma.indicator.create({ data: dto as any });
+  }
+
+  async updateForecast(dto: UpdateForecastDto, userId: string) {
+    const indicator = await this.prisma.indicator.findUnique({ where: { id: dto.indicatorId } });
+    if (!indicator) throw new NotFoundException();
+    if (indicator.type === 'CALCULATED') throw new ForbiddenException('Calculated indicators cannot be manually set');
+
+    const period = new Date(dto.period);
+
+    const forecast = await this.prisma.forecastValue.upsert({
+      where: {
+        indicatorId_scenarioId_period: {
+          indicatorId: dto.indicatorId,
+          scenarioId: dto.scenarioId,
+          period,
+        },
+      },
+      create: {
+        indicatorId: dto.indicatorId,
+        scenarioId: dto.scenarioId,
+        period,
+        value: dto.value,
+        isManual: true,
+        userId,
+      },
+      update: { value: dto.value, isManual: true },
+    });
+
+    // Audit
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'UPDATE',
+        entity: 'ForecastValue',
+        entityId: forecast.id,
+        scenarioId: dto.scenarioId,
+        after: { value: dto.value, period: dto.period },
+      },
+    });
+
+    // Trigger recalculation
+    await this.calcEngine.recalculate(dto.scenarioId, period, dto.indicatorId);
+
+    return forecast;
+  }
+
+  async getTree(rootId?: string) {
+    const graph = await this.calcEngine.buildGraph();
+
+    if (rootId) {
+      return this.buildSubTree(rootId, graph);
+    }
+
+    // Find roots (nodes with no parents)
+    const roots = [...graph.values()].filter((n) => n.parents.length === 0);
+    return roots.map((r) => this.buildSubTree(r.id, graph));
+  }
+
+  private buildSubTree(id: string, graph: Map<string, import('../../modules/calc-engine/calc-engine.service').IndicatorNode>, visited = new Set<string>()): any {
+    if (visited.has(id)) return { id, circular: true };
+    visited.add(id);
+    const node = graph.get(id);
+    if (!node) return null;
+    return {
+      ...node,
+      children: node.children.map((cid) => this.buildSubTree(cid, graph, new Set(visited))),
+    };
+  }
+
+  async getImpactChain(indicatorId: string) {
+    const graph = await this.calcEngine.buildGraph();
+    const affected = await this.calcEngine.getImpactChain(indicatorId, graph);
+    return { indicatorId, affectedIndicators: affected };
+  }
+}
