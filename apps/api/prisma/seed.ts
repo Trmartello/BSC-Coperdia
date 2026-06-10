@@ -171,16 +171,104 @@ async function main() {
     create: { indicatorId: pme.id, scenarioId: scenario.id, period, value: 28, isManual: true, userId: admin.id },
   });
 
+  // ── Map Categories ────────────────────────────────────────────────────────
+  const categories = [
+    { name: 'Financeiro',   color: '#10b981', sortOrder: 0 },
+    { name: 'Comercial',    color: '#3b82f6', sortOrder: 1 },
+    { name: 'Operacional',  color: '#f59e0b', sortOrder: 2 },
+    { name: 'Agro',         color: '#22c55e', sortOrder: 3 },
+    { name: 'RH',           color: '#a78bfa', sortOrder: 4 },
+  ];
+
+  const catMap: Record<string, string> = {};
+  for (const cat of categories) {
+    const record = await prisma.mapCategory.upsert({
+      where: { name: cat.name },
+      update: {},
+      create: { ...cat, userId: admin.id },
+    });
+    catMap[cat.name] = record.id;
+  }
+
+  // ── Indicator Maps ─────────────────────────────────────────────────────────
+  const mapDefs = [
+    {
+      name: 'Capital de Giro',
+      description: 'Ciclo financeiro: PMR + PME - PMP → NCG → Capital Investido → ROIC',
+      category: 'Financeiro',
+    },
+    {
+      name: 'Resultado Financeiro',
+      description: 'Árvore causal do ROIC: Receita → Margens → EBITDA → NOPAT → ROIC',
+      category: 'Financeiro',
+    },
+    {
+      name: 'Performance Comercial',
+      description: 'Volume × Ticket × Desconto → Receita → Margem. NPS e Retenção',
+      category: 'Comercial',
+    },
+    {
+      name: 'Eficiência Operacional',
+      description: 'OEE → Perdas → Produtividade → Custo Unitário. SLA e Logística',
+      category: 'Operacional',
+    },
+    {
+      name: 'Negócio Agro Copérdia',
+      description: 'Cooperados Ativos + Fidelização → Volume Leite e Cereais → Receita e Qualidade',
+      category: 'Agro',
+    },
+  ];
+
+  for (const def of mapDefs) {
+    await prisma.indicatorMap.create({
+      data: {
+        name: def.name,
+        description: def.description,
+        categoryId: catMap[def.category],
+        userId: admin.id,
+      },
+    });
+  }
+
   // ── Sample Action Plan ─────────────────────────────────────────────────────
-  await prisma.actionPlan.create({
+  const samplePlan = await prisma.actionPlan.create({
     data: {
       indicatorId: pmr.id,
-      title: 'Renegociar prazos com clientes estratégicos',
-      description: 'Reduzir prazo de recebimento dos top 10 clientes de 30 para 20 dias',
-      responsible: 'Gerente Comercial',
-      dueDate: new Date('2026-07-31'),
+      problem: 'PMR acima da meta — prazo médio de 25 dias vs meta de 30 dias',
+      description: 'Reduzir o prazo médio de recebimento para manter o capital de giro saudável',
       status: 'IN_PROGRESS',
+      userId: admin.id,
+    },
+  });
+
+  const initiative = await prisma.initiative.create({
+    data: {
+      actionPlanId: samplePlan.id,
+      title: 'Renegociação com clientes estratégicos',
+      description: 'Tratar os 10 maiores clientes para reduzir prazo de 30 para 20 dias',
+      userId: admin.id,
+    },
+  });
+
+  await prisma.actionItem.create({
+    data: {
+      initiativeId: initiative.id,
+      title: 'Renegociar prazos com clientes estratégicos',
+      description: 'Reunião com gerentes comerciais e top 10 clientes',
       priority: 'HIGH',
+      status: 'IN_PROGRESS',
+      dueDate: new Date('2026-07-31'),
+      ownerName: 'Gerente Comercial',
+      progress: 25,
+      userId: admin.id,
+    },
+  });
+
+  await prisma.planComment.create({
+    data: {
+      actionPlanId: samplePlan.id,
+      content: 'Iniciamos as conversas com os 3 maiores clientes. Retorno positivo.',
+      progress: 25,
       userId: admin.id,
     },
   });

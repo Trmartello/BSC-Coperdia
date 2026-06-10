@@ -55,6 +55,63 @@ export const scenariosApi = {
   archive: (id: string) => api.patch(`/scenarios/${id}/archive`),
 };
 
+// ─── Action Plans ─────────────────────────────────────────────────────────────
+export const actionPlansApi = {
+  list: (params?: { indicatorId?: string; standalone?: boolean }) =>
+    api.get('/action-plans', { params }),
+  get: (id: string) => api.get(`/action-plans/${id}`),
+  dashboard: () => api.get('/action-plans/dashboard'),
+  create: (data: { problem: string; description?: string; status?: string; indicatorId?: string }) =>
+    api.post('/action-plans', data),
+  update: (id: string, data: any) => api.patch(`/action-plans/${id}`, data),
+  delete: (id: string) => api.delete(`/action-plans/${id}`),
+
+  createInitiative: (planId: string, data: { title: string; description?: string }) =>
+    api.post(`/action-plans/${planId}/initiatives`, data),
+  updateInitiative: (id: string, data: any) => api.patch(`/action-plans/initiatives/${id}`, data),
+  deleteInitiative: (id: string) => api.delete(`/action-plans/initiatives/${id}`),
+
+  createAction: (initiativeId: string, data: any) =>
+    api.post(`/action-plans/initiatives/${initiativeId}/actions`, data),
+  updateAction: (id: string, data: any) => api.patch(`/action-plans/actions/${id}`, data),
+  deleteAction: (id: string) => api.delete(`/action-plans/actions/${id}`),
+
+  addComment: (planId: string, data: { content: string; progress?: number }) =>
+    api.post(`/action-plans/${planId}/comments`, data),
+  deleteComment: (planId: string, commentId: string) =>
+    api.delete(`/action-plans/${planId}/comments/${commentId}`),
+
+  uploadAttachment: (planId: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post(`/action-plans/${planId}/attachments`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deleteAttachment: (planId: string, attachmentId: string) =>
+    api.delete(`/action-plans/${planId}/attachments/${attachmentId}`),
+};
+
+// ─── Maps ────────────────────────────────────────────────────────────────────
+export const mapsApi = {
+  // categories
+  getCategories: () => api.get('/maps/categories'),
+  createCategory: (data: { name: string; color?: string }) => api.post('/maps/categories', data),
+  updateCategory: (id: string, data: any) => api.patch(`/maps/categories/${id}`, data),
+  deleteCategory: (id: string) => api.delete(`/maps/categories/${id}`),
+  // maps
+  list: (categoryId?: string) => api.get('/maps', { params: { categoryId } }),
+  get: (id: string) => api.get(`/maps/${id}`),
+  create: (data: { name: string; description?: string; categoryId: string }) => api.post('/maps', data),
+  update: (id: string, data: any) => api.patch(`/maps/${id}`, data),
+  delete: (id: string) => api.delete(`/maps/${id}`),
+  saveLayout: (id: string, data: { nodes: any[]; edges: any[] }) => api.post(`/maps/${id}/layout`, data),
+  addIndicator: (id: string, indicatorId: string, position?: { x: number; y: number }) =>
+    api.post(`/maps/${id}/indicators`, { indicatorId, position }),
+  removeIndicator: (id: string, indicatorId: string) =>
+    api.delete(`/maps/${id}/indicators/${indicatorId}`),
+};
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export const dashboardApi = {
   executive: (period: string, scenarioId?: string) =>

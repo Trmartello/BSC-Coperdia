@@ -30,4 +30,7 @@
   .text-label {
     @apply text-white/40 text-[10px] uppercase tracking-widest;
   }
+  .input-dark {
+    @apply w-full bg-white/5 border border-white/10 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none transition-colors;
+  }
 }

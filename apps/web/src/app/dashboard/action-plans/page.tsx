@@ -1,114 +1,189 @@
 'use client';
 
-import React from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../../lib/api';
-import { CheckCircle2, Circle, Clock, X, Calendar, User } from 'lucide-react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Plus, LayoutGrid, List, TrendingUp, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { actionPlansApi } from '../../../lib/api';
+import {
+  ActionPlan, PlanDashboard,
+  PLAN_STATUS_LABEL, PLAN_STATUS_COLOR,
+  ActionItemPriority, PRIORITY_COLOR, PRIORITY_LABEL,
+} from '../../../types/action-plan';
 import { cn } from '../../../lib/utils';
-
-const STATUS_ICONS: Record<string, React.ReactNode> = {
-  PENDING: <Circle size={14} className="text-white/40" />,
-  IN_PROGRESS: <Clock size={14} className="text-amber-400" />,
-  DONE: <CheckCircle2 size={14} className="text-emerald-400" />,
-  CANCELLED: <X size={14} className="text-red-400" />,
-};
-
-const PRIORITY_STYLE: Record<string, string> = {
-  LOW: 'text-slate-400 bg-slate-400/10 border-slate-400/20',
-  MEDIUM: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
-  HIGH: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-  CRITICAL: 'text-red-400 bg-red-400/10 border-red-400/20',
-};
+import { NewActionPlanModal } from '../../../components/action-plans/NewActionPlanModal';
+import { ActionPlanDetail } from '../../../components/action-plans/ActionPlanDetail';
 
 export default function ActionPlansPage() {
-  const qc = useQueryClient();
+  const [showNew, setShowNew] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'DONE'>('ALL');
 
-  const { data: plans = [], isLoading } = useQuery({
-    queryKey: ['all-action-plans'],
-    queryFn: () => api.get('/action-plans').then((r) => r.data),
+  const { data: plans = [], refetch } = useQuery<ActionPlan[]>({
+    queryKey: ['action-plans'],
+    queryFn: () => actionPlansApi.list().then((r) => r.data),
   });
 
-  const toggleDone = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      api.patch(`/action-plans/${id}`, { status: status === 'DONE' ? 'PENDING' : 'DONE' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['all-action-plans'] }),
+  const { data: dash } = useQuery<PlanDashboard>({
+    queryKey: ['action-plans-dashboard'],
+    queryFn: () => actionPlansApi.dashboard().then((r) => r.data),
   });
 
-  const byIndicator = (plans as any[]).reduce((acc: Record<string, any[]>, plan: any) => {
-    const key = plan.indicator?.name ?? 'Sem indicador';
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(plan);
-    return acc;
-  }, {});
+  const filtered = plans.filter((p) => filter === 'ALL' || p.status === filter);
+
+  if (selectedPlanId) {
+    return (
+      <div className="h-full">
+        <ActionPlanDetail
+          planId={selectedPlanId}
+          onClose={() => setSelectedPlanId(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <h1 className="text-white font-semibold text-lg">Plano de Ação</h1>
-        <div className="flex gap-2">
-          {['PENDING', 'IN_PROGRESS', 'DONE'].map((s) => (
-            <div key={s} className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/5">
-              {STATUS_ICONS[s]}
-              <span className="text-xs text-white/50">{(plans as any[]).filter((p) => p.status === s).length}</span>
-            </div>
-          ))}
+        <div>
+          <h1 className="text-white font-semibold text-lg">Plano de Ação</h1>
+          <p className="text-white/40 text-sm">{plans.length} planos cadastrados</p>
+        </div>
+        <button
+          onClick={() => setShowNew(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
+        >
+          <Plus size={14} />
+          Novo Plano
+        </button>
+      </div>
+
+      {/* ── Dashboard Cards ── */}
+      {dash && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <DashCard
+            icon={<LayoutGrid size={16} className="text-blue-400" />}
+            label="Em aberto"
+            value={dash.open}
+            color="text-blue-400"
+          />
+          <DashCard
+            icon={<CheckCircle2 size={16} className="text-emerald-400" />}
+            label="Concluídas"
+            value={dash.done}
+            color="text-emerald-400"
+          />
+          <DashCard
+            icon={<AlertTriangle size={16} className="text-red-400" />}
+            label="Atrasadas"
+            value={dash.overdue}
+            color="text-red-400"
+          />
+          <DashCard
+            icon={<TrendingUp size={16} className="text-purple-400" />}
+            label="Progresso médio"
+            value={`${dash.avgProgress}%`}
+            color="text-purple-400"
+          />
+        </div>
+      )}
+
+      {/* ── Filters ── */}
+      <div className="flex gap-1 bg-white/5 rounded-xl p-1 w-fit">
+        {(['ALL', 'OPEN', 'IN_PROGRESS', 'DONE'] as const).map((s) => {
+          const labels = { ALL: 'Todos', OPEN: 'Abertos', IN_PROGRESS: 'Em andamento', DONE: 'Concluídos' };
+          return (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={cn(
+                'px-4 py-1.5 rounded-lg text-sm transition-all',
+                filter === s ? 'bg-white/10 text-white font-medium' : 'text-white/40 hover:text-white/70',
+              )}
+            >
+              {labels[s]}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Plans List ── */}
+      <div className="space-y-2">
+        {filtered.map((plan) => (
+          <PlanRow key={plan.id} plan={plan} onClick={() => setSelectedPlanId(plan.id)} />
+        ))}
+        {filtered.length === 0 && (
+          <div className="text-center py-16 text-white/25">
+            <p className="text-sm">Nenhum plano encontrado.</p>
+            <button onClick={() => setShowNew(true)} className="mt-3 text-xs text-indigo-400 hover:text-indigo-300">
+              + Criar primeiro plano
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showNew && (
+        <NewActionPlanModal
+          onClose={() => setShowNew(false)}
+          onCreated={(id) => { refetch(); setSelectedPlanId(id); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DashCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string | number; color: string }) {
+  return (
+    <div className="card-dark p-4">
+      <div className="flex items-center gap-2 mb-2">{icon}<span className="text-xs text-white/40">{label}</span></div>
+      <p className={cn('text-2xl font-bold', color)}>{value}</p>
+    </div>
+  );
+}
+
+function PlanRow({ plan, onClick }: { plan: ActionPlan; onClick: () => void }) {
+  const allActions = plan.initiatives?.flatMap((i) => i.actions ?? []) ?? [];
+  const doneCount = allActions.filter((a) => a.status === 'DONE').length;
+  const avgProgress = allActions.length
+    ? Math.round(allActions.reduce((s, a) => s + (a.progress ?? 0), 0) / allActions.length)
+    : 0;
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full card-dark-hover p-4 flex items-center gap-4 text-left"
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <p className="text-sm font-medium text-white/85">{plan.problem}</p>
+          <span className={cn('text-[10px] px-2 py-0.5 rounded-full border', PLAN_STATUS_COLOR[plan.status])}>
+            {PLAN_STATUS_LABEL[plan.status]}
+          </span>
+          {plan.indicator && (
+            <span className="text-[10px] font-mono text-white/25">{plan.indicator.code}</span>
+          )}
+        </div>
+        {plan.description && (
+          <p className="text-xs text-white/35 truncate">{plan.description}</p>
+        )}
+        <div className="flex items-center gap-3 mt-2 text-[10px] text-white/25">
+          <span>{plan.initiatives?.length ?? 0} iniciativas</span>
+          <span>{doneCount}/{allActions.length} ações</span>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-20 bg-white/5 rounded-xl animate-pulse" />)}
+      {/* Progress */}
+      <div className="flex-shrink-0 flex items-center gap-3">
+        <div className="text-right">
+          <p className="text-xs text-white/40">{avgProgress}%</p>
         </div>
-      ) : (
-        Object.entries(byIndicator).map(([indicatorName, indicatorPlans]) => (
-          <div key={indicatorName}>
-            <p className="text-white/30 text-xs uppercase tracking-widest mb-2 px-1">{indicatorName}</p>
-            <div className="space-y-2">
-              {(indicatorPlans as any[]).map((plan) => (
-                <div key={plan.id} className="card-dark p-4 flex items-start gap-3">
-                  <button
-                    onClick={() => toggleDone.mutate({ id: plan.id, status: plan.status })}
-                    className="mt-0.5 flex-shrink-0"
-                  >
-                    {STATUS_ICONS[plan.status]}
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className={cn('text-sm font-medium', plan.status === 'DONE' ? 'line-through text-white/30' : 'text-white/85')}>
-                        {plan.title}
-                      </p>
-                      <span className={cn('text-[10px] px-1.5 py-0.5 rounded border font-medium', PRIORITY_STYLE[plan.priority])}>
-                        {plan.priority}
-                      </span>
-                    </div>
-                    {plan.description && (
-                      <p className="text-xs text-white/40 mt-0.5">{plan.description}</p>
-                    )}
-                    <div className="flex gap-4 mt-1.5 text-[10px] text-white/30">
-                      {plan.responsible && (
-                        <span className="flex items-center gap-1"><User size={10} />{plan.responsible}</span>
-                      )}
-                      {plan.dueDate && (
-                        <span className="flex items-center gap-1">
-                          <Calendar size={10} />
-                          {new Date(plan.dueDate).toLocaleDateString('pt-BR')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))
-      )}
-
-      {!isLoading && (plans as any[]).length === 0 && (
-        <div className="text-center py-20 text-white/20">
-          <p className="text-sm">Nenhum plano de ação cadastrado.</p>
-          <p className="text-xs mt-1">Crie ações a partir dos cards de indicadores no Mapa.</p>
+        <div className="w-20 h-1.5 bg-white/8 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-purple-500 rounded-full transition-all"
+            style={{ width: `${avgProgress}%` }}
+          />
         </div>
-      )}
-    </div>
+      </div>
+    </button>
   );
 }

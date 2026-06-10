@@ -17,8 +17,8 @@ enum UserRole {
 }
 
 enum IndicatorType {
-  INPUT      // aceita projeção manual
-  CALCULATED // calculado por fórmula
+  INPUT
+  CALCULATED
 }
 
 enum MeasureUnit {
@@ -49,20 +49,6 @@ enum IndicatorDirection {
   LOWER_IS_BETTER
 }
 
-enum ActionPlanStatus {
-  PENDING
-  IN_PROGRESS
-  DONE
-  CANCELLED
-}
-
-enum ActionPlanPriority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
 enum ScenarioStatus {
   DRAFT
   ACTIVE
@@ -74,6 +60,34 @@ enum AuditAction {
   UPDATE
   DELETE
   SIMULATE
+}
+
+// ─── Plano de Ação enums ──────────────────────────────────────────────────────
+
+enum PlanStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum InitiativeStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum ActionItemStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  OVERDUE
+  CANCELLED
+}
+
+enum ActionItemPriority {
+  HIGH
+  MEDIUM
+  LOW
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -88,12 +102,17 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  scenarios      Scenario[]
-  forecastValues ForecastValue[]
-  auditLogs      AuditLog[]
-  actionPlans    ActionPlan[]
-  attachments    Attachment[]
-  comments       IndicatorComment[]
+  scenarios       Scenario[]
+  forecastValues  ForecastValue[]
+  auditLogs       AuditLog[]
+  actionPlans     ActionPlan[]
+  planComments    PlanComment[]
+  planAttachments PlanAttachment[]
+  planAuditLogs   PlanAuditLog[]
+  initiatives     Initiative[]
+  actionItems     ActionItem[]
+  mapCategories   MapCategory[]
+  indicatorMaps   IndicatorMap[]
 
   @@map("users")
 }
@@ -101,8 +120,8 @@ model User {
 // ─── Indicators ──────────────────────────────────────────────────────────────
 
 model Indicator {
-  id          String        @id @default(cuid())
-  code        String        @unique
+  id          String             @id @default(cuid())
+  code        String             @unique
   name        String
   description String?
   category    String
@@ -116,87 +135,157 @@ model Indicator {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  formula         Formula?
-  realizedValues  RealizedValue[]
-  forecastValues  ForecastValue[]
-  goals           Goal[]
-
-  // tree relations
-  parents   IndicatorRelation[] @relation("ChildRelations")
-  children  IndicatorRelation[] @relation("ParentRelations")
-
+  formula        Formula?
+  realizedValues RealizedValue[]
+  forecastValues ForecastValue[]
+  goals          Goal[]
+  parents        IndicatorRelation[] @relation("ChildRelations")
+  children       IndicatorRelation[] @relation("ParentRelations")
   scenarioValues ScenarioValue[]
   actionPlans    ActionPlan[]
-  attachments    Attachment[]
-  comments       IndicatorComment[]
+  mapEntries     IndicatorMapEntry[]
 
   @@map("indicators")
 }
 
-// ─── Action Plans ─────────────────────────────────────────────────────────────
+// ─── Action Plans (Planos de Ação) ───────────────────────────────────────────
+// indicatorId = null → plano avulso
+// indicatorId = id   → vinculado a indicador
 
 model ActionPlan {
-  id          String            @id @default(cuid())
-  indicatorId String
-  title       String
+  id          String     @id @default(cuid())
+  indicatorId String?
+  problem     String     // "Problema a resolver"
   description String?
-  responsible String?
-  dueDate     DateTime?
-  status      ActionPlanStatus  @default(PENDING)
-  priority    ActionPlanPriority @default(MEDIUM)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  status      PlanStatus @default(OPEN)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   userId      String
 
-  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id])
+  indicator   Indicator?       @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id])
+  initiatives Initiative[]
+  comments    PlanComment[]
+  attachments PlanAttachment[]
+  auditLogs   PlanAuditLog[]
 
+  @@index([indicatorId])
+  @@index([userId])
   @@map("action_plans")
 }
 
-// ─── Attachments ─────────────────────────────────────────────────────────────
+// ─── Initiatives (Iniciativas dentro do Plano) ────────────────────────────────
 
-model Attachment {
-  id          String   @id @default(cuid())
-  indicatorId String
-  filename    String
-  url         String
-  size        Int
-  mimeType    String
-  createdAt   DateTime @default(now())
-  userId      String
+model Initiative {
+  id           String           @id @default(cuid())
+  actionPlanId String
+  title        String
+  description  String?
+  status       InitiativeStatus @default(OPEN)
+  sortOrder    Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  userId       String
 
-  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id])
+  actionPlan ActionPlan   @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id])
+  actions    ActionItem[]
 
-  @@map("attachments")
+  @@index([actionPlanId])
+  @@map("initiatives")
 }
 
-// ─── Comments ────────────────────────────────────────────────────────────────
+// ─── Action Items (Ações dentro de uma Iniciativa) ───────────────────────────
 
-model IndicatorComment {
-  id          String   @id @default(cuid())
-  indicatorId String
-  content     String
-  createdAt   DateTime @default(now())
-  userId      String
+model ActionItem {
+  id            String             @id @default(cuid())
+  initiativeId  String
+  title         String
+  description   String?
+  priority      ActionItemPriority @default(MEDIUM)
+  status        ActionItemStatus   @default(PENDING)
+  dueDate       DateTime?
+  ownerName     String?            // responsável (nome livre)
+  ownerId       String?            // responsável (usuário do sistema, opcional)
+  progress      Int                @default(0) // 0–100
+  observations  String?
+  completedAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  userId        String
 
-  indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id])
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
 
-  @@map("indicator_comments")
+  @@index([initiativeId])
+  @@map("action_items")
+}
+
+// ─── Plan Comments ────────────────────────────────────────────────────────────
+
+model PlanComment {
+  id           String   @id @default(cuid())
+  actionPlanId String
+  content      String
+  progress     Int?     // progresso reportado junto ao comentário
+  createdAt    DateTime @default(now())
+  userId       String
+
+  actionPlan ActionPlan @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@index([actionPlanId])
+  @@map("plan_comments")
+}
+
+// ─── Plan Attachments ─────────────────────────────────────────────────────────
+
+model PlanAttachment {
+  id           String   @id @default(cuid())
+  actionPlanId String
+  filename     String
+  url          String
+  size         Int      // bytes
+  mimeType     String
+  createdAt    DateTime @default(now())
+  userId       String
+
+  actionPlan ActionPlan @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@index([actionPlanId])
+  @@map("plan_attachments")
+}
+
+// ─── Plan Audit Log ───────────────────────────────────────────────────────────
+
+model PlanAuditLog {
+  id            String   @id @default(cuid())
+  actionPlanId  String
+  userId        String
+  action        String   // "CREATE" | "UPDATE" | "STATUS_CHANGE" | "PROGRESS" | "COMMENT" | "ATTACHMENT"
+  field         String?
+  previousValue Json?
+  newValue      Json?
+  createdAt     DateTime @default(now())
+
+  actionPlan ActionPlan @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@index([actionPlanId])
+  @@map("plan_audit_logs")
 }
 
 // ─── Formula ─────────────────────────────────────────────────────────────────
 
 model Formula {
-  id            String    @id @default(cuid())
-  indicatorId   String    @unique
-  expression    String    // ex: "RECEITA - CUSTOS - DESPESAS"
-  variables     Json      // { "RECEITA": "ind_xxx", "CUSTOS": "ind_yyy" }
+  id            String   @id @default(cuid())
+  indicatorId   String   @unique
+  expression    String
+  variables     Json
   description   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
 
@@ -206,11 +295,11 @@ model Formula {
 // ─── Tree Relations ───────────────────────────────────────────────────────────
 
 model IndicatorRelation {
-  id         String @id @default(cuid())
-  parentId   String
-  childId    String
-  weight     Float  @default(1.0) // peso do filho na fórmula do pai
-  sortOrder  Int    @default(0)
+  id        String @id @default(cuid())
+  parentId  String
+  childId   String
+  weight    Float  @default(1.0)
+  sortOrder Int    @default(0)
 
   parent Indicator @relation("ParentRelations", fields: [parentId], references: [id], onDelete: Cascade)
   child  Indicator @relation("ChildRelations",  fields: [childId],  references: [id], onDelete: Cascade)
@@ -224,7 +313,7 @@ model IndicatorRelation {
 model RealizedValue {
   id          String   @id @default(cuid())
   indicatorId String
-  period      DateTime // sempre primeiro dia do período
+  period      DateTime
   value       Decimal  @db.Decimal(20, 6)
   createdAt   DateTime @default(now())
 
@@ -291,18 +380,18 @@ model Scenario {
   @@map("scenarios")
 }
 
-// ─── Scenario Computed Values (cache de resultados calculados) ────────────────
+// ─── Scenario Values ─────────────────────────────────────────────────────────
 
 model ScenarioValue {
-  id          String   @id @default(cuid())
-  scenarioId  String
-  indicatorId String
-  period      DateTime
-  value       Decimal  @db.Decimal(20, 6)
-  delta       Decimal  @db.Decimal(20, 6) @default(0) // diferença vs baseline
-  deltaPercent Decimal @db.Decimal(10, 4) @default(0)
-  status      IndicatorStatus @default(NO_DATA)
-  computedAt  DateTime @default(now())
+  id           String          @id @default(cuid())
+  scenarioId   String
+  indicatorId  String
+  period       DateTime
+  value        Decimal         @db.Decimal(20, 6)
+  delta        Decimal         @db.Decimal(20, 6) @default(0)
+  deltaPercent Decimal         @db.Decimal(10, 4) @default(0)
+  status       IndicatorStatus @default(NO_DATA)
+  computedAt   DateTime        @default(now())
 
   scenario  Scenario  @relation(fields: [scenarioId],  references: [id], onDelete: Cascade)
   indicator Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
@@ -311,19 +400,68 @@ model ScenarioValue {
   @@map("scenario_values")
 }
 
-// ─── Audit ───────────────────────────────────────────────────────────────────
+// ─── Indicator Maps ───────────────────────────────────────────────────────────
+
+model MapCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#6366f1") // hex color for badge
+  isDefault Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+
+  user         User           @relation(fields: [userId], references: [id])
+  indicatorMaps IndicatorMap[]
+
+  @@map("map_categories")
+}
+
+model IndicatorMap {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  categoryId  String
+  flowData    Json?    // ReactFlow nodes + edges JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+
+  category MapCategory       @relation(fields: [categoryId], references: [id])
+  user     User              @relation(fields: [userId], references: [id])
+  entries  IndicatorMapEntry[]
+
+  @@map("indicator_maps")
+}
+
+model IndicatorMapEntry {
+  id           String @id @default(cuid())
+  mapId        String
+  indicatorId  String
+  positionX    Float  @default(0)
+  positionY    Float  @default(0)
+
+  map       IndicatorMap @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  indicator Indicator    @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+
+  @@unique([mapId, indicatorId])
+  @@map("indicator_map_entries")
+}
+
+// ─── System Audit Log ─────────────────────────────────────────────────────────
 
 model AuditLog {
-  id          String      @id @default(cuid())
-  userId      String
-  action      AuditAction
-  entity      String      // "Indicator", "Scenario", etc.
-  entityId    String
-  before      Json?
-  after       Json?
-  scenarioId  String?
-  createdAt   DateTime    @default(now())
-  ipAddress   String?
+  id         String      @id @default(cuid())
+  userId     String
+  action     AuditAction
+  entity     String
+  entityId   String
+  before     Json?
+  after      Json?
+  scenarioId String?
+  createdAt  DateTime    @default(now())
+  ipAddress  String?
 
   user User @relation(fields: [userId], references: [id])
 

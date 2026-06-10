@@ -11,12 +11,15 @@ import {
   Users,
   Settings,
   ChevronRight,
+  Network,
 } from 'lucide-react';
 
 const NAV = [
   {
     section: 'Visão Geral',
-    items: [{ label: 'Mapas Indicadores', href: '/dashboard/maps', icon: LayoutGrid }],
+    items: [
+      { label: 'Mapa Estratégico', href: '/dashboard/maps', icon: Network },
+    ],
   },
   {
     section: 'Execução',
