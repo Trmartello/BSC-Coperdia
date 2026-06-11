@@ -112,6 +112,30 @@ export const mapsApi = {
     api.delete(`/maps/${id}/indicators/${indicatorId}`),
 };
 
+// ─── Users ───────────────────────────────────────────────────────────────────
+export const usersApi = {
+  list: () => api.get('/users'),
+  get: (id: string) => api.get(`/users/${id}`),
+  create: (data: any) => api.post('/users', data),
+  update: (id: string, data: any) => api.patch(`/users/${id}`, data),
+  remove: (id: string) => api.delete(`/users/${id}`),
+  toggleActive: (id: string) => api.patch(`/users/${id}/toggle-active`),
+};
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+export const settingsApi = {
+  getSystem: () => api.get('/settings'),
+  getIndicators: () => api.get('/settings/indicators'),
+  createIndicator: (data: any) => api.post('/settings/indicators', data),
+  updateIndicator: (id: string, data: any) => api.patch(`/settings/indicators/${id}`, data),
+  deleteIndicator: (id: string) => api.delete(`/settings/indicators/${id}`),
+  getMaps: () => api.get('/settings/maps'),
+  getCategories: () => api.get('/settings/categories'),
+  createCategory: (data: any) => api.post('/settings/categories', data),
+  updateCategory: (id: string, data: any) => api.patch(`/settings/categories/${id}`, data),
+  deleteCategory: (id: string) => api.delete(`/settings/categories/${id}`),
+};
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export const dashboardApi = {
   executive: (period: string, scenarioId?: string) =>

@@ -14,6 +14,7 @@ import { CalcEngineModule } from './modules/calc-engine/calc-engine.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ActionPlansModule } from './modules/action-plans/action-plans.module';
 import { MapsModule } from './modules/maps/maps.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { MapsModule } from './modules/maps/maps.module';
     DashboardModule,
     ActionPlansModule,
     MapsModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}
