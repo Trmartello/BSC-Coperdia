@@ -6,12 +6,12 @@ import { usePathname } from 'next/navigation';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/auth.store';
 import {
-  LayoutGrid,
   ClipboardList,
   Users,
   Settings,
   ChevronRight,
   Network,
+  BarChart2,
 } from 'lucide-react';
 
 const NAV = [
@@ -22,14 +22,22 @@ const NAV = [
     ],
   },
   {
+    section: 'Análise',
+    items: [
+      { label: 'Indicadores', href: '/dashboard/indicators', icon: BarChart2 },
+    ],
+  },
+  {
     section: 'Execução',
-    items: [{ label: 'Plano de ação', href: '/dashboard/action-plans', icon: ClipboardList }],
+    items: [
+      { label: 'Plano de Ação', href: '/dashboard/action-plans', icon: ClipboardList },
+    ],
   },
   {
     section: 'Administração',
     items: [
-      { label: 'Usuário', href: '/dashboard/users', icon: Users },
-      { label: 'Configuração', href: '/dashboard/settings', icon: Settings },
+      { label: 'Usuários', href: '/dashboard/users', icon: Users },
+      { label: 'Configurações', href: '/dashboard/settings', icon: Settings },
     ],
   },
 ];

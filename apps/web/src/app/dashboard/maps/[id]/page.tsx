@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactFlow, {
@@ -10,45 +10,37 @@ import ReactFlow, {
   NodeProps, Handle, Panel,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import {
-  ArrowLeft, Save, Plus, Settings2, ZapOff, Zap,
-  TrendingUp, TrendingDown, Minus,
-} from 'lucide-react';
+import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown } from 'lucide-react';
 import { mapsApi, indicatorsApi } from '../../../../lib/api';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
 import { cn, formatValue } from '../../../../lib/utils';
+import { IndicatorDetailPanel } from '../../../../components/indicators/IndicatorDetailPanel';
 import { toast } from 'sonner';
 
-// ─── Indicator Node (card no mapa) ───────────────────────────────────────────
+// ─── Indicator Node ───────────────────────────────────────────────────────────
 
 function MapIndicatorNode({ data, selected }: NodeProps) {
   const { indicator, realized, goal, estimate } = data;
   const effective = estimate ?? realized;
   const dev = goal && effective != null && goal !== 0
-    ? ((effective - goal) / Math.abs(goal)) * 100
-    : null;
+    ? ((effective - goal) / Math.abs(goal)) * 100 : null;
   const isGood = dev === null ? null
     : (indicator.direction === 'LOWER_IS_BETTER' ? dev <= 0 : dev >= 0);
 
   return (
     <div className={cn(
-      'bg-[#1a1f2e] border rounded-2xl w-[220px] shadow-xl transition-all',
-      selected ? 'border-indigo-500 shadow-indigo-500/20' : 'border-white/10 hover:border-white/20',
+      'bg-[#1a1f2e] border rounded-2xl w-[220px] shadow-xl transition-all cursor-pointer',
+      selected ? 'border-indigo-500 shadow-indigo-500/20' : 'border-white/10 hover:border-white/25',
     )}>
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{ background: '#6366f1', border: 'none', width: 10, height: 10 }}
-      />
+      <Handle type="target" position={Position.Left}
+        style={{ background: '#6366f1', border: 'none', width: 10, height: 10 }} />
 
-      {/* Header */}
       <div className="px-3 pt-3 pb-2">
         <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">{indicator.code}</p>
         <p className="text-sm font-semibold text-white/85 leading-snug">{indicator.name}</p>
         <p className="text-[10px] text-white/30 mt-0.5">{indicator.category}</p>
       </div>
 
-      {/* Values */}
       <div className="grid grid-cols-3 px-3 pb-2 gap-1">
         {[
           { label: 'Real.', val: formatValue(realized, indicator.unit) },
@@ -62,35 +54,31 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
         ))}
       </div>
 
-      {/* Deviation + direction */}
       {dev !== null && (
         <div className={cn('px-3 pb-1.5 text-[10px] font-medium flex items-center gap-1',
-          isGood ? 'text-emerald-400' : 'text-red-400',
-        )}>
+          isGood ? 'text-emerald-400' : 'text-red-400')}>
           {isGood ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
           {Math.abs(dev).toFixed(1)}% vs meta
         </div>
       )}
 
       <div className="px-3 pb-2.5 flex items-center gap-1.5">
-        <div className={cn('w-2 h-2 rounded-sm', indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-emerald-500')} />
+        <div className={cn('w-2 h-2 rounded-sm',
+          indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-emerald-500')} />
         <p className="text-[9px] text-white/25">
           {indicator.direction === 'LOWER_IS_BETTER' ? 'Quanto menor melhor' : 'Quanto maior melhor'}
         </p>
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{ background: '#6366f1', border: 'none', width: 10, height: 10 }}
-      />
+      <Handle type="source" position={Position.Right}
+        style={{ background: '#6366f1', border: 'none', width: 10, height: 10 }} />
     </div>
   );
 }
 
 const nodeTypes = { mapIndicator: MapIndicatorNode };
 
-// ─── Build ReactFlow nodes from map entries ───────────────────────────────────
+// ─── Build nodes/edges ────────────────────────────────────────────────────────
 
 function buildNodesAndEdges(entries: MapEntry[], savedFlow?: any) {
   const nodes: Node[] = entries.map((entry, i) => {
@@ -108,10 +96,8 @@ function buildNodesAndEdges(entries: MapEntry[], savedFlow?: any) {
     };
   });
 
-  // Build edges from indicator relations
   const edges: Edge[] = [];
   const allIds = new Set(entries.map((e) => e.indicatorId));
-
   for (const entry of entries) {
     for (const rel of entry.indicator.children ?? []) {
       if (allIds.has(rel.child.id)) {
@@ -133,16 +119,8 @@ function buildNodesAndEdges(entries: MapEntry[], savedFlow?: any) {
 
 // ─── Add Indicator Panel ──────────────────────────────────────────────────────
 
-function AddIndicatorPanel({
-  mapId,
-  existingIds,
-  onAdd,
-  onClose,
-}: {
-  mapId: string;
-  existingIds: Set<string>;
-  onAdd: (id: string) => void;
-  onClose: () => void;
+function AddIndicatorPanel({ existingIds, onAdd, onClose }: {
+  existingIds: Set<string>; onAdd: (id: string) => void; onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
   const { data: allInds = [] } = useQuery({
@@ -151,8 +129,7 @@ function AddIndicatorPanel({
   });
 
   const filtered = (allInds as any[]).filter(
-    (ind) =>
-      !existingIds.has(ind.id) &&
+    (ind) => !existingIds.has(ind.id) &&
       (ind.name.toLowerCase().includes(search.toLowerCase()) ||
         ind.code.toLowerCase().includes(search.toLowerCase())),
   );
@@ -195,6 +172,7 @@ export default function MapEditorPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [selectedIndicatorId, setSelectedIndicatorId] = useState<string | null>(null);
 
   const { data: map, isLoading } = useQuery<IndicatorMap>({
     queryKey: ['map', id],
@@ -215,15 +193,21 @@ export default function MapEditorPage() {
     (params: Connection) =>
       setEdges((eds) =>
         addEdge({
-          ...params,
-          type: 'smoothstep',
-          animated: false,
+          ...params, type: 'smoothstep', animated: false,
           style: { stroke: '#6366f1', strokeWidth: 1.5, strokeDasharray: '5 3' },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
         }, eds),
       ),
     [setEdges],
   );
+
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedIndicatorId((prev) => prev === node.id ? null : node.id);
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setSelectedIndicatorId(null);
+  }, []);
 
   const saveMutation = useMutation({
     mutationFn: () => mapsApi.saveLayout(id, { nodes, edges }).then((r) => r.data),
@@ -239,11 +223,19 @@ export default function MapEditorPage() {
     },
   });
 
-  if (isLoading) {
-    return <div className="h-full bg-[#0d0f17] animate-pulse rounded-2xl" />;
-  }
+  if (isLoading) return <div className="h-full bg-[#0d0f17] animate-pulse rounded-2xl" />;
 
   const existingIds = new Set(map?.entries?.map((e) => e.indicatorId) ?? []);
+
+  // Detect current period from first available realized value
+  const currentPeriod = (() => {
+    for (const entry of map?.entries ?? []) {
+      if (entry.indicator?.realizedValues?.[0]?.period) {
+        return entry.indicator.realizedValues[0].period;
+      }
+    }
+    return new Date().toISOString().slice(0, 10);
+  })();
 
   return (
     <div className="flex flex-col h-[calc(100vh-56px-48px)]">
@@ -263,6 +255,11 @@ export default function MapEditorPage() {
             {map.category.name}
           </span>
         )}
+        {selectedIndicatorId && (
+          <span className="text-[10px] text-white/30 italic">
+            · clique no canvas para fechar o painel
+          </span>
+        )}
         <div className="flex-1" />
         <div className="relative">
           <button
@@ -274,7 +271,6 @@ export default function MapEditorPage() {
           </button>
           {showAddPanel && (
             <AddIndicatorPanel
-              mapId={id}
               existingIds={existingIds}
               onAdd={(indId) => addIndMutation.mutate(indId)}
               onClose={() => setShowAddPanel(false)}
@@ -291,40 +287,52 @@ export default function MapEditorPage() {
         </button>
       </div>
 
-      {/* ── ReactFlow Canvas ── */}
-      <div className="flex-1 rounded-2xl overflow-hidden border border-white/5 bg-[#0d0f17]">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          proOptions={{ hideAttribution: true }}
-          deleteKeyCode="Delete"
-        >
-          <Background color="#1a1f2e" gap={24} size={1} />
-          <Controls
-            style={{ background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
-            showInteractive={false}
-          />
-          <MiniMap
-            style={{ background: '#0d0f17', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8 }}
-            nodeColor="#1e2538"
-            maskColor="rgba(13,15,23,0.7)"
-          />
+      {/* ── Canvas + Detail Panel ── */}
+      <div className="flex flex-1 gap-4 overflow-hidden">
+        <div className="flex-1 rounded-2xl overflow-hidden border border-white/5 bg-[#0d0f17]">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={onNodeClick}
+            onPaneClick={onPaneClick}
+            nodeTypes={nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            proOptions={{ hideAttribution: true }}
+            deleteKeyCode="Delete"
+          >
+            <Background color="#1a1f2e" gap={24} size={1} />
+            <Controls
+              style={{ background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
+              showInteractive={false}
+            />
+            <MiniMap
+              style={{ background: '#0d0f17', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8 }}
+              nodeColor="#1e2538"
+              maskColor="rgba(13,15,23,0.7)"
+            />
+            {nodes.length === 0 && (
+              <Panel position="top-center">
+                <div className="mt-20 text-center text-white/20 pointer-events-none">
+                  <p className="text-sm">Nenhum indicador neste mapa.</p>
+                  <p className="text-xs mt-1">Use "Adicionar indicador" para começar.</p>
+                </div>
+              </Panel>
+            )}
+          </ReactFlow>
+        </div>
 
-          {nodes.length === 0 && (
-            <Panel position="top-center">
-              <div className="mt-20 text-center text-white/20 pointer-events-none">
-                <p className="text-sm">Nenhum indicador neste mapa.</p>
-                <p className="text-xs mt-1">Use "Adicionar indicador" para começar.</p>
-              </div>
-            </Panel>
-          )}
-        </ReactFlow>
+        {/* Indicator Detail Panel — aparece ao clicar em um nó */}
+        {selectedIndicatorId && (
+          <IndicatorDetailPanel
+            indicatorId={selectedIndicatorId}
+            period={currentPeriod}
+            onClose={() => setSelectedIndicatorId(null)}
+          />
+        )}
       </div>
     </div>
   );
