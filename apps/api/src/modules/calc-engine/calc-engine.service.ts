@@ -145,7 +145,8 @@ export class CalcEngineService {
 
     // Recalculate calculated indicators in order
     for (const id of order) {
-      const node = graph.get(id)!;
+      const node = graph.get(id);
+      if (!node) continue;
       if (node.type === 'CALCULATED' && node.formulaExpression && node.formulaVariables) {
         const computed = this.evaluateFormula(
           node.formulaExpression,

@@ -3,6 +3,7 @@ export type MeasureUnit = 'CURRENCY' | 'PERCENTAGE' | 'NUMBER' | 'DAYS' | 'INDEX
 export type Periodicity = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
 export type IndicatorStatus = 'ON_TRACK' | 'AT_RISK' | 'OFF_TRACK' | 'NO_DATA';
 export type UserRole = 'ADMIN' | 'CONTROLADORIA' | 'GESTOR' | 'DIRETORIA';
+export type IndicatorDirection = 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER';
 
 export interface Indicator {
   id: string;
@@ -13,12 +14,16 @@ export interface Indicator {
   type: IndicatorType;
   unit: MeasureUnit;
   periodicity: Periodicity;
+  direction?: IndicatorDirection;
   responsible?: string;
   active: boolean;
   sortOrder: number;
   formula?: Formula;
   parents?: IndicatorRelation[];
   children?: IndicatorRelation[];
+  realizedValues?: RealizedValue[];
+  forecastValues?: ForecastValue[];
+  goals?: Goal[];
 }
 
 export interface Formula {
@@ -95,7 +100,7 @@ export interface IndicatorCard {
   status: IndicatorStatus;
 }
 
-export interface TreeNode extends Indicator {
+export interface TreeNode extends Omit<Indicator, 'children'> {
   children: TreeNode[];
   circular?: boolean;
 }

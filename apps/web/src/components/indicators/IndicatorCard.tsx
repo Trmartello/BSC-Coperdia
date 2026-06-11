@@ -59,8 +59,8 @@ export function IndicatorCard({ data, onDelete, onOpenDetail, onOpenActionPlan, 
   const devVsGoal = deviation(effective, goal);
   const devRealized = deviation(effective, realized);
 
-  const devGoalInfo = deviationLabel(devVsGoal, indicator.direction as any);
-  const devEstInfo = deviationLabel(devRealized, indicator.direction as any);
+  const devGoalInfo = deviationLabel(devVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
+  const devEstInfo = deviationLabel(devRealized, indicator.direction ?? 'HIGHER_IS_BETTER');
 
   const canEdit = indicator.type === 'INPUT' && !!activeScenario;
 

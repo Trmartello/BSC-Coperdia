@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { CalcEngineService } from '../calc-engine/calc-engine.service';
+import { CalcEngineService, IndicatorNode } from '../calc-engine/calc-engine.service';
 import { CreateIndicatorDto } from './dto/create-indicator.dto';
 import { UpdateForecastDto } from './dto/update-forecast.dto';
 
@@ -18,6 +18,9 @@ export class IndicatorsService {
         formula: true,
         parents: { include: { parent: { select: { id: true, code: true, name: true } } } },
         children: { include: { child: { select: { id: true, code: true, name: true } } } },
+        realizedValues: { orderBy: { period: 'desc' }, take: 1 },
+        forecastValues: { orderBy: { period: 'desc' }, take: 1 },
+        goals: { orderBy: { period: 'desc' }, take: 1 },
       },
       orderBy: { sortOrder: 'asc' },
     });
@@ -31,6 +34,7 @@ export class IndicatorsService {
         parents: { include: { parent: true } },
         children: { include: { child: true } },
         realizedValues: { orderBy: { period: 'desc' }, take: 12 },
+        forecastValues: { orderBy: { period: 'desc' }, take: 12 },
         goals: { orderBy: { period: 'desc' }, take: 12 },
       },
     });
@@ -98,7 +102,7 @@ export class IndicatorsService {
     return roots.map((r) => this.buildSubTree(r.id, graph));
   }
 
-  private buildSubTree(id: string, graph: Map<string, import('../../modules/calc-engine/calc-engine.service').IndicatorNode>, visited = new Set<string>()): any {
+  private buildSubTree(id: string, graph: Map<string, IndicatorNode>, visited = new Set<string>()): any {
     if (visited.has(id)) return { id, circular: true };
     visited.add(id);
     const node = graph.get(id);

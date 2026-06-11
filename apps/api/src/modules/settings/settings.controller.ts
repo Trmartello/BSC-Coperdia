@@ -47,7 +47,7 @@ export class SettingsController {
 
   @Post('categories')
   createCategory(@Body() body: any, @Request() req: any) {
-    return this.settingsService.createCategory(body, req.user.sub);
+    return this.settingsService.createCategory(body, req.user.id);
   }
 
   @Patch('categories/:id')

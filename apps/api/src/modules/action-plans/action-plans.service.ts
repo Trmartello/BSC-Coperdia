@@ -247,6 +247,9 @@ export class ActionPlansService {
   // ── Action Items ───────────────────────────────────────────────────────────
 
   async createActionItem(initiativeId: string, dto: CreateActionItemDto, userId: string) {
+    const init = await this.prisma.initiative.findUnique({ where: { id: initiativeId } });
+    if (!init) throw new NotFoundException(`Initiative ${initiativeId} not found`);
+
     const item = await this.prisma.actionItem.create({
       data: {
         initiativeId,
@@ -263,8 +266,7 @@ export class ActionPlansService {
       },
     });
 
-    const init = await this.prisma.initiative.findUnique({ where: { id: initiativeId } });
-    if (init) await this.audit(init.actionPlanId, userId, 'CREATE', 'action_item', undefined, item);
+    await this.audit(init.actionPlanId, userId, 'CREATE', 'action_item', undefined, item);
 
     return item;
   }

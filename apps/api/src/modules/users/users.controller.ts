@@ -22,7 +22,7 @@ export class UsersController {
 
   @Post()
   create(@Body() body: any, @Request() req: any) {
-    return this.usersService.create(body, req.user.sub);
+    return this.usersService.create(body, req.user.id);
   }
 
   @Patch(':id')

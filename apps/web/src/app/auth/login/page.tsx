@@ -9,13 +9,13 @@ import { toast } from 'sonner';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setAuth } = useAuthStore();
+  const { login } = useAuthStore();
   const [form, setForm] = useState({ email: '', password: '' });
 
   const mutation = useMutation({
     mutationFn: () => authApi.login(form.email, form.password),
     onSuccess: ({ data }) => {
-      setAuth(data.accessToken, data.user);
+      login(data.user, data.accessToken);
       router.push('/dashboard/maps');
     },
     onError: () => toast.error('E-mail ou senha inválidos'),

@@ -100,7 +100,7 @@ function buildNodesAndEdges(entries: MapEntry[], savedFlow?: any) {
   const allIds = new Set(entries.map((e) => e.indicatorId));
   for (const entry of entries) {
     for (const rel of entry.indicator.children ?? []) {
-      if (allIds.has(rel.child.id)) {
+      if (rel.child?.id && allIds.has(rel.child.id)) {
         edges.push({
           id: `e-${rel.child.id}-${entry.indicatorId}`,
           source: rel.child.id,

@@ -18,7 +18,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env', 'apps/api/.env'] }),
     EventEmitterModule.forRoot({ wildcard: true, maxListeners: 20 }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     ServeStaticModule.forRoot({ rootPath: join(__dirname, '..', 'uploads'), serveRoot: '/uploads' }),

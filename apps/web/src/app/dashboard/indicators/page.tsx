@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Filter } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { indicatorsApi } from '../../../lib/api';
 import { IndicatorCard } from '../../../components/indicators/IndicatorCard';
 import { IndicatorDetailPanel } from '../../../components/indicators/IndicatorDetailPanel';
@@ -109,7 +109,14 @@ export default function IndicatorsPage() {
                     selectedId === ind.id ? 'ring-2 ring-indigo-500' : '',
                   )}
                 >
-                  <IndicatorCard indicator={ind} period={CURRENT_PERIOD} />
+                  <IndicatorCard
+                    data={{
+                      indicator: ind,
+                      realized: ind.realizedValues?.[0]?.value ?? null,
+                      goal: ind.goals?.[0]?.value ?? null,
+                      estimate: ind.forecastValues?.[0]?.value ?? null,
+                    }}
+                  />
                 </div>
               ))}
             </div>
