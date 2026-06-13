@@ -43,6 +43,8 @@ export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
     mutationFn: () => actionPlansApi.createAction(initiativeId, form).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['action-plan', planId] });
+      qc.invalidateQueries({ queryKey: ['action-plans'] });
+      qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
       toast.success('Ação criada');
       onClose();
     },

@@ -65,8 +65,24 @@ export class UsersService {
   }
 
   async remove(id: string) {
-    await this.prisma.user.delete({ where: { id } });
-    return { success: true };
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { _count: { select: { actionPlans: true } } },
+    });
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+
+    // Usuário com vínculos (planos, mapas, etc.) não pode ser apagado por FK Restrict.
+    // Nesse caso fazemos desativação (soft-delete) para preservar o histórico.
+    try {
+      await this.prisma.user.delete({ where: { id } });
+      return { success: true, deactivated: false };
+    } catch (err: any) {
+      if (err?.code === 'P2003') {
+        await this.prisma.user.update({ where: { id }, data: { active: false } });
+        return { success: true, deactivated: true };
+      }
+      throw err;
+    }
   }
 
   async toggleActive(id: string) {

@@ -12,12 +12,14 @@ import {
   ChevronRight,
   Network,
   BarChart2,
+  LayoutDashboard,
 } from 'lucide-react';
 
 const NAV = [
   {
     section: 'Visão Geral',
     items: [
+      { label: 'Dashboard', href: '/dashboard/executive', icon: LayoutDashboard },
       { label: 'Mapa Estratégico', href: '/dashboard/maps', icon: Network },
     ],
   },

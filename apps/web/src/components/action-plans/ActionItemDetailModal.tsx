@@ -51,6 +51,8 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
     onSuccess: (updated) => {
       setAction(updated);
       qc.invalidateQueries({ queryKey: ['action-plan', plan.id] });
+      qc.invalidateQueries({ queryKey: ['action-plans'] });
+      qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
       toast.success('Ação atualizada');
     },
     onError: () => toast.error('Erro ao salvar'),

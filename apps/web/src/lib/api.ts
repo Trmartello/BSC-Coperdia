@@ -136,6 +136,16 @@ export const settingsApi = {
   deleteCategory: (id: string) => api.delete(`/settings/categories/${id}`),
 };
 
+// ─── Formulas ────────────────────────────────────────────────────────────────
+export const formulasApi = {
+  get: (indicatorId: string) => api.get(`/formulas/${indicatorId}`),
+  create: (data: { indicatorId: string; expression: string; variables: Record<string, string>; description?: string }) =>
+    api.post('/formulas', data),
+  validate: (data: { expression: string; variables: Record<string, string> }) =>
+    api.post('/formulas/validate', data),
+  remove: (indicatorId: string) => api.delete(`/formulas/${indicatorId}`),
+};
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export const dashboardApi = {
   executive: (period: string, scenarioId?: string) =>

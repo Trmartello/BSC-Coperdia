@@ -77,6 +77,8 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
     mutationFn: () => actionPlansApi.create({ problem: newProblem, indicatorId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['action-plans', { indicatorId }] });
+      qc.invalidateQueries({ queryKey: ['action-plans'] });
+      qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
       toast.success('Plano de ação criado');
       setShowNewPlan(false);
       setNewProblem('');
