@@ -7,7 +7,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('api/v1');
-  app.enableCors({ origin: process.env.FRONTEND_URL, credentials: true });
+  // Se FRONTEND_URL não estiver definido, libera todas as origens (útil em deploy/demo)
+  app.enableCors({ origin: process.env.FRONTEND_URL || true, credentials: true });
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
