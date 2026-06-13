@@ -17,6 +17,7 @@ RUN /app/node_modules/.bin/nest build
 
 # ---- Runtime stage ----
 FROM node:20-alpine
+RUN apk add --no-cache openssl
 WORKDIR /app
 
 # node_modules hoisted (inclui @prisma/client + cliente gerado em .prisma)
