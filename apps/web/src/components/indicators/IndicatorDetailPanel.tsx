@@ -164,6 +164,65 @@ function RealizedRow({ rv, unit, indicatorId, onSaved }: {
   );
 }
 
+// ─── Novo lançamento manual (apenas indicadores de entrada) ─────────────────────
+
+function NewRealizedForm({ indicatorId, defaultPeriod, onSaved }: {
+  indicatorId: string; defaultPeriod: string; onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [month, setMonth] = useState(defaultPeriod.slice(0, 7));
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const v = parseFloat(value.replace(',', '.'));
+    if (Number.isNaN(v)) { toast.error('Informe um valor numérico'); return; }
+    setSaving(true);
+    try {
+      await indicatorsApi.setRealized(indicatorId, { period: `${month}-01`, value: v });
+      toast.success('Lançamento salvo. Recalculando fórmulas...');
+      setOpen(false); setValue('');
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao salvar lançamento');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center justify-center gap-1.5 mb-4 py-2 rounded-xl bg-purple-600/20 border border-purple-500/30 text-purple-200 text-xs hover:bg-purple-600/30 transition-colors"
+      >
+        <Plus size={13} /> Novo lançamento
+      </button>
+    );
+  }
+
+  return (
+    <div className="mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className="text-[9px] text-white/30 uppercase tracking-wider">Período</label>
+          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
+            className="w-full bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-1.5 mt-0.5 focus:outline-none focus:border-purple-500" />
+        </div>
+        <div className="flex-1">
+          <label className="text-[9px] text-white/30 uppercase tracking-wider">Valor</label>
+          <input type="number" value={value} onChange={(e) => setValue(e.target.value)} autoFocus placeholder="0"
+            className="w-full bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-1.5 mt-0.5 focus:outline-none focus:border-purple-500" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={() => { setOpen(false); setValue(''); }} className="flex-1 py-1.5 rounded-lg border border-white/10 text-xs text-white/40 hover:bg-white/5">Cancelar</button>
+        <button onClick={save} disabled={saving} className="flex-1 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs text-white disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar'}</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Detail Panel ──────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'realized';
@@ -487,10 +546,12 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                 <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Lançamentos Realizados</p>
                 <span className="text-[10px] text-white/30">{realizedHistory.length} registros</span>
               </div>
-              {ind?.type === 'CALCULATED' && (
+              {ind?.type === 'CALCULATED' ? (
                 <div className="mb-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300">
                   Indicador calculado. Valores gerados automaticamente pela fórmula.
                 </div>
+              ) : (
+                <NewRealizedForm indicatorId={indicatorId} defaultPeriod={period} onSaved={() => refetch()} />
               )}
               {realizedHistory.length === 0 ? (
                 <p className="text-xs text-white/20 text-center py-8">Nenhum valor lançado.</p>

@@ -46,6 +46,15 @@ export const indicatorsApi = {
     api.post(`/indicators/${id}/goal`, data),
   setEstimate: (id: string, data: { period: string; value: number }) =>
     api.post(`/indicators/${id}/estimate`, data),
+  downloadTemplate: () =>
+    api.get('/indicators/import/template', { responseType: 'blob' }),
+  importData: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/indicators/import', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   addRelation: (parentId: string, childId: string) =>
     api.post('/indicators/relations', { parentId, childId }),
   removeRelation: (parentId: string, childId: string) =>

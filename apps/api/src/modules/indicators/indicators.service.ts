@@ -243,4 +243,137 @@ export class IndicatorsService {
     const affected = await this.calcEngine.getImpactChain(indicatorId, graph);
     return { indicatorId, affectedIndicators: affected };
   }
+
+  // ── Carga de dados (planilha CSV) ────────────────────────────────────────────
+
+  // Modelo para preenchimento: apenas indicadores de ENTRADA (sem fórmula).
+  async generateImportTemplate(): Promise<string> {
+    const inputs = await this.prisma.indicator.findMany({
+      where: { active: true, type: 'INPUT' },
+      orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }],
+    });
+    const period = new Date().toISOString().slice(0, 7) + '-01';
+    const sep = ';';
+    const lines = ['codigo;nome;periodo;valor'];
+    for (const i of inputs) {
+      // nome entre aspas para tolerar separador no texto
+      lines.push([i.code, `"${i.name.replace(/"/g, "'")}"`, period, ''].join(sep));
+    }
+    // BOM para o Excel reconhecer UTF-8 (acentos)
+    return '﻿' + lines.join('\r\n') + '\r\n';
+  }
+
+  private parseImportCsv(text: string): { codigo: string; periodo: string; valor: string }[] {
+    const clean = text.replace(/^﻿/, '');
+    const lines = clean.split(/\r?\n/).filter((l) => l.trim().length);
+    if (!lines.length) return [];
+    const sep = lines[0].includes(';') ? ';' : ',';
+    const header = lines[0].split(sep).map((h) => h.trim().toLowerCase());
+    const col = {
+      codigo: header.findIndex((h) => h.startsWith('cod')),
+      periodo: header.findIndex((h) => h.startsWith('per')),
+      valor: header.findIndex((h) => h.startsWith('val')),
+    };
+    if (col.codigo < 0 || col.periodo < 0 || col.valor < 0) {
+      throw new BadRequestException('Formato inválido. Baixe e utilize a planilha modelo (colunas: codigo, periodo, valor).');
+    }
+    const split = (line: string) => line.split(sep).map((c) => c.trim().replace(/^"|"$/g, ''));
+    const rows: { codigo: string; periodo: string; valor: string }[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const c = split(lines[i]);
+      rows.push({ codigo: c[col.codigo] ?? '', periodo: c[col.periodo] ?? '', valor: c[col.valor] ?? '' });
+    }
+    return rows;
+  }
+
+  private normalizePeriod(p: string): Date | null {
+    const t = p.trim();
+    const iso = /^\d{4}-\d{2}$/.test(t) ? `${t}-01` : t;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  async importRealizedValues(text: string, userId: string) {
+    const rows = this.parseImportCsv(text);
+    const indicators = await this.prisma.indicator.findMany({ include: { formula: true } });
+    const byCode = new Map(indicators.map((i) => [i.code.toUpperCase(), i]));
+    const byId = new Map(indicators.map((i) => [i.id, i]));
+
+    const skipped: { codigo: string; motivo: string }[] = [];
+    const importedPeriods = new Set<string>(); // ISO
+    let importedCount = 0;
+    const ops: any[] = [];
+
+    for (const row of rows) {
+      const code = row.codigo.trim().toUpperCase();
+      if (!code) continue;
+      if (row.valor.trim() === '') { skipped.push({ codigo: code, motivo: 'valor em branco' }); continue; }
+      const ind = byCode.get(code);
+      if (!ind) { skipped.push({ codigo: code, motivo: 'código não encontrado' }); continue; }
+      if (ind.type === 'CALCULATED' || ind.formula) {
+        skipped.push({ codigo: code, motivo: 'ignorado — calculado por fórmula' });
+        continue;
+      }
+      const period = this.normalizePeriod(row.periodo);
+      if (!period) { skipped.push({ codigo: code, motivo: `período inválido (${row.periodo})` }); continue; }
+      const value = parseFloat(row.valor.replace(/\s/g, '').replace(',', '.'));
+      if (Number.isNaN(value)) { skipped.push({ codigo: code, motivo: `valor inválido (${row.valor})` }); continue; }
+
+      importedCount++;
+      importedPeriods.add(period.toISOString());
+      ops.push(
+        this.prisma.realizedValue.upsert({
+          where: { indicatorId_period: { indicatorId: ind.id, period } },
+          create: { indicatorId: ind.id, period, value },
+          update: { value },
+        }),
+      );
+    }
+
+    if (ops.length) await this.prisma.$transaction(ops);
+    // Recalcula indicadores calculados a partir dos novos insumos
+    if (ops.length) await this.calcEngine.recalculateRealized();
+
+    // ── Relatório de inconsistências ──
+    // Para cada período importado, verifica insumos (variáveis das fórmulas) que
+    // são de ENTRADA e seguem sem valor → o indicador calculado fica comprometido.
+    const inconsistencies: {
+      calculado: string; calculadoNome: string; faltando: string; faltandoNome: string; periodo: string;
+    }[] = [];
+
+    for (const isoPeriod of importedPeriods) {
+      const period = new Date(isoPeriod);
+      const realized = await this.prisma.realizedValue.findMany({ where: { period }, select: { indicatorId: true } });
+      const haveValue = new Set(realized.map((r) => r.indicatorId));
+      const periodLabel = isoPeriod.slice(0, 10);
+
+      for (const ind of indicators) {
+        const variables = ind.formula?.variables as Record<string, string> | undefined;
+        if (!variables) continue;
+        for (const depId of Object.values(variables)) {
+          const dep = byId.get(depId);
+          if (!dep) continue;
+          if (dep.type === 'INPUT' && !haveValue.has(depId)) {
+            inconsistencies.push({
+              calculado: ind.code, calculadoNome: ind.name,
+              faltando: dep.code, faltandoNome: dep.name,
+              periodo: periodLabel,
+            });
+          }
+        }
+      }
+    }
+
+    await this.audit.log({
+      userId, action: 'CREATE', entity: 'RealizedValue', entityId: 'bulk-import',
+      after: { importedCount, skipped: skipped.length, inconsistencies: inconsistencies.length },
+    });
+
+    return {
+      importedCount,
+      periods: [...importedPeriods].map((p) => p.slice(0, 10)).sort(),
+      skipped,
+      inconsistencies,
+    };
+  }
 }

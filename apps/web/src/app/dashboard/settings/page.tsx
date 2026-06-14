@@ -3,10 +3,11 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Settings, BarChart2, Map, Tag, Plus, Pencil, Trash2, Activity,
+  Settings, BarChart2, Map, Tag, Plus, Pencil, Trash2, Activity, FileSpreadsheet,
 } from 'lucide-react';
 import { settingsApi } from '../../../lib/api';
 import { IndicatorFormPanel } from '../../../components/indicators/IndicatorFormPanel';
+import { ImportDataModal } from '../../../components/indicators/ImportDataModal';
 import { cn } from '../../../lib/utils';
 import { toast } from 'sonner';
 
@@ -28,6 +29,7 @@ export default function SettingsPage() {
   const [showNewCat, setShowNewCat] = useState(false);
   const [showIndForm, setShowIndForm] = useState(false);
   const [editIndId, setEditIndId] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   const { data: systemData } = useQuery({
     queryKey: ['settings'],
@@ -167,12 +169,20 @@ export default function SettingsPage() {
         <div className="bg-[#1a1f2e] border border-white/10 rounded-2xl overflow-hidden">
           <div className="p-4 border-b border-white/5 flex items-center justify-between">
             <p className="text-sm font-medium text-white/60">{(indicators as any[]).length} indicadores</p>
-            <button
-              onClick={() => { setEditIndId(null); setShowIndForm(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-colors"
-            >
-              <Plus size={13} /> Novo Indicador
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowImport(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 text-xs font-medium transition-colors"
+              >
+                <FileSpreadsheet size={13} /> Carga de dados
+              </button>
+              <button
+                onClick={() => { setEditIndId(null); setShowIndForm(true); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-colors"
+              >
+                <Plus size={13} /> Novo Indicador
+              </button>
+            </div>
           </div>
           <table className="w-full">
             <thead>
@@ -319,6 +329,8 @@ export default function SettingsPage() {
           }}
         />
       )}
+
+      {showImport && <ImportDataModal onClose={() => setShowImport(false)} />}
     </div>
   );
 }
