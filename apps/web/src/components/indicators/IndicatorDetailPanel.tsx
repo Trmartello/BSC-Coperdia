@@ -71,12 +71,12 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
 
   const pts = data.slice(-15);
   const n = pts.length;
-  const step = 42;
-  const barW = step * 0.6;
+  const step = 52;
+  const barW = step * 0.55;
   const chartW = n * step;
-  const chartH = 120;
-  const pad = 20;
-  const topPad = 52; // espaço para as duas linhas YoY acima das barras
+  const chartH = 140;
+  const pad = 24;
+  const topPad = 58; // espaço para as duas linhas YoY acima das barras
 
   // Para cada um dos 2 meses mais recentes, encontrar o mesmo mês do ano anterior
   interface YoyPair {
@@ -119,7 +119,7 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
 
   return (
     <div className="w-full overflow-x-auto">
-      <svg width="100%" height={baseY + 24} viewBox={`0 0 ${fullW} ${baseY + 24}`} preserveAspectRatio="xMidYMid meet">
+      <svg width="100%" height={baseY + 46} viewBox={`0 0 ${fullW} ${baseY + 46}`} preserveAspectRatio="xMidYMid meet">
 
         {/* duas linhas YoY tracejadas com hastes e label central */}
         {yoyPairs.map((pair, pi) => {
@@ -130,14 +130,14 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
           const color = pair.good ? 'rgba(52,211,153,0.7)' : 'rgba(248,113,113,0.7)';
           const labelColor = pair.good ? '#34d399' : '#f87171';
           const label = `${pair.pct > 0 ? '+' : ''}${pair.pct.toFixed(1)}% YoY`;
-          const labelW = label.length * 5.2 + 8;
+          const labelW = label.length * 6.2 + 10;
           return (
             <g key={`yoy-${pi}`}>
               <line x1={lx1} x2={lx2} y1={ly} y2={ly} stroke={color} strokeWidth={1} strokeDasharray="4 3" />
-              <line x1={lx1} x2={lx1} y1={ly - 4} y2={ly + 4} stroke={color} strokeWidth={1} />
-              <line x1={lx2} x2={lx2} y1={ly - 4} y2={ly + 4} stroke={color} strokeWidth={1} />
-              <rect x={midX - labelW / 2} y={ly - 9} width={labelW} height={13} rx={3} fill="#161b27" />
-              <text x={midX} y={ly + 1} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={labelColor}>
+              <line x1={lx1} x2={lx1} y1={ly - 5} y2={ly + 5} stroke={color} strokeWidth={1.5} />
+              <line x1={lx2} x2={lx2} y1={ly - 5} y2={ly + 5} stroke={color} strokeWidth={1.5} />
+              <rect x={midX - labelW / 2} y={ly - 10} width={labelW} height={14} rx={3} fill="#161b27" />
+              <text x={midX} y={ly + 1} textAnchor="middle" fontSize="10" fontWeight="700" fill={labelColor}>
                 {label}
               </text>
             </g>
@@ -182,7 +182,7 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
             <g key={`b-${i}`}>
               <rect x={x(i) - barW / 2} width={barW} y={y(p.value)} height={baseY - y(p.value)} rx={3} fill={barColor} />
               {showLabel && (
-                <text x={x(i)} y={y(p.value) - 4} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={labelColor}>
+                <text x={x(i)} y={y(p.value) - 5} textAnchor="middle" fontSize="10" fontWeight="700" fill={labelColor}>
                   {fmtBar(p.value, unit)}
                 </text>
               )}
@@ -190,15 +190,18 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
           );
         })}
 
-        {/* labels de período: destaque (negrito) nos meses realçados, demais esmaecidos */}
+        {/* labels de período — todos visíveis, rotacionados -45° para não colidir */}
         {pts.map((p, i) => {
           const highlight = i >= n - 2 || prevYearIdxSet.has(i);
-          const show = highlight || i === 0 || i % 4 === 0;
-          if (!show) return null;
           return (
-            <text key={`t-${i}`} x={x(i)} y={baseY + 16} textAnchor="middle"
-              fontSize="7.5" fontWeight={highlight ? 700 : 400}
-              fill={highlight ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)'}>
+            <text
+              key={`t-${i}`}
+              x={x(i)} y={baseY + 6}
+              textAnchor="end"
+              fontSize="9" fontWeight={highlight ? 700 : 400}
+              fill={highlight ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.32)'}
+              transform={`rotate(-45,${x(i)},${baseY + 6})`}
+            >
               {fmtMonthCompact(p.period)}
             </text>
           );
@@ -422,7 +425,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   return (
     <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
       <div
-        className="w-[420px] h-full bg-[#161b27] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl relative"
+        className="w-[50vw] min-w-[460px] max-w-[800px] h-full bg-[#161b27] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Guided action plan overlay */}
