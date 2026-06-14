@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactFlow, {
@@ -8,9 +8,11 @@ import ReactFlow, {
   useNodesState, useEdgesState,
   addEdge, Connection, MarkerType, Position,
   NodeProps, Handle, Panel,
+  ConnectionMode, EdgeProps, BaseEdge, EdgeLabelRenderer,
+  getSmoothStepPath, reconnectEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil, Info, Maximize2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil, Info, Maximize2, Trash2, X } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
@@ -38,9 +40,18 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
     : (indicator.direction === 'LOWER_IS_BETTER' ? dev <= 0 : dev >= 0);
 
   const handleStyle = {
-    background: '#6366f1', border: 'none', width: 10, height: 10,
+    background: '#6366f1', border: '2px solid #0d0f17', width: 11, height: 11,
     opacity: 0, transition: 'opacity 0.15s',
   } as const;
+
+  // 4 alças (topo/direita/baixo/esquerda) — em ConnectionMode.Loose cada uma
+  // funciona como origem e destino, permitindo conectar por qualquer lado do card.
+  const handles = ([
+    ['top', Position.Top],
+    ['right', Position.Right],
+    ['bottom', Position.Bottom],
+    ['left', Position.Left],
+  ] as const);
 
   return (
     <div className={cn(
@@ -48,7 +59,9 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
       selected ? 'border-indigo-500 shadow-indigo-500/20' : 'border-white/10 hover:border-white/25',
       '[&:hover_.rf-handle]:!opacity-100',
     )}>
-      <Handle type="target" position={Position.Left} className="rf-handle" style={handleStyle} />
+      {handles.map(([hid, pos]) => (
+        <Handle key={hid} id={hid} type="source" position={pos} className="rf-handle" style={handleStyle} />
+      ))}
 
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-start justify-between gap-2">
@@ -112,13 +125,60 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
           {indicator.direction === 'LOWER_IS_BETTER' ? 'Quanto menor melhor' : 'Quanto maior melhor'}
         </p>
       </div>
-
-      <Handle type="source" position={Position.Right} className="rf-handle" style={handleStyle} />
     </div>
   );
 }
 
 const nodeTypes = { mapIndicator: MapIndicatorNode };
+
+// ─── Editable Edge (clique para selecionar + remover; arraste a ponta p/ reconectar) ─
+
+function EditableEdge({
+  id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
+  markerEnd, style, data, selected,
+}: EdgeProps) {
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
+  });
+
+  const edgeStyle: React.CSSProperties = {
+    ...style,
+    stroke: selected ? '#818cf8' : (style?.stroke ?? '#6366f1'),
+    strokeWidth: selected ? 2.5 : (style?.strokeWidth ?? 1.5),
+  };
+
+  return (
+    <>
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={edgeStyle} />
+      <EdgeLabelRenderer>
+        <div
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: 'all',
+          }}
+          className={cn(
+            'nodrag nopan transition-opacity',
+            selected ? 'opacity-100' : 'opacity-0 hover:opacity-100',
+          )}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              data?.onRemoveEdge?.(id, data?.parentId, data?.childId);
+            }}
+            title="Remover conexão"
+            className="w-5 h-5 rounded-full bg-red-500/90 hover:bg-red-500 text-white flex items-center justify-center shadow-lg border border-white/30"
+          >
+            <X size={11} />
+          </button>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes = { editable: EditableEdge };
 
 // ─── Build nodes/edges ────────────────────────────────────────────────────────
 
@@ -129,6 +189,7 @@ function buildNodesAndEdges(
     onInfo: (id: string) => void;
     onExpand: (id: string) => void;
     onRemove: (id: string, name: string) => void;
+    onRemoveEdge: (edgeId: string, parentId: string, childId: string) => void;
   },
   showEstimate = true,
 ) {
@@ -150,20 +211,37 @@ function buildNodesAndEdges(
     };
   });
 
+  // Mapa das alças salvas por par origem→destino (preserva o lado escolhido)
+  const savedHandles = new Map<string, { sourceHandle?: string; targetHandle?: string }>();
+  for (const se of savedFlow?.edges ?? []) {
+    if (se.source && se.target) {
+      savedHandles.set(`${se.source}->${se.target}`, {
+        sourceHandle: se.sourceHandle ?? undefined,
+        targetHandle: se.targetHandle ?? undefined,
+      });
+    }
+  }
+
   const edges: Edge[] = [];
   const allIds = new Set(entries.map((e) => e.indicatorId));
   for (const entry of entries) {
     for (const rel of entry.indicator.children ?? []) {
       if (rel.child?.id && allIds.has(rel.child.id)) {
+        const source = rel.child.id;
+        const target = entry.indicatorId;
+        const saved = savedHandles.get(`${source}->${target}`);
         edges.push({
-          id: `e-${rel.child.id}-${entry.indicatorId}`,
-          source: rel.child.id,
-          target: entry.indicatorId,
-          type: 'smoothstep',
+          id: `e-${source}-${target}`,
+          source,
+          target,
+          // alças padrão (direita→esquerda) quando ainda não houver layout salvo
+          sourceHandle: saved?.sourceHandle ?? 'right',
+          targetHandle: saved?.targetHandle ?? 'left',
+          type: 'editable',
           animated: false,
           style: { stroke: '#6366f1', strokeWidth: 1.5, strokeDasharray: '5 3' },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
-          data: { parentId: entry.indicatorId, childId: rel.child.id },
+          data: { parentId: target, childId: source, onRemoveEdge: handlers?.onRemoveEdge },
         });
       }
     }
@@ -280,8 +358,8 @@ export default function MapEditorPage() {
   });
 
   const { data: map, isLoading } = useQuery<IndicatorMap>({
-    queryKey: ['map', id],
-    queryFn: () => mapsApi.get(id).then((r) => r.data),
+    queryKey: ['map', id, activePeriod],
+    queryFn: () => mapsApi.get(id, activePeriod).then((r) => r.data),
   });
 
   const { data: flags } = useQuery({
@@ -305,12 +383,26 @@ export default function MapEditorPage() {
     }
   }, [id, qc]);
 
+  // Remove a conexão (relação de impacto) entre dois indicadores
+  const handleRemoveEdge = useCallback(async (edgeId: string, parentId: string, childId: string) => {
+    setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+    try {
+      await indicatorsApi.removeRelation(parentId, childId);
+      toast.success('Conexão removida');
+    } catch {
+      toast.error('Erro ao remover conexão');
+    } finally {
+      qc.invalidateQueries({ queryKey: ['map', id] });
+    }
+  }, [id, qc, setEdges]);
+
   useEffect(() => {
     if (!map?.entries) return;
     const { nodes: n, edges: e } = buildNodesAndEdges(map.entries, map.flowData, {
       onInfo: (indId) => setInfoIndicatorId(indId),
       onExpand: (indId) => setSelectedIndicatorId((prev) => (prev === indId ? null : indId)),
       onRemove: handleRemoveIndicator,
+      onRemoveEdge: handleRemoveEdge,
     }, showEstimate);
     setNodes(n);
     setEdges(e);
@@ -340,6 +432,55 @@ export default function MapEditorPage() {
       }
     },
     [setEdges, qc, id],
+  );
+
+  // ── Reconexão: arraste a ponta de uma conexão para outro card ──────────────
+  const edgeReconnectOk = useRef(true);
+  const onReconnectStart = useCallback(() => { edgeReconnectOk.current = false; }, []);
+
+  const onReconnect = useCallback(
+    async (oldEdge: Edge, newConnection: Connection) => {
+      edgeReconnectOk.current = true;
+      if (!newConnection.source || !newConnection.target) return;
+      const oldParent = (oldEdge.data as any)?.parentId ?? oldEdge.target;
+      const oldChild = (oldEdge.data as any)?.childId ?? oldEdge.source;
+      const newParent = newConnection.target;
+      const newChild = newConnection.source;
+
+      // sem alteração efetiva
+      if (oldParent === newParent && oldChild === newChild) return;
+
+      setEdges((els) =>
+        reconnectEdge(oldEdge, newConnection, els).map((e) =>
+          e.id === oldEdge.id || (e.source === newChild && e.target === newParent)
+            ? { ...e, data: { ...(e.data as any), parentId: newParent, childId: newChild } }
+            : e,
+        ),
+      );
+      try {
+        await indicatorsApi.removeRelation(oldParent, oldChild);
+        await indicatorsApi.addRelation(newParent, newChild);
+        toast.success('Conexão atualizada');
+      } catch (e: any) {
+        toast.error(e?.response?.data?.message || 'Erro ao reconectar');
+      } finally {
+        qc.invalidateQueries({ queryKey: ['map', id] });
+      }
+    },
+    [setEdges, qc, id],
+  );
+
+  // Se soltar a ponta no vazio, remove a conexão
+  const onReconnectEnd = useCallback(
+    (_: unknown, edge: Edge) => {
+      if (!edgeReconnectOk.current) {
+        const parentId = (edge.data as any)?.parentId ?? edge.target;
+        const childId = (edge.data as any)?.childId ?? edge.source;
+        handleRemoveEdge(edge.id, parentId, childId);
+      }
+      edgeReconnectOk.current = true;
+    },
+    [handleRemoveEdge],
   );
 
   // Remover conexão (selecione a seta e tecle Delete)
@@ -406,7 +547,7 @@ export default function MapEditorPage() {
           </span>
         )}
         <span className="text-[10px] text-white/30 italic hidden lg:inline">
-          · arraste as alças dos cards para conectar · selecione uma seta e tecle Delete para remover
+          · arraste as alças (4 lados) para conectar · clique na linha para selecionar e remover (✕) · arraste a ponta para reconectar
         </span>
         <div className="flex-1" />
         <div className="relative">
@@ -453,9 +594,14 @@ export default function MapEditorPage() {
             onEdgesChange={onEdgesChange}
             onEdgesDelete={onEdgesDelete}
             onConnect={onConnect}
+            onReconnect={onReconnect}
+            onReconnectStart={onReconnectStart}
+            onReconnectEnd={onReconnectEnd}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            connectionMode={ConnectionMode.Loose}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             proOptions={{ hideAttribution: true }}

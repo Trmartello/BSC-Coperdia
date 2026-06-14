@@ -121,7 +121,7 @@ export const mapsApi = {
   deleteCategory: (id: string) => api.delete(`/maps/categories/${id}`),
   // maps
   list: (categoryId?: string) => api.get('/maps', { params: { categoryId } }),
-  get: (id: string) => api.get(`/maps/${id}`),
+  get: (id: string, period?: string) => api.get(`/maps/${id}`, { params: period ? { period } : {} }),
   create: (data: { name: string; description?: string; categoryId: string }) => api.post('/maps', data),
   update: (id: string, data: any) => api.patch(`/maps/${id}`, data),
   delete: (id: string) => api.delete(`/maps/${id}`),

@@ -43,9 +43,14 @@ export class MapsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, period?: string) {
     // Mantém os valores calculados em dia para os cards do mapa
     await this.calcEngine.recalculateRealized();
+
+    // Com um período de referência, os cards refletem o valor vigente "até"
+    // aquele mês (último valor conhecido <= período selecionado).
+    const upto = period ? { period: { lte: new Date(period) } } : {};
+
     const map = await this.prisma.indicatorMap.findUnique({
       where: { id },
       include: {
@@ -55,9 +60,9 @@ export class MapsService {
             indicator: {
               include: {
                 formula: true,
-                realizedValues: { orderBy: { period: 'desc' }, take: 1 },
-                forecastValues: { where: { scenarioId: null }, orderBy: { period: 'desc' }, take: 1 },
-                goals: { orderBy: { period: 'desc' }, take: 1 },
+                realizedValues: { where: upto, orderBy: { period: 'desc' }, take: 1 },
+                forecastValues: { where: { scenarioId: null, ...upto }, orderBy: { period: 'desc' }, take: 1 },
+                goals: { where: upto, orderBy: { period: 'desc' }, take: 1 },
                 parents: { include: { parent: { select: { id: true, code: true, name: true } } } },
                 children: { include: { child: { select: { id: true, code: true, name: true } } } },
               },

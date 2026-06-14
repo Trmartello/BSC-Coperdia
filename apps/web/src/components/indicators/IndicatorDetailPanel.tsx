@@ -388,26 +388,41 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   });
 
   const ind = indicator as any;
-
-  // Valores do período atual
-  const realized = ind?.realizedValues?.[0]?.value ? parseFloat(ind.realizedValues[0].value) : null;
-  const goal = ind?.goals?.[0]?.value ? parseFloat(ind.goals[0].value) : null;
-  const estimate = ind?.forecastValues?.[0]?.value ? parseFloat(ind.forecastValues[0].value) : null;
-  const effective = (showEstimate ? estimate : null) ?? realized;
   const direction = ind?.direction ?? 'HIGHER_IS_BETTER';
   const unit = ind?.unit ?? 'NUMBER';
+
+  // ── Período de referência selecionado (mês de análise) ──────────────────────
+  const refDate = new Date(period);
+  const refYear = refDate.getUTCFullYear();
+  const refMonth = refDate.getUTCMonth();
+  const sameYM = (d: Date, y: number, m: number) => d.getUTCMonth() === m && d.getUTCFullYear() === y;
 
   // Série realizada ordenada ascendente
   const realizedAsc = [...(ind?.realizedValues ?? [])]
     .map((rv: any) => ({ period: new Date(rv.period), value: parseFloat(rv.value) }))
     .sort((a, b) => a.period.getTime() - b.period.getTime());
 
-  const curPoint = realizedAsc[realizedAsc.length - 1];
-  const prevPoint = realizedAsc[realizedAsc.length - 2];
-  const yoyPoint = curPoint
-    ? realizedAsc.find((p) => p.period.getUTCMonth() === curPoint.period.getUTCMonth()
-        && p.period.getUTCFullYear() === curPoint.period.getUTCFullYear() - 1)
-    : undefined;
+  // Ponto do mês de referência (e comparativos: mês anterior e ano anterior)
+  const curPoint = realizedAsc.find((p) => sameYM(p.period, refYear, refMonth));
+  const prevD = new Date(Date.UTC(refYear, refMonth - 1, 1));
+  const prevPoint = realizedAsc.find((p) => sameYM(p.period, prevD.getUTCFullYear(), prevD.getUTCMonth()));
+  const yoyPoint = realizedAsc.find((p) => sameYM(p.period, refYear - 1, refMonth));
+
+  // Meta e estimativa vigentes no período de referência (carry-forward: último <= período)
+  const goalRec = [...(ind?.goals ?? [])]
+    .map((g: any) => ({ d: new Date(g.period), v: parseFloat(g.value) }))
+    .filter((g) => g.d.getTime() <= refDate.getTime())
+    .sort((a, b) => b.d.getTime() - a.d.getTime())[0];
+  const estRec = [...(ind?.forecastValues ?? [])]
+    .map((f: any) => ({ d: new Date(f.period), v: parseFloat(f.value) }))
+    .filter((f) => f.d.getTime() <= refDate.getTime())
+    .sort((a, b) => b.d.getTime() - a.d.getTime())[0];
+
+  // Valores do período de referência
+  const realized = curPoint ? curPoint.value : null;
+  const goal = goalRec ? goalRec.v : null;
+  const estimate = estRec ? estRec.v : null;
+  const effective = (showEstimate ? estimate : null) ?? realized;
 
   // VS META
   const vsGoal = goal && effective != null && goal !== 0 ? ((effective - goal) / Math.abs(goal)) * 100 : null;
@@ -421,20 +436,23 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   // Diferença absoluta vs meta (para "X acima/abaixo")
   const goalDiff = (effective != null && goal != null) ? Math.abs(effective - goal) : null;
 
-  // Dados do gráfico
-  const chartData: Pt[] = realizedAsc.slice(-15).map((p) => {
-    const goalForPeriod = (ind?.goals ?? []).find((g: any) =>
-      new Date(g.period).getUTCMonth() === p.period.getUTCMonth() &&
-      new Date(g.period).getUTCFullYear() === p.period.getUTCFullYear());
-    const prevYear = realizedAsc.find((q) => q.period.getUTCMonth() === p.period.getUTCMonth()
-      && q.period.getUTCFullYear() === p.period.getUTCFullYear() - 1);
-    return {
-      period: p.period,
-      value: p.value,
-      goal: goalForPeriod ? parseFloat(goalForPeriod.value) : undefined,
-      prevYear: prevYear?.value,
-    };
-  });
+  // Dados do gráfico — janela de até 15 períodos terminando no mês selecionado
+  const chartData: Pt[] = realizedAsc
+    .filter((p) => p.period.getTime() <= refDate.getTime())
+    .slice(-15)
+    .map((p) => {
+      const goalForPeriod = (ind?.goals ?? []).find((g: any) =>
+        new Date(g.period).getUTCMonth() === p.period.getUTCMonth() &&
+        new Date(g.period).getUTCFullYear() === p.period.getUTCFullYear());
+      const prevYear = realizedAsc.find((q) => q.period.getUTCMonth() === p.period.getUTCMonth()
+        && q.period.getUTCFullYear() === p.period.getUTCFullYear() - 1);
+      return {
+        period: p.period,
+        value: p.value,
+        goal: goalForPeriod ? parseFloat(goalForPeriod.value) : undefined,
+        prevYear: prevYear?.value,
+      };
+    });
 
   const STATUS_BADGE = goodVsGoal === null
     ? { label: 'SEM META', dot: 'bg-white/30', color: 'text-white/40' }
@@ -526,7 +544,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                   {/* REALIZADO */}
                   <div className="flex flex-col pr-3">
                     <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">Realizado</p>
-                    <p className="text-[9px] text-white/35 mt-1">{curPoint ? fmtMonth(curPoint.period) : '—'}</p>
+                    <p className="text-[9px] text-white/35 mt-1">{fmtMonth(refDate)}</p>
                     <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
                       {fmtLarge(effective, unit)}
                     </p>

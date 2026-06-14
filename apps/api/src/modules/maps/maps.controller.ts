@@ -43,7 +43,9 @@ export class MapsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) { return this.service.findOne(id); }
+  findOne(@Param('id') id: string, @Query('period') period?: string) {
+    return this.service.findOne(id, period);
+  }
 
   @Roles(...WRITE_ROLES)
   @Post()
