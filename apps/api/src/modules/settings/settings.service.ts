@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AuditService } from '../../common/audit/audit.service';
 
 @Injectable()
 export class SettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async getSystemSettings() {
     // Return aggregated system info
@@ -33,16 +37,23 @@ export class SettingsService {
     });
   }
 
-  async createIndicator(data: any) {
-    return this.prisma.indicator.create({ data });
+  async createIndicator(data: any, userId: string) {
+    const created = await this.prisma.indicator.create({ data });
+    await this.audit.log({ userId, action: 'CREATE', entity: 'Indicator', entityId: created.id, after: created });
+    return created;
   }
 
-  async updateIndicator(id: string, data: any) {
-    return this.prisma.indicator.update({ where: { id }, data });
+  async updateIndicator(id: string, data: any, userId: string) {
+    const before = await this.prisma.indicator.findUnique({ where: { id } });
+    const updated = await this.prisma.indicator.update({ where: { id }, data });
+    await this.audit.log({ userId, action: 'UPDATE', entity: 'Indicator', entityId: id, before, after: updated });
+    return updated;
   }
 
-  async deleteIndicator(id: string) {
+  async deleteIndicator(id: string, userId: string) {
+    const before = await this.prisma.indicator.findUnique({ where: { id } });
     await this.prisma.indicator.delete({ where: { id } });
+    await this.audit.log({ userId, action: 'DELETE', entity: 'Indicator', entityId: id, before });
     return { success: true };
   }
 

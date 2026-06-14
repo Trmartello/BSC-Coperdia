@@ -6,6 +6,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { AuditModule } from './common/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { IndicatorsModule } from './modules/indicators/indicators.module';
@@ -25,6 +26,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     ServeStaticModule.forRoot({ rootPath: join(__dirname, '..', 'uploads'), serveRoot: '/uploads' }),
     PrismaModule,
+    AuditModule,
     AuthModule,
     UsersModule,
     IndicatorsModule,

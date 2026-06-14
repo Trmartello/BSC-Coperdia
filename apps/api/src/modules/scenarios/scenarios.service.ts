@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AuditService } from '../../common/audit/audit.service';
 import { CalcEngineService } from '../calc-engine/calc-engine.service';
 import Decimal from 'decimal.js';
 
@@ -14,6 +15,7 @@ export class ScenariosService {
   constructor(
     private prisma: PrismaService,
     private calcEngine: CalcEngineService,
+    private audit: AuditService,
   ) {}
 
   async findAll(userId: string) {
@@ -37,9 +39,18 @@ export class ScenariosService {
   }
 
   async create(dto: CreateScenarioDto, userId: string) {
-    return this.prisma.scenario.create({
+    const created = await this.prisma.scenario.create({
       data: { ...dto, period: new Date(dto.period), userId },
     });
+    await this.audit.log({
+      userId,
+      action: 'CREATE',
+      entity: 'Scenario',
+      entityId: created.id,
+      scenarioId: created.id,
+      after: { name: created.name, description: created.description, period: created.period },
+    });
+    return created;
   }
 
   async recalculate(id: string) {

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AuditService } from '../../common/audit/audit.service';
 import { CalcEngineService, IndicatorNode } from '../calc-engine/calc-engine.service';
 import { CreateIndicatorDto } from './dto/create-indicator.dto';
 import { UpdateForecastDto } from './dto/update-forecast.dto';
@@ -9,6 +10,7 @@ export class IndicatorsService {
   constructor(
     private prisma: PrismaService,
     private calcEngine: CalcEngineService,
+    private audit: AuditService,
   ) {}
 
   async findAll() {
@@ -53,6 +55,17 @@ export class IndicatorsService {
 
     const period = new Date(dto.period);
 
+    // valor anterior (para registrar o "antes" na auditoria)
+    const previous = await this.prisma.forecastValue.findUnique({
+      where: {
+        indicatorId_scenarioId_period: {
+          indicatorId: dto.indicatorId,
+          scenarioId: dto.scenarioId,
+          period,
+        },
+      },
+    });
+
     const forecast = await this.prisma.forecastValue.upsert({
       where: {
         indicatorId_scenarioId_period: {
@@ -72,16 +85,15 @@ export class IndicatorsService {
       update: { value: dto.value, isManual: true },
     });
 
-    // Audit
-    await this.prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'UPDATE',
-        entity: 'ForecastValue',
-        entityId: forecast.id,
-        scenarioId: dto.scenarioId,
-        after: { value: dto.value, period: dto.period },
-      },
+    // Auditoria da simulação: quem, indicador, cenário, valor anterior e novo
+    await this.audit.log({
+      userId,
+      action: 'SIMULATE',
+      entity: 'ForecastValue',
+      entityId: forecast.id,
+      scenarioId: dto.scenarioId,
+      before: previous ? { value: Number(previous.value), period: dto.period } : undefined,
+      after: { indicator: indicator.code, value: dto.value, period: dto.period },
     });
 
     // Trigger recalculation

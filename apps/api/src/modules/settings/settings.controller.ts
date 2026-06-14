@@ -4,8 +4,10 @@ import {
 } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('settings')
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
@@ -20,19 +22,22 @@ export class SettingsController {
     return this.settingsService.getIndicators();
   }
 
+  @Roles('ADMIN')
   @Post('indicators')
-  createIndicator(@Body() body: any) {
-    return this.settingsService.createIndicator(body);
+  createIndicator(@Body() body: any, @Request() req: any) {
+    return this.settingsService.createIndicator(body, req.user.id);
   }
 
+  @Roles('ADMIN')
   @Patch('indicators/:id')
-  updateIndicator(@Param('id') id: string, @Body() body: any) {
-    return this.settingsService.updateIndicator(id, body);
+  updateIndicator(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.settingsService.updateIndicator(id, body, req.user.id);
   }
 
+  @Roles('ADMIN')
   @Delete('indicators/:id')
-  deleteIndicator(@Param('id') id: string) {
-    return this.settingsService.deleteIndicator(id);
+  deleteIndicator(@Param('id') id: string, @Request() req: any) {
+    return this.settingsService.deleteIndicator(id, req.user.id);
   }
 
   @Get('maps')
@@ -45,16 +50,19 @@ export class SettingsController {
     return this.settingsService.getCategories();
   }
 
+  @Roles('ADMIN')
   @Post('categories')
   createCategory(@Body() body: any, @Request() req: any) {
     return this.settingsService.createCategory(body, req.user.id);
   }
 
+  @Roles('ADMIN')
   @Patch('categories/:id')
   updateCategory(@Param('id') id: string, @Body() body: any) {
     return this.settingsService.updateCategory(id, body);
   }
 
+  @Roles('ADMIN')
   @Delete('categories/:id')
   deleteCategory(@Param('id') id: string) {
     return this.settingsService.deleteCategory(id);

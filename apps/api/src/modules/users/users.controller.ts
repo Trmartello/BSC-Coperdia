@@ -4,8 +4,12 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
-@UseGuards(JwtAuthGuard)
+// Gestão de usuários é exclusiva do perfil ADMIN
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -26,13 +30,13 @@ export class UsersController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any) {
-    return this.usersService.update(id, body);
+  update(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.usersService.update(id, body, req.user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  remove(@Param('id') id: string, @Request() req: any) {
+    return this.usersService.remove(id, req.user.id);
   }
 
   @Patch(':id/toggle-active')
