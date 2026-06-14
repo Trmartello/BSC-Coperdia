@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CalcEngineService } from '../calc-engine/calc-engine.service';
 
 @Injectable()
 export class MapsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private calcEngine: CalcEngineService,
+  ) {}
 
   // ── Categories ─────────────────────────────────────────────────────────────
 
@@ -40,6 +44,8 @@ export class MapsService {
   }
 
   async findOne(id: string) {
+    // Mantém os valores calculados em dia para os cards do mapa
+    await this.calcEngine.recalculateRealized();
     const map = await this.prisma.indicatorMap.findUnique({
       where: { id },
       include: {

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { indicatorsApi } from '../../../lib/api';
+import { indicatorsApi, settingsApi } from '../../../lib/api';
 import { IndicatorCard } from '../../../components/indicators/IndicatorCard';
 import { IndicatorDetailPanel } from '../../../components/indicators/IndicatorDetailPanel';
 import { IndicatorDetailModal } from '../../../components/indicators/IndicatorDetailModal';
@@ -21,6 +21,12 @@ export default function IndicatorsPage() {
     queryKey: ['indicators'],
     queryFn: () => indicatorsApi.list().then((r) => r.data),
   });
+
+  const { data: flags } = useQuery({
+    queryKey: ['settings-flags'],
+    queryFn: () => settingsApi.getFlags().then((r) => r.data),
+  });
+  const showEstimate = flags?.showEstimate ?? true;
 
   const indList = indicators as any[];
   const categories = Array.from(new Set(indList.map((i) => i.category))).sort();
@@ -99,6 +105,7 @@ export default function IndicatorsPage() {
             {filtered.map((ind: any) => (
               <IndicatorCard
                 key={ind.id}
+                showEstimate={showEstimate}
                 data={{
                   indicator: ind,
                   realized: ind.realizedValues?.[0]?.value ?? null,

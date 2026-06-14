@@ -254,7 +254,9 @@ export class CalcEngineService {
 
   async recalculateRealized(): Promise<void> {
     const graph = await this.buildGraph();
-    const order = this.topologicalSort(graph);
+    // topologicalSort() returns roots-first; for evaluation we need
+    // dependencies (children) computed BEFORE dependents, so iterate reversed.
+    const evalOrder = [...this.topologicalSort(graph)].reverse();
 
     // Collect realized values grouped by period
     const allRealized = await this.prisma.realizedValue.findMany({
@@ -264,34 +266,42 @@ export class CalcEngineService {
 
     // Group input realized values by period (Date object keyed by ISO string)
     const periodMap = new Map<string, { period: Date; values: Map<string, Decimal> }>();
+    const stored = new Map<string, Decimal>(); // `${indId}|${periodISO}` -> stored value
     for (const rv of allRealized) {
       const key = rv.period.toISOString();
       if (!periodMap.has(key)) periodMap.set(key, { period: rv.period, values: new Map() });
-      periodMap.get(key)!.values.set(rv.indicatorId, new Decimal(rv.value.toString()));
+      const dec = new Decimal(rv.value.toString());
+      periodMap.get(key)!.values.set(rv.indicatorId, dec);
+      stored.set(`${rv.indicatorId}|${key}`, dec);
     }
 
     const upserts: ReturnType<typeof this.prisma.realizedValue.upsert>[] = [];
 
     for (const { period, values } of periodMap.values()) {
-      for (const id of order) {
+      const periodKey = period.toISOString();
+      for (const id of evalOrder) {
         const node = graph.get(id);
         if (!node || node.type !== 'CALCULATED' || !node.formulaExpression || !node.formulaVariables) continue;
         const computed = this.evaluateFormula(node.formulaExpression, node.formulaVariables, values);
-        if (computed !== null) {
-          values.set(id, computed); // make available for downstream CALCULATED nodes
-          upserts.push(
-            this.prisma.realizedValue.upsert({
-              where: { indicatorId_period: { indicatorId: id, period } },
-              create: { indicatorId: id, period, value: computed.toFixed(6) },
-              update: { value: computed.toFixed(6) },
-            }),
-          );
-        }
+        if (computed === null) continue;
+        values.set(id, computed); // make available for downstream CALCULATED nodes
+        // skip the write when the stored value already matches (keeps reads cheap).
+        // Compare at storage precision (6 casas) to evitar regravar dízimas.
+        const computedStr = computed.toFixed(6);
+        const prev = stored.get(`${id}|${periodKey}`);
+        if (prev && prev.toFixed(6) === computedStr) continue;
+        upserts.push(
+          this.prisma.realizedValue.upsert({
+            where: { indicatorId_period: { indicatorId: id, period } },
+            create: { indicatorId: id, period, value: computedStr },
+            update: { value: computedStr },
+          }),
+        );
       }
     }
 
     if (upserts.length) await this.prisma.$transaction(upserts);
-    this.logger.log(`recalculateRealized: upserted ${upserts.length} computed realized values`);
+    if (upserts.length) this.logger.log(`recalculateRealized: upserted ${upserts.length} computed realized values`);
   }
 
   async getImpactChain(

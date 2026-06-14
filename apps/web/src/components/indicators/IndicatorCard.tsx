@@ -20,6 +20,7 @@ interface CardData {
 
 interface Props {
   data: CardData;
+  showEstimate?: boolean; // controla a exibição da coluna "Estimativa"
   onDelete?: () => void;
   onOpenInfo?: () => void;
   onOpenDetail?: () => void;
@@ -48,7 +49,7 @@ function deviationLabel(pct: number | null, direction: 'HIGHER_IS_BETTER' | 'LOW
   return { label: `${sign}${pct.toFixed(1)}% vs meta`, positive: isGood };
 }
 
-export function IndicatorCard({ data, onDelete, onOpenInfo, onOpenDetail, onOpenActionPlan, onUpdated }: Props) {
+export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo, onOpenDetail, onOpenActionPlan, onUpdated }: Props) {
   const { indicator, realized, goal, estimate, actionCount = 0, attachmentCount = 0, commentCount = 0 } = data;
   const { activeScenario, activePeriod } = useScenarioStore();
 
@@ -56,14 +57,16 @@ export function IndicatorCard({ data, onDelete, onOpenInfo, onOpenDetail, onOpen
   const [inputValue, setInputValue] = useState(String(estimate ?? ''));
   const [saving, setSaving] = useState(false);
 
-  const effective = effectiveEstimate(realized, estimate);
+  // Quando a estimativa está desabilitada nas configurações, o desvio é medido
+  // sobre o valor realizado (não há "previsto" a considerar).
+  const effective = showEstimate ? effectiveEstimate(realized, estimate) : realized;
   const devVsGoal = deviation(effective, goal);
   const devRealized = deviation(effective, realized);
 
   const devGoalInfo = deviationLabel(devVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
   const devEstInfo = deviationLabel(devRealized, indicator.direction ?? 'HIGHER_IS_BETTER');
 
-  const canEdit = indicator.type === 'INPUT' && !!activeScenario;
+  const canEdit = showEstimate && indicator.type === 'INPUT' && !!activeScenario;
 
   async function handleSave() {
     if (!activeScenario) return;
@@ -111,15 +114,17 @@ export function IndicatorCard({ data, onDelete, onOpenInfo, onOpenDetail, onOpen
       </div>
 
       {/* ── Values grid ── */}
-      <div className="grid grid-cols-3 px-4 pb-1">
+      <div className={cn('grid px-4 pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
         <ValueCol label="Realizado" value={formatValue(realized, indicator.unit)} />
         <ValueCol label="Meta" value={formatValue(goal, indicator.unit)} bold />
-        <ValueCol
-          label="Estimativa"
-          value={formatValue(effective, indicator.unit)}
-          editable={canEdit}
-          onEdit={() => { setInputValue(String(estimate ?? realized ?? '')); setEditing(true); }}
-        />
+        {showEstimate && (
+          <ValueCol
+            label="Estimativa"
+            value={formatValue(effective, indicator.unit)}
+            editable={canEdit}
+            onEdit={() => { setInputValue(String(estimate ?? realized ?? '')); setEditing(true); }}
+          />
+        )}
       </div>
 
       {/* Inline edit input */}
@@ -143,7 +148,7 @@ export function IndicatorCard({ data, onDelete, onOpenInfo, onOpenDetail, onOpen
       {/* ── Deviation rows ── */}
       <div className="px-4 pb-2 space-y-0.5">
         <DeviationRow {...devGoalInfo} />
-        <DeviationRow {...devEstInfo} />
+        {showEstimate && <DeviationRow {...devEstInfo} />}
       </div>
 
       {/* ── Divider ── */}

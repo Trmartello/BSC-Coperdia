@@ -14,6 +14,9 @@ export class IndicatorsService {
   ) {}
 
   async findAll() {
+    // Garante que indicadores CALCULATED tenham valor realizado atualizado
+    // pela fórmula vigente (recompute idempotente; só grava se mudou).
+    await this.calcEngine.recalculateRealized();
     return this.prisma.indicator.findMany({
       where: { active: true },
       include: {
@@ -29,6 +32,7 @@ export class IndicatorsService {
   }
 
   async findOne(id: string) {
+    await this.calcEngine.recalculateRealized();
     const indicator = await this.prisma.indicator.findUnique({
       where: { id },
       include: {

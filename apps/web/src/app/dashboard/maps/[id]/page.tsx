@@ -11,7 +11,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil, Info, Maximize2, Trash2 } from 'lucide-react';
-import { mapsApi, indicatorsApi } from '../../../../lib/api';
+import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
 import { cn, formatValue } from '../../../../lib/utils';
 import { IndicatorDetailPanel } from '../../../../components/indicators/IndicatorDetailPanel';
@@ -29,8 +29,8 @@ function unitLabel(unit: string): string {
 // ─── Indicator Node ───────────────────────────────────────────────────────────
 
 function MapIndicatorNode({ data, selected }: NodeProps) {
-  const { indicator, realized, goal, estimate, onInfo, onExpand, onRemove } = data;
-  const effective = estimate ?? realized;
+  const { indicator, realized, goal, estimate, showEstimate = true, onInfo, onExpand, onRemove } = data;
+  const effective = showEstimate ? (estimate ?? realized) : realized;
   const dev = goal && effective != null && goal !== 0
     ? ((effective - goal) / Math.abs(goal)) * 100 : null;
   const isGood = dev === null ? null
@@ -83,11 +83,11 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
         <p className="text-[10px] text-white/30 mt-0.5">{indicator.category}</p>
       </div>
 
-      <div className="grid grid-cols-3 px-3 pb-2 gap-1">
+      <div className={cn('grid px-3 pb-2 gap-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
         {[
           { label: 'Real.', val: formatValue(realized, indicator.unit) },
           { label: 'Meta', val: formatValue(goal, indicator.unit) },
-          { label: 'Est.', val: formatValue(effective, indicator.unit) },
+          ...(showEstimate ? [{ label: 'Est.', val: formatValue(effective, indicator.unit) }] : []),
         ].map((col) => (
           <div key={col.label} className="text-center">
             <p className="text-[8px] text-white/25 uppercase">{col.label}</p>
@@ -129,6 +129,7 @@ function buildNodesAndEdges(
     onExpand: (id: string) => void;
     onRemove: (id: string, name: string) => void;
   },
+  showEstimate = true,
 ) {
   const nodes: Node[] = entries.map((entry, i) => {
     const savedNode = savedFlow?.nodes?.find((n: any) => n.id === entry.indicatorId);
@@ -142,7 +143,7 @@ function buildNodesAndEdges(
       type: 'mapIndicator',
       position: savedNode?.position ?? { x: (i % 3) * 280, y: Math.floor(i / 3) * 220 },
       data: {
-        indicator: ind, realized, goal, estimate,
+        indicator: ind, realized, goal, estimate, showEstimate,
         onInfo: handlers?.onInfo, onExpand: handlers?.onExpand, onRemove: handlers?.onRemove,
       },
     };
@@ -281,6 +282,12 @@ export default function MapEditorPage() {
     queryFn: () => mapsApi.get(id).then((r) => r.data),
   });
 
+  const { data: flags } = useQuery({
+    queryKey: ['settings-flags'],
+    queryFn: () => settingsApi.getFlags().then((r) => r.data),
+  });
+  const showEstimate = flags?.showEstimate ?? true;
+
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
@@ -302,10 +309,10 @@ export default function MapEditorPage() {
       onInfo: (indId) => setInfoIndicatorId(indId),
       onExpand: (indId) => setSelectedIndicatorId((prev) => (prev === indId ? null : indId)),
       onRemove: handleRemoveIndicator,
-    });
+    }, showEstimate);
     setNodes(n);
     setEdges(e);
-  }, [map]);
+  }, [map, showEstimate]);
 
   // Criar conexão: source = causa (filho), target = recebe impacto (pai)
   const onConnect = useCallback(
