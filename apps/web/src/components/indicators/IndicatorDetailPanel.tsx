@@ -13,8 +13,25 @@ import { toast } from 'sonner';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 function fmtMonth(d: Date) {
   return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+}
+
+// Rótulo compacto para o eixo do gráfico: "Mai'26"
+function fmtMonthCompact(d: Date) {
+  return `${MESES[d.getMonth()]}'${String(d.getFullYear()).slice(2)}`;
+}
+
+// Valor curto para rótulo sobre as barras do gráfico
+function fmtBar(v: number | null | undefined, unit: string): string {
+  if (v == null) return '';
+  if (unit === 'PERCENTAGE') return `${v % 1 === 0 ? v : v.toFixed(1)}%`;
+  if (unit === 'DAYS') return `${Math.round(v)}d`;
+  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
+  return `${v % 1 === 0 ? v : v.toFixed(1)}`;
 }
 
 function fmtLarge(v: number | null | undefined, unit: string): string {
@@ -45,65 +62,82 @@ function isImprovement(pct: number | null, direction: string): boolean | null {
 
 interface Pt { period: Date; value: number; goal?: number; prevYear?: number }
 
-function HistoryChart({ data, direction }: { data: Pt[]; direction: string }) {
+function HistoryChart({ data, direction, unit, currentGoal }: {
+  data: Pt[]; direction: string; unit: string; currentGoal?: number | null;
+}) {
   if (!data.length) {
     return <div className="h-32 flex items-center justify-center text-white/20 text-xs">Sem dados históricos</div>;
   }
 
   const pts = data.slice(-15);
   const n = pts.length;
-  const step = 30;
-  const barW = 14;
+  const step = 38;
+  const barW = 16;
   const chartW = n * step;
   const chartH = 110;
-  const pad = 14;
+  const pad = 16;
+  const topPad = 16; // espaço para os rótulos de valor acima das barras
 
   const allVals = pts.flatMap((p) => [p.value, p.goal ?? 0, p.prevYear ?? 0]).filter((v) => v > 0);
   const maxVal = Math.max(...allVals, 1);
 
   const x = (i: number) => pad + i * step + step / 2;
-  const y = (v: number) => chartH - (v / maxVal) * chartH;
+  const y = (v: number) => topPad + (chartH - (v / maxVal) * chartH);
 
   // polyline MoM (evolução mês a mês) através dos topos das barras
   const momPath = pts.map((p, i) => `${x(i)},${y(p.value)}`).join(' ');
   // polyline YoY (mesmo período do ano anterior) onde houver dado
   const yoyPts = pts.map((p, i) => (p.prevYear ? `${x(i)},${y(p.prevYear)}` : null)).filter(Boolean) as string[];
 
+  // status por barra: usa a meta do período; nas duas barras mais recentes,
+  // recorre à meta atual como referência (legenda "atual + penúltimo — cor do status")
+  const statusOf = (p: Pt, i: number): boolean | null => {
+    const isRecent = i >= n - 2;
+    const g = p.goal ?? (isRecent ? currentGoal ?? undefined : undefined);
+    if (g == null) return null;
+    return direction === 'LOWER_IS_BETTER' ? p.value <= g : p.value >= g;
+  };
+
   return (
     <div className="w-full overflow-x-auto">
-      <svg width="100%" height={chartH + 26} viewBox={`0 0 ${chartW + pad * 2} ${chartH + 26}`} preserveAspectRatio="xMidYMid meet">
+      <svg width="100%" height={topPad + chartH + 26} viewBox={`0 0 ${chartW + pad * 2} ${topPad + chartH + 26}`} preserveAspectRatio="xMidYMid meet">
         {/* meta — segmentos pontilhados horizontais por período */}
-        {pts.map((p, i) =>
-          p.goal != null ? (
+        {pts.map((p, i) => {
+          const isRecent = i >= n - 2;
+          const g = p.goal ?? (isRecent ? currentGoal ?? undefined : undefined);
+          return g != null ? (
             <line
               key={`g-${i}`}
               x1={x(i) - barW} x2={x(i) + barW}
-              y1={y(p.goal)} y2={y(p.goal)}
+              y1={y(g)} y2={y(g)}
               stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeDasharray="3 2"
             />
-          ) : null,
-        )}
+          ) : null;
+        })}
 
         {/* barras: fantasma (ano anterior) + atual (cor do status) */}
         {pts.map((p, i) => {
-          const good = p.goal != null
-            ? (direction === 'LOWER_IS_BETTER' ? p.value <= p.goal : p.value >= p.goal)
-            : null;
-          const barColor = good === null ? 'rgba(255,255,255,0.25)' : good ? 'rgba(16,185,129,0.75)' : 'rgba(239,68,68,0.75)';
+          const good = statusOf(p, i);
+          const barColor = good === null ? 'rgba(255,255,255,0.25)' : good ? 'rgba(16,185,129,0.85)' : 'rgba(239,68,68,0.85)';
+          const labelColor = good === null ? 'rgba(255,255,255,0.45)' : good ? 'rgba(52,211,153,0.95)' : 'rgba(248,113,113,0.95)';
           return (
             <g key={`b-${i}`}>
               {p.prevYear != null && (
                 <rect
                   x={x(i) - barW / 2 - 3} width={barW * 0.55}
-                  y={y(p.prevYear)} height={chartH - y(p.prevYear)}
+                  y={y(p.prevYear)} height={topPad + chartH - y(p.prevYear)}
                   rx={2} fill="rgba(129,140,248,0.45)"
                 />
               )}
               <rect
                 x={x(i) - barW / 2 + (p.prevYear != null ? 3 : 0)} width={barW * (p.prevYear != null ? 0.7 : 1)}
-                y={y(p.value)} height={chartH - y(p.value)}
+                y={y(p.value)} height={topPad + chartH - y(p.value)}
                 rx={2} fill={barColor}
               />
+              {/* rótulo de valor acima da barra */}
+              <text x={x(i)} y={y(p.value) - 4} textAnchor="middle" fontSize="7.5" fontWeight="600" fill={labelColor}>
+                {fmtBar(p.value, unit)}
+              </text>
             </g>
           );
         })}
@@ -122,8 +156,8 @@ function HistoryChart({ data, direction }: { data: Pt[]; direction: string }) {
         {/* labels de período (mostra alguns para não poluir) */}
         {pts.map((p, i) =>
           (i === 0 || i === n - 1 || i % 3 === 0) ? (
-            <text key={`t-${i}`} x={x(i)} y={chartH + 16} textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.3)">
-              {fmtMonth(p.period)}
+            <text key={`t-${i}`} x={x(i)} y={topPad + chartH + 16} textAnchor="middle" fontSize="7.5" fill="rgba(255,255,255,0.35)">
+              {fmtMonthCompact(p.period)}
             </text>
           ) : null,
         )}
@@ -314,10 +348,6 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   // VS ANO ANTERIOR (YoY)
   const yoy = curPoint && yoyPoint && yoyPoint.value !== 0 ? ((curPoint.value - yoyPoint.value) / Math.abs(yoyPoint.value)) * 100 : null;
   const goodYoy = isImprovement(yoy, direction);
-  // Score vs meta (100 = na meta). HIGHER: real/meta; LOWER: meta/real
-  const score = (effective != null && effective !== 0 && goal != null && goal !== 0)
-    ? (direction === 'LOWER_IS_BETTER' ? (goal / effective) * 100 : (effective / goal) * 100)
-    : null;
   // Diferença absoluta vs meta (para "X acima/abaixo")
   const goalDiff = (effective != null && goal != null) ? Math.abs(effective - goal) : null;
 
@@ -419,23 +449,21 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
         <div className="flex-1 overflow-y-auto">
           {tab === 'overview' && (
             <>
-              {/* Métricas principais (3 tiles — Realizado / VS Ano Anterior / VS Meta) */}
+              {/* Métricas principais (3 colunas — Realizado / VS Ano Anterior / VS Meta)
+                  separadas por divisórias verticais (sem caixas estilo KPI) */}
               <div className="px-5 py-4 border-b border-white/5 space-y-3">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3">
                   {/* REALIZADO */}
-                  <div className="bg-white/[0.03] rounded-xl p-3 flex flex-col">
+                  <div className="flex flex-col pr-3">
                     <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">Realizado</p>
                     <p className="text-[9px] text-white/35 mt-1">{curPoint ? fmtMonth(curPoint.period) : '—'}</p>
                     <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
                       {fmtLarge(effective, unit)}
                     </p>
-                    {score != null && (
-                      <p className="text-[9px] text-white/25 mt-1.5">Score {score.toFixed(0)} pts</p>
-                    )}
                   </div>
 
                   {/* VS ANO ANTERIOR */}
-                  <div className="bg-white/[0.03] rounded-xl p-3 flex flex-col">
+                  <div className="flex flex-col px-3 border-l border-blue-500/40">
                     <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Ano Anterior</p>
                     <p className="text-[9px] text-white/35 mt-1">
                       {yoyPoint ? `${fmtMonth(yoyPoint.period)} · ${fmtLarge(yoyPoint.value, unit)}` : 'Sem histórico'}
@@ -450,7 +478,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                   </div>
 
                   {/* VS META */}
-                  <div className="bg-white/[0.03] rounded-xl p-3 flex flex-col">
+                  <div className="flex flex-col pl-3 border-l border-blue-500/40">
                     <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Meta</p>
                     <p className="text-[9px] text-white/35 mt-1">
                       {goal != null
@@ -496,7 +524,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                     </span>
                   )}
                 </div>
-                <HistoryChart data={chartData} direction={direction} />
+                <HistoryChart data={chartData} direction={direction} unit={unit} currentGoal={goal} />
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
                   <Legend swatch="bg-emerald-500/70" label="Atual + penúltimo (cor do status)" />
                   <Legend swatch="bg-indigo-400/50" label="Mesmo período ano anterior" />
