@@ -65,6 +65,8 @@ interface Pt { period: Date; value: number; goal?: number; prevYear?: number }
 function HistoryChart({ data, direction, unit, currentGoal }: {
   data: Pt[]; direction: string; unit: string; currentGoal?: number | null;
 }) {
+  const [tooltip, setTooltip] = useState<{ i: number; x: number; y: number } | null>(null);
+
   if (!data.length) {
     return <div className="h-32 flex items-center justify-center text-white/20 text-xs">Sem dados históricos</div>;
   }
@@ -179,7 +181,13 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
 
           const showLabel = isRecent || isPrevYear;
           return (
-            <g key={`b-${i}`}>
+            <g key={`b-${i}`}
+              onMouseEnter={() => setTooltip({ i, x: x(i), y: y(p.value) })}
+              onMouseLeave={() => setTooltip(null)}
+              style={{ cursor: 'crosshair' }}
+            >
+              {/* área de hover maior que a barra */}
+              <rect x={x(i) - barW / 2 - 4} width={barW + 8} y={topPad} height={baseY - topPad} rx={0} fill="transparent" />
               <rect x={x(i) - barW / 2} width={barW} y={y(p.value)} height={baseY - y(p.value)} rx={3} fill={barColor} />
               {showLabel && (
                 <text x={x(i)} y={y(p.value) - 5} textAnchor="middle" fontSize="10" fontWeight="700" fill={labelColor}>
@@ -206,6 +214,23 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
             </text>
           );
         })}
+
+        {/* tooltip ao passar o mouse */}
+        {tooltip != null && (() => {
+          const p = pts[tooltip.i];
+          const label = `${fmtMonthCompact(p.period)}: ${fmtBar(p.value, unit)}`;
+          const tw = label.length * 6.5 + 16;
+          const tx = Math.min(Math.max(tooltip.x - tw / 2, pad), fullW - tw - pad);
+          const ty = Math.max(tooltip.y - 34, 4);
+          return (
+            <g pointerEvents="none">
+              <rect x={tx} y={ty} width={tw} height={20} rx={4} fill="rgba(30,37,60,0.97)" stroke="rgba(255,255,255,0.15)" strokeWidth={0.8} />
+              <text x={tx + tw / 2} y={ty + 13} textAnchor="middle" fontSize="11" fontWeight="600" fill="rgba(255,255,255,0.92)">
+                {label}
+              </text>
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );
@@ -557,19 +582,12 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
               <div className="px-5 py-4 border-b border-white/5">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Histórico — {chartData.length} períodos</p>
-                  <div className="flex items-center gap-4 text-[10px] text-white/40">
-                    <span>
-                      Mês anterior:{' '}
-                      <span className="text-white/65">{prevPoint ? fmtLarge(prevPoint.value, unit) : '—'}</span>
-                      {mom != null && (
-                        <span className={cn('ml-1', goodMom ? 'text-emerald-400/80' : 'text-red-400/80')}>
-                          ({mom > 0 ? '+' : ''}{mom.toFixed(1)}%)
-                        </span>
-                      )}
-                    </span>
-                    {showEstimate && (
-                      <span>
-                        Estimativa: <span className="text-white/65">{fmtLarge(estimate, unit)}</span>
+                  <div className="flex items-center gap-1 text-[12px] font-semibold text-white/55">
+                    <span>Mês anterior:</span>
+                    <span className="text-white/85">{prevPoint ? fmtLarge(prevPoint.value, unit) : '—'}</span>
+                    {mom != null && (
+                      <span className={cn('font-bold', goodMom ? 'text-emerald-400' : 'text-red-400')}>
+                        ({mom > 0 ? '+' : ''}{mom.toFixed(1)}%)
                       </span>
                     )}
                   </div>
