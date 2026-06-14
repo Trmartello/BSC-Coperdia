@@ -194,17 +194,18 @@ async function main() {
     { code: 'FLUXO_CAIXA',       name: 'Fluxo de Caixa Livre',  unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Tesouraria',    realized: 45,  goal: 50 },
   ];
 
+  // realized = valor realizado pré-computado a partir dos inputs (para o Dashboard)
   const calcDefs: {
-    code: string; name: string; unit: Unit; direction: Dir; goal: number; expr: string; vars: string[];
+    code: string; name: string; unit: Unit; direction: Dir; goal: number; realized: number; expr: string; vars: string[];
   }[] = [
-    { code: 'EBITDA',            name: 'EBITDA',            unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 115, expr: 'RECEITA - CUSTOS - DESPESAS',                  vars: ['RECEITA', 'CUSTOS', 'DESPESAS'] },
-    { code: 'NOPAT',             name: 'NOPAT',             unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 97,  expr: 'EBITDA - IMPOSTOS',                            vars: ['EBITDA', 'IMPOSTOS'] },
-    { code: 'LUCRO_LIQUIDO',     name: 'Lucro Líquido',     unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 97,  expr: 'EBITDA - IMPOSTOS',                            vars: ['EBITDA', 'IMPOSTOS'] },
-    { code: 'CAPITAL_INVESTIDO', name: 'Capital Investido', unit: 'CURRENCY',   direction: 'LOWER_IS_BETTER',  goal: 390, expr: 'ESTOQUES + CONTAS_RECEBER + ATIVO_IMOBILIZADO', vars: ['ESTOQUES', 'CONTAS_RECEBER', 'ATIVO_IMOBILIZADO'] },
-    { code: 'CAPITAL_GIRO',      name: 'Capital de Giro',   unit: 'CURRENCY',   direction: 'LOWER_IS_BETTER',  goal: 160, expr: 'ESTOQUES + CONTAS_RECEBER',                    vars: ['ESTOQUES', 'CONTAS_RECEBER'] },
-    { code: 'ROIC',              name: 'ROIC',              unit: 'PERCENTAGE', direction: 'HIGHER_IS_BETTER', goal: 18,  expr: '(NOPAT / CAPITAL_INVESTIDO) * 100',            vars: ['NOPAT', 'CAPITAL_INVESTIDO'] },
-    { code: 'ROE',               name: 'ROE',               unit: 'PERCENTAGE', direction: 'HIGHER_IS_BETTER', goal: 20,  expr: '(LUCRO_LIQUIDO / PATRIMONIO) * 100',           vars: ['LUCRO_LIQUIDO', 'PATRIMONIO'] },
-    { code: 'ENDIVIDAMENTO',     name: 'Endividamento',     unit: 'PERCENTAGE', direction: 'LOWER_IS_BETTER',  goal: 38,  expr: '(DIVIDA / PATRIMONIO) * 100',                  vars: ['DIVIDA', 'PATRIMONIO'] },
+    { code: 'EBITDA',            name: 'EBITDA',            unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 115, realized: 80,        expr: 'RECEITA - CUSTOS - DESPESAS',                  vars: ['RECEITA', 'CUSTOS', 'DESPESAS'] },
+    { code: 'NOPAT',             name: 'NOPAT',             unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 97,  realized: 60,        expr: 'EBITDA - IMPOSTOS',                            vars: ['EBITDA', 'IMPOSTOS'] },
+    { code: 'LUCRO_LIQUIDO',     name: 'Lucro Líquido',     unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 97,  realized: 60,        expr: 'EBITDA - IMPOSTOS',                            vars: ['EBITDA', 'IMPOSTOS'] },
+    { code: 'CAPITAL_INVESTIDO', name: 'Capital Investido', unit: 'CURRENCY',   direction: 'LOWER_IS_BETTER',  goal: 390, realized: 400,       expr: 'ESTOQUES + CONTAS_RECEBER + ATIVO_IMOBILIZADO', vars: ['ESTOQUES', 'CONTAS_RECEBER', 'ATIVO_IMOBILIZADO'] },
+    { code: 'CAPITAL_GIRO',      name: 'Capital de Giro',   unit: 'CURRENCY',   direction: 'LOWER_IS_BETTER',  goal: 160, realized: 170,       expr: 'ESTOQUES + CONTAS_RECEBER',                    vars: ['ESTOQUES', 'CONTAS_RECEBER'] },
+    { code: 'ROIC',              name: 'ROIC',              unit: 'PERCENTAGE', direction: 'HIGHER_IS_BETTER', goal: 18,  realized: 15,        expr: '(NOPAT / CAPITAL_INVESTIDO) * 100',            vars: ['NOPAT', 'CAPITAL_INVESTIDO'] },
+    { code: 'ROE',               name: 'ROE',               unit: 'PERCENTAGE', direction: 'HIGHER_IS_BETTER', goal: 20,  realized: 17.142857, expr: '(LUCRO_LIQUIDO / PATRIMONIO) * 100',           vars: ['LUCRO_LIQUIDO', 'PATRIMONIO'] },
+    { code: 'ENDIVIDAMENTO',     name: 'Endividamento',     unit: 'PERCENTAGE', direction: 'LOWER_IS_BETTER',  goal: 38,  realized: 42.857143, expr: '(DIVIDA / PATRIMONIO) * 100',                  vars: ['DIVIDA', 'PATRIMONIO'] },
   ];
 
   const fin: Record<string, string> = {}; // code -> id
@@ -268,6 +269,10 @@ async function main() {
     await prisma.goal.upsert({
       where: { indicatorId_period: { indicatorId: fin[def.code], period } },
       update: {}, create: { indicatorId: fin[def.code], period, value: def.goal },
+    });
+    await prisma.realizedValue.upsert({
+      where: { indicatorId_period: { indicatorId: fin[def.code], period } },
+      update: {}, create: { indicatorId: fin[def.code], period, value: def.realized },
     });
   }
 
