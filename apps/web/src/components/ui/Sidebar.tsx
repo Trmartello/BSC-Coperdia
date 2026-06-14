@@ -13,6 +13,7 @@ import {
   Network,
   BarChart2,
   LayoutDashboard,
+  Layers,
 } from 'lucide-react';
 
 const NAV = [
@@ -27,6 +28,7 @@ const NAV = [
     section: 'Análise',
     items: [
       { label: 'Indicadores', href: '/dashboard/indicators', icon: BarChart2 },
+      { label: 'Cenários', href: '/dashboard/scenarios', icon: Layers },
     ],
   },
   {
