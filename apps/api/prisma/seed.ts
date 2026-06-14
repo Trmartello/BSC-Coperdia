@@ -171,6 +171,114 @@ async function main() {
     create: { indicatorId: pme.id, scenarioId: scenario.id, period, value: 28, isManual: true, userId: admin.id },
   });
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // ÁRVORE FINANCEIRA ESTRATÉGICA (Receita → EBITDA → NOPAT → ROIC ; → ROE)
+  // Valores em R$ milhões. Códigos batem com o Dashboard Executivo.
+  // ════════════════════════════════════════════════════════════════════════════
+
+  type Dir = 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER';
+  type Unit = 'CURRENCY' | 'PERCENTAGE';
+
+  const inputDefs: {
+    code: string; name: string; unit: Unit; direction: Dir; responsible: string; realized: number; goal: number;
+  }[] = [
+    { code: 'RECEITA',           name: 'Receita Líquida',       unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Comercial',     realized: 500, goal: 520 },
+    { code: 'CUSTOS',            name: 'Custos (CPV)',          unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Operações',     realized: 300, goal: 290 },
+    { code: 'DESPESAS',          name: 'Despesas Operacionais', unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Controladoria', realized: 120, goal: 115 },
+    { code: 'IMPOSTOS',          name: 'Impostos sobre Lucro',  unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Fiscal',        realized: 20,  goal: 18 },
+    { code: 'ESTOQUES',          name: 'Estoques',              unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Logística',     realized: 80,  goal: 75 },
+    { code: 'CONTAS_RECEBER',    name: 'Contas a Receber',      unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Financeiro',    realized: 90,  goal: 85 },
+    { code: 'ATIVO_IMOBILIZADO', name: 'Ativo Imobilizado',     unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Controladoria', realized: 230, goal: 230 },
+    { code: 'PATRIMONIO',        name: 'Patrimônio Líquido',    unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Controladoria', realized: 350, goal: 360 },
+    { code: 'DIVIDA',            name: 'Dívida Bruta',          unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Financeiro',    realized: 150, goal: 140 },
+    { code: 'FLUXO_CAIXA',       name: 'Fluxo de Caixa Livre',  unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Tesouraria',    realized: 45,  goal: 50 },
+  ];
+
+  const calcDefs: {
+    code: string; name: string; unit: Unit; direction: Dir; goal: number; expr: string; vars: string[];
+  }[] = [
+    { code: 'EBITDA',            name: 'EBITDA',            unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 115, expr: 'RECEITA - CUSTOS - DESPESAS',                  vars: ['RECEITA', 'CUSTOS', 'DESPESAS'] },
+    { code: 'NOPAT',             name: 'NOPAT',             unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 97,  expr: 'EBITDA - IMPOSTOS',                            vars: ['EBITDA', 'IMPOSTOS'] },
+    { code: 'LUCRO_LIQUIDO',     name: 'Lucro Líquido',     unit: 'CURRENCY',   direction: 'HIGHER_IS_BETTER', goal: 97,  expr: 'EBITDA - IMPOSTOS',                            vars: ['EBITDA', 'IMPOSTOS'] },
+    { code: 'CAPITAL_INVESTIDO', name: 'Capital Investido', unit: 'CURRENCY',   direction: 'LOWER_IS_BETTER',  goal: 390, expr: 'ESTOQUES + CONTAS_RECEBER + ATIVO_IMOBILIZADO', vars: ['ESTOQUES', 'CONTAS_RECEBER', 'ATIVO_IMOBILIZADO'] },
+    { code: 'CAPITAL_GIRO',      name: 'Capital de Giro',   unit: 'CURRENCY',   direction: 'LOWER_IS_BETTER',  goal: 160, expr: 'ESTOQUES + CONTAS_RECEBER',                    vars: ['ESTOQUES', 'CONTAS_RECEBER'] },
+    { code: 'ROIC',              name: 'ROIC',              unit: 'PERCENTAGE', direction: 'HIGHER_IS_BETTER', goal: 18,  expr: '(NOPAT / CAPITAL_INVESTIDO) * 100',            vars: ['NOPAT', 'CAPITAL_INVESTIDO'] },
+    { code: 'ROE',               name: 'ROE',               unit: 'PERCENTAGE', direction: 'HIGHER_IS_BETTER', goal: 20,  expr: '(LUCRO_LIQUIDO / PATRIMONIO) * 100',           vars: ['LUCRO_LIQUIDO', 'PATRIMONIO'] },
+    { code: 'ENDIVIDAMENTO',     name: 'Endividamento',     unit: 'PERCENTAGE', direction: 'LOWER_IS_BETTER',  goal: 38,  expr: '(DIVIDA / PATRIMONIO) * 100',                  vars: ['DIVIDA', 'PATRIMONIO'] },
+  ];
+
+  const fin: Record<string, string> = {}; // code -> id
+
+  // Indicadores de ENTRADA + realizado + meta
+  let order = 10;
+  for (const def of inputDefs) {
+    const ind = await prisma.indicator.upsert({
+      where: { code: def.code },
+      update: {},
+      create: {
+        code: def.code, name: def.name, category: 'Estratégico', type: 'INPUT',
+        unit: def.unit, periodicity: 'MONTHLY', direction: def.direction,
+        responsible: def.responsible, sortOrder: order++,
+      },
+    });
+    fin[def.code] = ind.id;
+    await prisma.realizedValue.upsert({
+      where: { indicatorId_period: { indicatorId: ind.id, period } },
+      update: {}, create: { indicatorId: ind.id, period, value: def.realized },
+    });
+    await prisma.goal.upsert({
+      where: { indicatorId_period: { indicatorId: ind.id, period } },
+      update: {}, create: { indicatorId: ind.id, period, value: def.goal },
+    });
+  }
+
+  // Indicadores CALCULADOS
+  order = 30;
+  for (const def of calcDefs) {
+    const ind = await prisma.indicator.upsert({
+      where: { code: def.code },
+      update: {},
+      create: {
+        code: def.code, name: def.name, category: 'Estratégico', type: 'CALCULATED',
+        unit: def.unit, periodicity: 'MONTHLY', direction: def.direction,
+        responsible: 'Controladoria', sortOrder: order++,
+      },
+    });
+    fin[def.code] = ind.id;
+  }
+
+  // Fórmulas + relações (pai = calculado, filhos = variáveis) + metas
+  for (const def of calcDefs) {
+    const variables: Record<string, string> = {};
+    for (const v of def.vars) variables[v] = fin[v];
+    await prisma.formula.upsert({
+      where: { indicatorId: fin[def.code] },
+      update: {},
+      create: {
+        indicatorId: fin[def.code], expression: def.expr, variables,
+        description: `${def.name} = ${def.expr}`,
+      },
+    });
+    for (const v of def.vars) {
+      await prisma.indicatorRelation.upsert({
+        where: { parentId_childId: { parentId: fin[def.code], childId: fin[v] } },
+        update: {}, create: { parentId: fin[def.code], childId: fin[v], weight: 1 },
+      });
+    }
+    await prisma.goal.upsert({
+      where: { indicatorId_period: { indicatorId: fin[def.code], period } },
+      update: {}, create: { indicatorId: fin[def.code], period, value: def.goal },
+    });
+  }
+
+  // Forecast de exemplo no cenário base: Receita otimista (540 vs 500),
+  // para demonstrar a propagação Receita → EBITDA → NOPAT → ROIC/ROE.
+  await prisma.forecastValue.upsert({
+    where: { indicatorId_scenarioId_period: { indicatorId: fin['RECEITA'], scenarioId: scenario.id, period } },
+    update: {},
+    create: { indicatorId: fin['RECEITA'], scenarioId: scenario.id, period, value: 540, isManual: true, userId: admin.id },
+  });
+
   // ── Map Categories ────────────────────────────────────────────────────────
   const categories = [
     { name: 'Financeiro',   color: '#10b981', sortOrder: 0 },
@@ -219,59 +327,63 @@ async function main() {
     },
   ];
 
-  for (const def of mapDefs) {
-    await prisma.indicatorMap.create({
+  if ((await prisma.indicatorMap.count()) === 0) {
+    for (const def of mapDefs) {
+      await prisma.indicatorMap.create({
+        data: {
+          name: def.name,
+          description: def.description,
+          categoryId: catMap[def.category],
+          userId: admin.id,
+        },
+      });
+    }
+  }
+
+  // ── Sample Action Plan (idempotente) ───────────────────────────────────────
+  if ((await prisma.actionPlan.count()) === 0) {
+    const samplePlan = await prisma.actionPlan.create({
       data: {
-        name: def.name,
-        description: def.description,
-        categoryId: catMap[def.category],
+        indicatorId: pmr.id,
+        problem: 'PMR acima da meta — prazo médio de 25 dias vs meta de 30 dias',
+        description: 'Reduzir o prazo médio de recebimento para manter o capital de giro saudável',
+        status: 'IN_PROGRESS',
+        userId: admin.id,
+      },
+    });
+
+    const initiative = await prisma.initiative.create({
+      data: {
+        actionPlanId: samplePlan.id,
+        title: 'Renegociação com clientes estratégicos',
+        description: 'Tratar os 10 maiores clientes para reduzir prazo de 30 para 20 dias',
+        userId: admin.id,
+      },
+    });
+
+    await prisma.actionItem.create({
+      data: {
+        initiativeId: initiative.id,
+        title: 'Renegociar prazos com clientes estratégicos',
+        description: 'Reunião com gerentes comerciais e top 10 clientes',
+        priority: 'HIGH',
+        status: 'IN_PROGRESS',
+        dueDate: new Date('2026-07-31'),
+        ownerName: 'Gerente Comercial',
+        progress: 25,
+        userId: admin.id,
+      },
+    });
+
+    await prisma.planComment.create({
+      data: {
+        actionPlanId: samplePlan.id,
+        content: 'Iniciamos as conversas com os 3 maiores clientes. Retorno positivo.',
+        progress: 25,
         userId: admin.id,
       },
     });
   }
-
-  // ── Sample Action Plan ─────────────────────────────────────────────────────
-  const samplePlan = await prisma.actionPlan.create({
-    data: {
-      indicatorId: pmr.id,
-      problem: 'PMR acima da meta — prazo médio de 25 dias vs meta de 30 dias',
-      description: 'Reduzir o prazo médio de recebimento para manter o capital de giro saudável',
-      status: 'IN_PROGRESS',
-      userId: admin.id,
-    },
-  });
-
-  const initiative = await prisma.initiative.create({
-    data: {
-      actionPlanId: samplePlan.id,
-      title: 'Renegociação com clientes estratégicos',
-      description: 'Tratar os 10 maiores clientes para reduzir prazo de 30 para 20 dias',
-      userId: admin.id,
-    },
-  });
-
-  await prisma.actionItem.create({
-    data: {
-      initiativeId: initiative.id,
-      title: 'Renegociar prazos com clientes estratégicos',
-      description: 'Reunião com gerentes comerciais e top 10 clientes',
-      priority: 'HIGH',
-      status: 'IN_PROGRESS',
-      dueDate: new Date('2026-07-31'),
-      ownerName: 'Gerente Comercial',
-      progress: 25,
-      userId: admin.id,
-    },
-  });
-
-  await prisma.planComment.create({
-    data: {
-      actionPlanId: samplePlan.id,
-      content: 'Iniciamos as conversas com os 3 maiores clientes. Retorno positivo.',
-      progress: 25,
-      userId: admin.id,
-    },
-  });
 
   console.log('✅ Seed concluído!');
   console.log('   Admin: admin@coperdia.com.br / admin123');
