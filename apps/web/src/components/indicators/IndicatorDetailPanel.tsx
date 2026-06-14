@@ -16,12 +16,12 @@ import { toast } from 'sonner';
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 function fmtMonth(d: Date) {
-  return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+  return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
 }
 
 // Rótulo compacto para o eixo do gráfico: "Mai'26"
 function fmtMonthCompact(d: Date) {
-  return `${MESES[d.getMonth()]}'${String(d.getFullYear()).slice(2)}`;
+  return `${MESES[d.getUTCMonth()]}'${String(d.getUTCFullYear()).slice(2)}`;
 }
 
 // Valor curto para rótulo sobre as barras do gráfico
@@ -87,8 +87,8 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
   const prevYearIdx = new Map<number, number>(); // idx do ano anterior -> idx recente correspondente
   recentIdx.forEach((ri) => {
     const rp = pts[ri].period;
-    const j = pts.findIndex((p) => p.period.getMonth() === rp.getMonth()
-      && p.period.getFullYear() === rp.getFullYear() - 1);
+    const j = pts.findIndex((p) => p.period.getUTCMonth() === rp.getUTCMonth()
+      && p.period.getUTCFullYear() === rp.getUTCFullYear() - 1);
     if (j >= 0) prevYearIdx.set(j, ri);
   });
 
@@ -109,8 +109,8 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
 
   // YoY entre o mês mais recente e o mesmo mês do ano anterior
   const last = pts[n - 1];
-  const lastPrev = pts.find((p) => p.period.getMonth() === last.period.getMonth()
-    && p.period.getFullYear() === last.period.getFullYear() - 1);
+  const lastPrev = pts.find((p) => p.period.getUTCMonth() === last.period.getUTCMonth()
+    && p.period.getUTCFullYear() === last.period.getUTCFullYear() - 1);
   const yoy = last && lastPrev && lastPrev.value !== 0
     ? ((last.value - lastPrev.value) / Math.abs(lastPrev.value)) * 100 : null;
   const yoyGood = yoy == null ? null
@@ -204,7 +204,7 @@ function RealizedRow({ rv, unit, indicatorId, onSaved }: {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(parseFloat(rv.value)));
   const [saving, setSaving] = useState(false);
-  const period = new Date(rv.period).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+  const period = new Date(rv.period).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
 
   async function save() {
     setSaving(true);
@@ -365,8 +365,8 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   const curPoint = realizedAsc[realizedAsc.length - 1];
   const prevPoint = realizedAsc[realizedAsc.length - 2];
   const yoyPoint = curPoint
-    ? realizedAsc.find((p) => p.period.getMonth() === curPoint.period.getMonth()
-        && p.period.getFullYear() === curPoint.period.getFullYear() - 1)
+    ? realizedAsc.find((p) => p.period.getUTCMonth() === curPoint.period.getUTCMonth()
+        && p.period.getUTCFullYear() === curPoint.period.getUTCFullYear() - 1)
     : undefined;
 
   // VS META
@@ -384,10 +384,10 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   // Dados do gráfico
   const chartData: Pt[] = realizedAsc.slice(-15).map((p) => {
     const goalForPeriod = (ind?.goals ?? []).find((g: any) =>
-      new Date(g.period).getMonth() === p.period.getMonth() &&
-      new Date(g.period).getFullYear() === p.period.getFullYear());
-    const prevYear = realizedAsc.find((q) => q.period.getMonth() === p.period.getMonth()
-      && q.period.getFullYear() === p.period.getFullYear() - 1);
+      new Date(g.period).getUTCMonth() === p.period.getUTCMonth() &&
+      new Date(g.period).getUTCFullYear() === p.period.getUTCFullYear());
+    const prevYear = realizedAsc.find((q) => q.period.getUTCMonth() === p.period.getUTCMonth()
+      && q.period.getUTCFullYear() === p.period.getUTCFullYear() - 1);
     return {
       period: p.period,
       value: p.value,
