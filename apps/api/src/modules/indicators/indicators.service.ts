@@ -39,9 +39,9 @@ export class IndicatorsService {
         formula: true,
         parents: { include: { parent: true } },
         children: { include: { child: true } },
-        realizedValues: { orderBy: { period: 'desc' }, take: 12 },
-        forecastValues: { where: { scenarioId: null }, orderBy: { period: 'desc' }, take: 12 },
-        goals: { orderBy: { period: 'desc' }, take: 12 },
+        realizedValues: { orderBy: { period: 'desc' }, take: 27 },
+        forecastValues: { where: { scenarioId: null }, orderBy: { period: 'desc' }, take: 27 },
+        goals: { orderBy: { period: 'desc' }, take: 27 },
       },
     });
     if (!indicator) throw new NotFoundException(`Indicator ${id} not found`);
