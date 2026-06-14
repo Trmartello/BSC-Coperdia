@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X, TrendingUp, TrendingDown, ClipboardList,
-  Plus, ChevronRight, Pencil, Check,
+  Plus, ChevronRight, ChevronLeft, Pencil, Check,
 } from 'lucide-react';
 import { indicatorsApi, actionPlansApi, settingsApi } from '../../lib/api';
+import { ActionPlanDetail } from '../action-plans/ActionPlanDetail';
 import { cn, formatValue } from '../../lib/utils';
 import { toast } from 'sonner';
 
@@ -198,6 +199,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   const [tab, setTab] = useState<Tab>('overview');
   const [showNewPlan, setShowNewPlan] = useState(false);
   const [newProblem, setNewProblem] = useState('');
+  const [openPlanId, setOpenPlanId] = useState<string | null>(null);
 
   const { data: indicator, isLoading, refetch } = useQuery({
     queryKey: ['indicator-detail', indicatorId, period],
@@ -217,12 +219,13 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
 
   const createPlanMutation = useMutation({
     mutationFn: () => actionPlansApi.create({ problem: newProblem, indicatorId }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['action-plans', { indicatorId }] });
       qc.invalidateQueries({ queryKey: ['action-plans'] });
       toast.success('Plano de ação criado');
       setShowNewPlan(false);
       setNewProblem('');
+      setOpenPlanId(res.data.id);
     },
   });
 
@@ -287,9 +290,23 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   return (
     <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
       <div
-        className="w-[420px] h-full bg-[#161b27] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl"
+        className="w-[420px] h-full bg-[#161b27] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Guided action plan overlay */}
+        {openPlanId && (
+          <div className="absolute inset-0 z-10 bg-[#161b27] flex flex-col overflow-hidden">
+            <div className="px-4 pt-4 pb-3 border-b border-white/5 flex items-center gap-2 flex-shrink-0">
+              <button onClick={() => setOpenPlanId(null)} className="text-white/40 hover:text-white/70 transition-colors flex items-center gap-1 text-xs">
+                <ChevronLeft size={14} /> Voltar
+              </button>
+              <span className="text-xs text-white/30">Plano de Ação</span>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <ActionPlanDetail planId={openPlanId} asPanel />
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className="px-5 pt-5 pb-4 border-b border-white/5">
           <div className="flex items-start justify-between">
@@ -427,7 +444,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                       const totalActions = plan.initiatives?.reduce((acc: number, ini: any) => acc + (ini.actions?.length ?? 0), 0) ?? 0;
                       const doneActions = plan.initiatives?.reduce((acc: number, ini: any) => acc + (ini.actions?.filter((a: any) => a.status === 'DONE').length ?? 0), 0) ?? 0;
                       return (
-                        <div key={plan.id} className="bg-white/[0.03] rounded-xl p-3 hover:bg-white/[0.05] transition-colors cursor-pointer">
+                        <div key={plan.id} className="bg-white/[0.03] rounded-xl p-3 hover:bg-white/[0.05] transition-colors cursor-pointer" onClick={() => setOpenPlanId(plan.id)}>
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-xs text-white/70 leading-snug flex-1">{plan.problem}</p>
                             <ChevronRight size={12} className="text-white/20 flex-shrink-0 mt-0.5" />
