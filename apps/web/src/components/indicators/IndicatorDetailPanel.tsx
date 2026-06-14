@@ -550,29 +550,29 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                   </div>
                 </div>
 
-                {/* Strip compacto: mês anterior + estimativa */}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-white/35 border-t border-white/5 pt-2">
-                  <span>
-                    Mês anterior:{' '}
-                    <span className="text-white/60">{prevPoint ? fmtLarge(prevPoint.value, unit) : '—'}</span>
-                    {mom != null && (
-                      <span className={cn('ml-1', goodMom ? 'text-emerald-400/80' : 'text-red-400/80')}>
-                        ({mom > 0 ? '+' : ''}{mom.toFixed(1)}%)
-                      </span>
-                    )}
-                  </span>
-                  {showEstimate && (
-                    <span>
-                      Estimativa: <span className="text-white/60">{fmtLarge(estimate, unit)}</span>
-                    </span>
-                  )}
-                </div>
+                {/* Strip compacto removido — info movida para o header do Histórico */}
               </div>
 
               {/* Gráfico histórico */}
               <div className="px-5 py-4 border-b border-white/5">
-                <div className="flex items-center mb-2">
+                <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Histórico — {chartData.length} períodos</p>
+                  <div className="flex items-center gap-4 text-[10px] text-white/40">
+                    <span>
+                      Mês anterior:{' '}
+                      <span className="text-white/65">{prevPoint ? fmtLarge(prevPoint.value, unit) : '—'}</span>
+                      {mom != null && (
+                        <span className={cn('ml-1', goodMom ? 'text-emerald-400/80' : 'text-red-400/80')}>
+                          ({mom > 0 ? '+' : ''}{mom.toFixed(1)}%)
+                        </span>
+                      )}
+                    </span>
+                    {showEstimate && (
+                      <span>
+                        Estimativa: <span className="text-white/65">{fmtLarge(estimate, unit)}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <HistoryChart data={chartData} direction={direction} unit={unit} currentGoal={goal} />
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
