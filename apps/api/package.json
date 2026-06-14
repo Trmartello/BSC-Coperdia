@@ -10,7 +10,8 @@
     "test": "jest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "ts-node prisma/seed.ts"
+    "db:seed": "ts-node prisma/seed.ts",
+    "db:seed:prod": "node dist-seed/seed.js"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^2.2.1",

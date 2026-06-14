@@ -9,6 +9,28 @@ export class SettingsService {
     private readonly audit: AuditService,
   ) {}
 
+  // ── Flags / preferências do sistema (chave/valor) ──────────────────────────
+  private readonly FLAG_DEFAULTS: Record<string, any> = {
+    showEstimate: true, // exibir coluna "Estimativa" nos cards/painéis
+  };
+
+  async getFlags() {
+    const rows = await this.prisma.systemSetting.findMany();
+    const flags: Record<string, any> = { ...this.FLAG_DEFAULTS };
+    for (const row of rows) flags[row.key] = row.value;
+    return flags;
+  }
+
+  async setFlag(key: string, value: any, userId: string) {
+    const updated = await this.prisma.systemSetting.upsert({
+      where: { key },
+      create: { key, value },
+      update: { value },
+    });
+    await this.audit.log({ userId, action: 'UPDATE', entity: 'SystemSetting', entityId: key, after: { key, value } });
+    return updated;
+  }
+
   async getSystemSettings() {
     // Return aggregated system info
     const [userCount, indicatorCount, mapCount, planCount] = await Promise.all([

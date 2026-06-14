@@ -17,6 +17,17 @@ export class SettingsController {
     return this.settingsService.getSystemSettings();
   }
 
+  @Get('flags')
+  getFlags() {
+    return this.settingsService.getFlags();
+  }
+
+  @Roles('ADMIN')
+  @Patch('flags')
+  setFlag(@Body() body: { key: string; value: any }, @Request() req: any) {
+    return this.settingsService.setFlag(body.key, body.value, req.user.id);
+  }
+
   @Get('indicators')
   getIndicators() {
     return this.settingsService.getIndicators();

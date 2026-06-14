@@ -362,6 +362,17 @@ model Goal {
   @@map("goals")
 }
 
+// ─── System Settings (chave/valor) ───────────────────────────────────────────
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
 // ─── Scenarios ───────────────────────────────────────────────────────────────
 
 model Scenario {

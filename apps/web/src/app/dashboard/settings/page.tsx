@@ -31,6 +31,20 @@ export default function SettingsPage() {
     queryFn: () => settingsApi.getSystem().then((r) => r.data),
   });
 
+  const { data: flags } = useQuery({
+    queryKey: ['settings-flags'],
+    queryFn: () => settingsApi.getFlags().then((r) => r.data),
+  });
+
+  const setFlagMutation = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: any }) => settingsApi.setFlag(key, value),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings-flags'] });
+      toast.success('Configuração atualizada');
+    },
+    onError: () => toast.error('Erro ao atualizar (verifique sua permissão)'),
+  });
+
   const { data: indicators = [] } = useQuery({
     queryKey: ['settings-indicators'],
     queryFn: () => settingsApi.getIndicators().then((r) => r.data),
@@ -111,6 +125,31 @@ export default function SettingsPage() {
               <p className="text-sm text-white/40 mt-1">{s.label}</p>
             </div>
           ))}
+
+          <div className="col-span-2 bg-[#1a1f2e] border border-white/10 rounded-2xl p-5">
+            <p className="text-sm font-medium text-white/60 mb-3">Preferências de exibição</p>
+            <label className="flex items-center justify-between gap-4 cursor-pointer">
+              <div>
+                <p className="text-sm text-white/80">Habilitar estimativa de indicadores</p>
+                <p className="text-xs text-white/40 mt-0.5">
+                  Exibe a coluna "Estimativa" nos cards e no painel expandido dos indicadores.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFlagMutation.mutate({ key: 'showEstimate', value: !(flags?.showEstimate ?? true) })}
+                className={cn(
+                  'relative w-11 h-6 rounded-full transition-colors flex-shrink-0',
+                  (flags?.showEstimate ?? true) ? 'bg-purple-600' : 'bg-white/15',
+                )}
+              >
+                <span className={cn(
+                  'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform',
+                  (flags?.showEstimate ?? true) ? 'translate-x-5' : 'translate-x-0',
+                )} />
+              </button>
+            </label>
+          </div>
 
           <div className="col-span-2 bg-[#1a1f2e] border border-white/10 rounded-2xl p-5">
             <p className="text-sm font-medium text-white/60 mb-1">Versão do sistema</p>

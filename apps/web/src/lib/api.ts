@@ -129,6 +129,8 @@ export const usersApi = {
 // ─── Settings ────────────────────────────────────────────────────────────────
 export const settingsApi = {
   getSystem: () => api.get('/settings'),
+  getFlags: () => api.get('/settings/flags'),
+  setFlag: (key: string, value: any) => api.patch('/settings/flags', { key, value }),
   getIndicators: () => api.get('/settings/indicators'),
   createIndicator: (data: any) => api.post('/settings/indicators', data),
   updateIndicator: (id: string, data: any) => api.patch(`/settings/indicators/${id}`, data),
