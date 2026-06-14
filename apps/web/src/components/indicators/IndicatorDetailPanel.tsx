@@ -462,36 +462,46 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                     </p>
                   </div>
 
-                  {/* VS ANO ANTERIOR */}
+                  {/* VS ANO ANTERIOR — mostra o valor absoluto do ano anterior */}
                   <div className="flex flex-col px-3 border-l border-blue-500/40">
                     <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Ano Anterior</p>
                     <p className="text-[9px] text-white/35 mt-1">
-                      {yoyPoint ? `${fmtMonth(yoyPoint.period)} · ${fmtLarge(yoyPoint.value, unit)}` : 'Sem histórico'}
+                      {yoyPoint ? fmtMonth(yoyPoint.period) : 'Sem histórico'}
                     </p>
                     <p className={cn('text-[26px] font-black mt-1 leading-none', goodYoy == null ? 'text-white/40' : goodYoy ? 'text-emerald-400' : 'text-red-400')}>
-                      {yoy != null ? `${yoy > 0 ? '+' : ''}${yoy.toFixed(1)}%` : '—'}
+                      {yoyPoint ? fmtLarge(yoyPoint.value, unit) : '—'}
                     </p>
-                    <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodYoy == null ? 'text-white/25' : goodYoy ? 'text-emerald-400/70' : 'text-red-400/70')}>
-                      {goodYoy != null && (goodYoy ? <TrendingUp size={9} /> : <TrendingDown size={9} />)}
-                      <span className="leading-tight">{goodYoy == null ? '—' : goodYoy ? 'Melhorou' : 'Piorou'} vs ano anterior</span>
-                    </div>
+                    {yoy != null && (
+                      <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodYoy ? 'text-emerald-400/70' : 'text-red-400/70')}>
+                        {goodYoy ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+                        <span className="leading-tight">{yoy > 0 ? '+' : ''}{yoy.toFixed(0)}% {goodYoy ? 'Melhorou' : 'Piorou'}</span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* VS META */}
+                  {/* VS META — mostra diferença absoluta em unidade */}
                   <div className="flex flex-col pl-3 border-l border-blue-500/40">
                     <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Meta</p>
                     <p className="text-[9px] text-white/35 mt-1">
-                      {goal != null
-                        ? `Meta: ${fmtLarge(goal, unit)}${goalDiff != null && goodVsGoal != null ? ` · ${fmtLarge(goalDiff, unit)} ${goodVsGoal ? 'acima' : 'abaixo'}` : ''}`
-                        : 'Sem meta definida'}
+                      {goal != null ? `Meta: ${fmtLarge(goal, unit)}` : 'Sem meta definida'}
                     </p>
-                    <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white/40' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
-                      {vsGoal != null ? `${vsGoal > 0 ? '+' : ''}${vsGoal.toFixed(1)}%` : '—'}
-                    </p>
-                    <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodVsGoal == null ? 'text-white/25' : goodVsGoal ? 'text-emerald-400/70' : 'text-red-400/70')}>
-                      {goodVsGoal != null && (goodVsGoal ? <TrendingUp size={9} /> : <TrendingDown size={9} />)}
-                      <span className="leading-tight">{goodVsGoal == null ? 'Sem meta' : goodVsGoal ? 'Acima da meta' : 'Abaixo da meta'}</span>
-                    </div>
+                    {(() => {
+                      const diff = effective != null && goal != null ? effective - goal : null;
+                      const sign = diff != null ? (diff >= 0 ? '+' : '') : '';
+                      return (
+                        <>
+                          <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white/40' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
+                            {diff != null ? `${sign}${fmtLarge(diff, unit)}` : '—'}
+                          </p>
+                          {vsGoal != null && (
+                            <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodVsGoal ? 'text-emerald-400/70' : 'text-red-400/70')}>
+                              {goodVsGoal ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+                              <span className="leading-tight">{Math.abs(vsGoal).toFixed(0)}% {goodVsGoal ? 'melhor que a meta' : 'pior que a meta'}</span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
