@@ -71,96 +71,126 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
 
   const pts = data.slice(-15);
   const n = pts.length;
-  const step = 38;
-  const barW = 16;
+  const step = 42;
+  const barW = step * 0.6;
   const chartW = n * step;
-  const chartH = 110;
-  const pad = 16;
-  const topPad = 16; // espaço para os rótulos de valor acima das barras
+  const chartH = 130;
+  const pad = 20;
+  const topPad = 26; // espaço para rótulos de valor / YoY acima das barras
 
-  const allVals = pts.flatMap((p) => [p.value, p.goal ?? 0, p.prevYear ?? 0]).filter((v) => v > 0);
-  const maxVal = Math.max(...allVals, 1);
+  // Índices destacados: 2 mais recentes (cor do status) ...
+  const recentIdx = new Set<number>();
+  if (n >= 1) recentIdx.add(n - 1);
+  if (n >= 2) recentIdx.add(n - 2);
+
+  // ... e os mesmos meses do ano anterior (cor roxa)
+  const prevYearIdx = new Map<number, number>(); // idx do ano anterior -> idx recente correspondente
+  recentIdx.forEach((ri) => {
+    const rp = pts[ri].period;
+    const j = pts.findIndex((p) => p.period.getMonth() === rp.getMonth()
+      && p.period.getFullYear() === rp.getFullYear() - 1);
+    if (j >= 0) prevYearIdx.set(j, ri);
+  });
+
+  const goalLine = currentGoal ?? null;
+
+  const allVals = pts.map((p) => p.value).filter((v) => v > 0);
+  const maxVal = Math.max(...allVals, goalLine ?? 0, 1) * 1.15;
 
   const x = (i: number) => pad + i * step + step / 2;
   const y = (v: number) => topPad + (chartH - (v / maxVal) * chartH);
+  const baseY = topPad + chartH;
 
-  // polyline MoM (evolução mês a mês) através dos topos das barras
-  const momPath = pts.map((p, i) => `${x(i)},${y(p.value)}`).join(' ');
-  // polyline YoY (mesmo período do ano anterior) onde houver dado
-  const yoyPts = pts.map((p, i) => (p.prevYear ? `${x(i)},${y(p.prevYear)}` : null)).filter(Boolean) as string[];
-
-  // status por barra: usa a meta do período; nas duas barras mais recentes,
-  // recorre à meta atual como referência (legenda "atual + penúltimo — cor do status")
-  const statusOf = (p: Pt, i: number): boolean | null => {
-    const isRecent = i >= n - 2;
-    const g = p.goal ?? (isRecent ? currentGoal ?? undefined : undefined);
-    if (g == null) return null;
-    return direction === 'LOWER_IS_BETTER' ? p.value <= g : p.value >= g;
+  // status das barras recentes (verde/vermelho conforme a meta atual)
+  const statusOf = (p: Pt): boolean | null => {
+    if (goalLine == null) return null;
+    return direction === 'LOWER_IS_BETTER' ? p.value <= goalLine : p.value >= goalLine;
   };
+
+  // YoY entre o mês mais recente e o mesmo mês do ano anterior
+  const last = pts[n - 1];
+  const lastPrev = pts.find((p) => p.period.getMonth() === last.period.getMonth()
+    && p.period.getFullYear() === last.period.getFullYear() - 1);
+  const yoy = last && lastPrev && lastPrev.value !== 0
+    ? ((last.value - lastPrev.value) / Math.abs(lastPrev.value)) * 100 : null;
+  const yoyGood = yoy == null ? null
+    : direction === 'LOWER_IS_BETTER' ? yoy <= 0 : yoy >= 0;
+
+  const fullW = chartW + pad * 2;
 
   return (
     <div className="w-full overflow-x-auto">
-      <svg width="100%" height={topPad + chartH + 26} viewBox={`0 0 ${chartW + pad * 2} ${topPad + chartH + 26}`} preserveAspectRatio="xMidYMid meet">
-        {/* meta — segmentos pontilhados horizontais por período */}
-        {pts.map((p, i) => {
-          const isRecent = i >= n - 2;
-          const g = p.goal ?? (isRecent ? currentGoal ?? undefined : undefined);
-          return g != null ? (
-            <line
-              key={`g-${i}`}
-              x1={x(i) - barW} x2={x(i) + barW}
-              y1={y(g)} y2={y(g)}
-              stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeDasharray="3 2"
-            />
-          ) : null;
-        })}
+      <svg width="100%" height={baseY + 24} viewBox={`0 0 ${fullW} ${baseY + 24}`} preserveAspectRatio="xMidYMid meet">
+        {/* anotação YoY no topo, centralizada, com hastes nas pontas */}
+        {yoy != null && (
+          <g>
+            <line x1={x(0)} x2={x(n - 1)} y1={topPad - 14} y2={topPad - 14}
+              stroke="rgba(255,255,255,0.18)" strokeWidth={1} strokeDasharray="4 3" />
+            <line x1={x(0)} x2={x(0)} y1={topPad - 18} y2={topPad - 10} stroke="rgba(255,255,255,0.18)" strokeWidth={1} />
+            <line x1={x(n - 1)} x2={x(n - 1)} y1={topPad - 18} y2={topPad - 10} stroke="rgba(255,255,255,0.18)" strokeWidth={1} />
+            <rect x={fullW / 2 - 34} y={topPad - 22} width={68} height={15} rx={4} fill="#161b27" />
+            <text x={fullW / 2} y={topPad - 11} textAnchor="middle" fontSize="9" fontWeight="700"
+              fill={yoyGood ? '#34d399' : '#f87171'}>
+              {yoy > 0 ? '+' : ''}{yoy.toFixed(1)}% YoY
+            </text>
+          </g>
+        )}
 
-        {/* barras: fantasma (ano anterior) + atual (cor do status) */}
+        {/* linha de meta tracejada + rótulo à direita */}
+        {goalLine != null && (
+          <g>
+            <line x1={pad} x2={fullW - pad} y1={y(goalLine)} y2={y(goalLine)}
+              stroke="rgba(255,255,255,0.22)" strokeWidth={1} strokeDasharray="4 4" />
+            <text x={fullW - pad + 2} y={y(goalLine) + 3} textAnchor="end" fontSize="7.5" fill="rgba(255,255,255,0.3)">
+              {fmtBar(goalLine, unit)}
+            </text>
+          </g>
+        )}
+
+        {/* barras */}
         {pts.map((p, i) => {
-          const good = statusOf(p, i);
-          const barColor = good === null ? 'rgba(255,255,255,0.25)' : good ? 'rgba(16,185,129,0.85)' : 'rgba(239,68,68,0.85)';
-          const labelColor = good === null ? 'rgba(255,255,255,0.45)' : good ? 'rgba(52,211,153,0.95)' : 'rgba(248,113,113,0.95)';
+          const isRecent = recentIdx.has(i);
+          const isPrevYear = prevYearIdx.has(i);
+          const good = isRecent ? statusOf(p) : null;
+          let barColor = 'rgba(255,255,255,0.07)';
+          let labelColor = 'rgba(255,255,255,0.5)';
+          if (isPrevYear) {
+            barColor = 'rgba(129,140,248,0.85)';
+            labelColor = 'rgba(165,180,252,0.95)';
+          } else if (isRecent) {
+            barColor = good === null ? 'rgba(255,255,255,0.3)' : good ? 'rgba(16,185,129,0.9)' : 'rgba(239,68,68,0.9)';
+            labelColor = good === null ? 'rgba(255,255,255,0.6)' : good ? 'rgba(52,211,153,1)' : 'rgba(248,113,113,1)';
+          }
+          const showLabel = isRecent || isPrevYear;
           return (
             <g key={`b-${i}`}>
-              {p.prevYear != null && (
-                <rect
-                  x={x(i) - barW / 2 - 3} width={barW * 0.55}
-                  y={y(p.prevYear)} height={topPad + chartH - y(p.prevYear)}
-                  rx={2} fill="rgba(129,140,248,0.45)"
-                />
-              )}
               <rect
-                x={x(i) - barW / 2 + (p.prevYear != null ? 3 : 0)} width={barW * (p.prevYear != null ? 0.7 : 1)}
-                y={y(p.value)} height={topPad + chartH - y(p.value)}
-                rx={2} fill={barColor}
+                x={x(i) - barW / 2} width={barW}
+                y={y(p.value)} height={baseY - y(p.value)}
+                rx={3} fill={barColor}
               />
-              {/* rótulo de valor acima da barra */}
-              <text x={x(i)} y={y(p.value) - 4} textAnchor="middle" fontSize="7.5" fontWeight="600" fill={labelColor}>
-                {fmtBar(p.value, unit)}
-              </text>
+              {showLabel && (
+                <text x={x(i)} y={y(p.value) - 5} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={labelColor}>
+                  {fmtBar(p.value, unit)}
+                </text>
+              )}
             </g>
           );
         })}
 
-        {/* linha pontilhada — evolução mês a mês (MoM) */}
-        <polyline points={momPath} fill="none" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="5 3" />
-        {pts.map((p, i) => (
-          <circle key={`mc-${i}`} cx={x(i)} cy={y(p.value)} r={2} fill="#a78bfa" />
-        ))}
-
-        {/* linha pontilhada — mesmo período ano anterior (YoY) */}
-        {yoyPts.length > 1 && (
-          <polyline points={yoyPts.join(' ')} fill="none" stroke="rgba(129,140,248,0.7)" strokeWidth={1.2} strokeDasharray="2 3" />
-        )}
-
-        {/* labels de período (mostra alguns para não poluir) */}
-        {pts.map((p, i) =>
-          (i === 0 || i === n - 1 || i % 3 === 0) ? (
-            <text key={`t-${i}`} x={x(i)} y={topPad + chartH + 16} textAnchor="middle" fontSize="7.5" fill="rgba(255,255,255,0.35)">
+        {/* labels de período: destaque (negrito) nos meses realçados, demais esmaecidos */}
+        {pts.map((p, i) => {
+          const highlight = recentIdx.has(i) || prevYearIdx.has(i);
+          const show = highlight || i === 0 || i % 4 === 0;
+          if (!show) return null;
+          return (
+            <text key={`t-${i}`} x={x(i)} y={baseY + 16} textAnchor="middle"
+              fontSize="7.5" fontWeight={highlight ? 700 : 400}
+              fill={highlight ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)'}>
               {fmtMonthCompact(p.period)}
             </text>
-          ) : null,
-        )}
+          );
+        })}
       </svg>
     </div>
   );
@@ -526,13 +556,8 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
 
               {/* Gráfico histórico */}
               <div className="px-5 py-4 border-b border-white/5">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center mb-2">
                   <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Histórico — {chartData.length} períodos</p>
-                  {yoy != null && (
-                    <span className={cn('text-[10px] font-semibold', goodYoy ? 'text-emerald-400' : 'text-red-400')}>
-                      {yoy > 0 ? '+' : ''}{yoy.toFixed(1)}% YoY
-                    </span>
-                  )}
                 </div>
                 <HistoryChart data={chartData} direction={direction} unit={unit} currentGoal={goal} />
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
