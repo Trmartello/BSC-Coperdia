@@ -6,6 +6,7 @@ import {
   Settings, BarChart2, Map, Tag, Plus, Pencil, Trash2, Activity,
 } from 'lucide-react';
 import { settingsApi } from '../../../lib/api';
+import { IndicatorFormPanel } from '../../../components/indicators/IndicatorFormPanel';
 import { cn } from '../../../lib/utils';
 import { toast } from 'sonner';
 
@@ -25,6 +26,8 @@ export default function SettingsPage() {
   const [tab, setTab] = useState('overview');
   const [newCat, setNewCat] = useState({ name: '', color: '#6366f1' });
   const [showNewCat, setShowNewCat] = useState(false);
+  const [showIndForm, setShowIndForm] = useState(false);
+  const [editIndId, setEditIndId] = useState<string | null>(null);
 
   const { data: systemData } = useQuery({
     queryKey: ['settings'],
@@ -164,6 +167,12 @@ export default function SettingsPage() {
         <div className="bg-[#1a1f2e] border border-white/10 rounded-2xl overflow-hidden">
           <div className="p-4 border-b border-white/5 flex items-center justify-between">
             <p className="text-sm font-medium text-white/60">{(indicators as any[]).length} indicadores</p>
+            <button
+              onClick={() => { setEditIndId(null); setShowIndForm(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-colors"
+            >
+              <Plus size={13} /> Novo Indicador
+            </button>
           </div>
           <table className="w-full">
             <thead>
@@ -190,12 +199,20 @@ export default function SettingsPage() {
                   <td className="px-4 py-3 text-xs text-white/40">{UNIT_LABEL[ind.unit] ?? ind.unit}</td>
                   <td className="px-4 py-3 text-xs text-white/40">{ind.periodicity}</td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => { if (confirm('Remover indicador?')) deleteIndMutation.mutate(ind.id); }}
-                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => { setEditIndId(ind.id); setShowIndForm(true); }}
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/20 hover:text-white/60 transition-colors"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => { if (confirm('Remover indicador?')) deleteIndMutation.mutate(ind.id); }}
+                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -289,6 +306,18 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {showIndForm && (
+        <IndicatorFormPanel
+          editIndicatorId={editIndId}
+          onClose={() => { setShowIndForm(false); setEditIndId(null); }}
+          onSaved={() => {
+            setShowIndForm(false);
+            setEditIndId(null);
+            qc.invalidateQueries({ queryKey: ['settings-indicators'] });
+          }}
+        />
       )}
     </div>
   );
