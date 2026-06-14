@@ -12,6 +12,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil, Info, Maximize2, Trash2 } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
+import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
 import { cn, formatValue } from '../../../../lib/utils';
 import { IndicatorDetailPanel } from '../../../../components/indicators/IndicatorDetailPanel';
@@ -268,6 +269,7 @@ function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClos
 export default function MapEditorPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { activePeriod } = useScenarioStore();
   const qc = useQueryClient();
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [selectedIndicatorId, setSelectedIndicatorId] = useState<string | null>(null);
@@ -384,15 +386,6 @@ export default function MapEditorPage() {
 
   const existingIds = new Set(map?.entries?.map((e) => e.indicatorId) ?? []);
 
-  // Detect current period from first available realized value
-  const currentPeriod = (() => {
-    for (const entry of map?.entries ?? []) {
-      if (entry.indicator?.realizedValues?.[0]?.period) {
-        return entry.indicator.realizedValues[0].period;
-      }
-    }
-    return new Date().toISOString().slice(0, 10);
-  })();
 
   return (
     <div className="flex flex-col h-[calc(100vh-56px-48px)]">
@@ -493,7 +486,7 @@ export default function MapEditorPage() {
         {selectedIndicatorId && (
           <IndicatorDetailPanel
             indicatorId={selectedIndicatorId}
-            period={currentPeriod}
+            period={activePeriod}
             onClose={() => setSelectedIndicatorId(null)}
           />
         )}

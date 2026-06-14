@@ -244,6 +244,15 @@ export class IndicatorsService {
     return { indicatorId, affectedIndicators: affected };
   }
 
+  async getAvailablePeriods(): Promise<string[]> {
+    const rows = await this.prisma.realizedValue.findMany({
+      select: { period: true },
+      distinct: ['period'],
+      orderBy: { period: 'asc' },
+    });
+    return rows.map((r) => r.period.toISOString().slice(0, 10));
+  }
+
   // ── Carga de dados (planilha CSV) ────────────────────────────────────────────
 
   // Modelo para preenchimento: apenas indicadores de ENTRADA (sem fórmula).

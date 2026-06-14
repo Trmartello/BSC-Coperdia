@@ -55,6 +55,7 @@ export const indicatorsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  periods: () => api.get<string[]>('/indicators/periods'),
   addRelation: (parentId: string, childId: string) =>
     api.post('/indicators/relations', { parentId, childId }),
   removeRelation: (parentId: string, childId: string) =>

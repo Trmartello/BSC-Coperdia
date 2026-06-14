@@ -18,6 +18,11 @@ import { UpdateForecastDto } from './dto/update-forecast.dto';
 export class IndicatorsController {
   constructor(private readonly service: IndicatorsService) {}
 
+  @Get('periods')
+  getAvailablePeriods() {
+    return this.service.getAvailablePeriods();
+  }
+
   @Get()
   findAll() {
     return this.service.findAll();

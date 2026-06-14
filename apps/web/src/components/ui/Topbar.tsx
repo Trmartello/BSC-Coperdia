@@ -4,19 +4,24 @@ import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/auth.store';
 import { useScenarioStore } from '../../store/scenario.store';
-import { scenariosApi } from '../../lib/api';
+import { scenariosApi, indicatorsApi } from '../../lib/api';
 import { Scenario } from '../../types';
-import { Bell, ChevronDown, Layers } from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export function Topbar() {
   const { user } = useAuthStore();
-  const { activeScenario, setActiveScenario } = useScenarioStore();
+  const { activeScenario, setActiveScenario, activePeriod, setActivePeriod } = useScenarioStore();
   const [open, setOpen] = useState(false);
 
   const { data: scenarios = [] } = useQuery({
     queryKey: ['scenarios'],
     queryFn: () => scenariosApi.list().then((r) => r.data as Scenario[]),
+  });
+
+  const { data: periods = [] } = useQuery({
+    queryKey: ['indicator-periods'],
+    queryFn: () => indicatorsApi.periods().then((r) => r.data),
   });
 
   // Auto-seleciona o cenário baseline (ou o primeiro) quando nenhum está ativo
@@ -26,6 +31,23 @@ export function Topbar() {
       setActiveScenario(baseline);
     }
   }, [scenarios, activeScenario, setActiveScenario]);
+
+  // Auto-seleciona o período mais recente se o período ativo não existir nos dados
+  useEffect(() => {
+    if (periods.length === 0) return;
+    if (!periods.includes(activePeriod)) {
+      setActivePeriod(periods[periods.length - 1]);
+    }
+  }, [periods, activePeriod, setActivePeriod]);
+
+  const periodIdx = periods.indexOf(activePeriod);
+  const prevPeriod = () => { if (periodIdx > 0) setActivePeriod(periods[periodIdx - 1]); };
+  const nextPeriod = () => { if (periodIdx < periods.length - 1) setActivePeriod(periods[periodIdx + 1]); };
+
+  const displayPeriod = activePeriod
+    ? new Date(activePeriod + 'T12:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+        .replace('.', '').replace(/^\w/, (c) => c.toUpperCase())
+    : '—';
 
   const initials = user?.name
     ? user.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
@@ -41,6 +63,14 @@ export function Topbar() {
       </div>
 
       <div className="flex-1" />
+
+      {/* Period selector */}
+      <div className="flex items-center gap-1 bg-purple-600/15 border border-purple-500/25 rounded-xl px-2 py-1.5">
+        <span className="text-[10px] text-white/40 mr-1">Período:</span>
+        <button onClick={prevPeriod} disabled={periodIdx <= 0} className="text-white/40 hover:text-white/80 disabled:opacity-20 px-0.5"><ChevronLeft size={13} /></button>
+        <span className="text-xs font-semibold text-purple-200 min-w-[60px] text-center">{displayPeriod}</span>
+        <button onClick={nextPeriod} disabled={periodIdx >= periods.length - 1} className="text-white/40 hover:text-white/80 disabled:opacity-20 px-0.5"><ChevronRight size={13} /></button>
+      </div>
 
       {/* Scenario selector */}
       <div className="relative">
