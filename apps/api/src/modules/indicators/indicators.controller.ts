@@ -47,4 +47,26 @@ export class IndicatorsController {
   updateForecast(@Body() dto: UpdateForecastDto, @Request() req: any) {
     return this.service.updateForecast(dto, req.user.id);
   }
+
+  // Carga/correção de valor realizado (carga de dados): ADMIN e CONTROLADORIA
+  @Roles('ADMIN', 'CONTROLADORIA')
+  @Post(':id/realized')
+  setRealized(
+    @Param('id') id: string,
+    @Body() body: { period: string; value: number },
+    @Request() req: any,
+  ) {
+    return this.service.setRealized(id, body.period, body.value, req.user.id);
+  }
+
+  // Definição de meta: ADMIN e CONTROLADORIA
+  @Roles('ADMIN', 'CONTROLADORIA')
+  @Post(':id/goal')
+  setGoal(
+    @Param('id') id: string,
+    @Body() body: { period: string; value: number },
+    @Request() req: any,
+  ) {
+    return this.service.setGoal(id, body.period, body.value, req.user.id);
+  }
 }

@@ -102,6 +102,50 @@ export class IndicatorsService {
     return forecast;
   }
 
+  // Carga/correção de valor REALIZADO (carga de dados)
+  async setRealized(indicatorId: string, period: string, value: number, userId: string) {
+    const p = new Date(period);
+    const before = await this.prisma.realizedValue.findUnique({
+      where: { indicatorId_period: { indicatorId, period: p } },
+    });
+    const rv = await this.prisma.realizedValue.upsert({
+      where: { indicatorId_period: { indicatorId, period: p } },
+      create: { indicatorId, period: p, value },
+      update: { value },
+    });
+    await this.audit.log({
+      userId,
+      action: before ? 'UPDATE' : 'CREATE',
+      entity: 'RealizedValue',
+      entityId: rv.id,
+      before: before ? { value: Number(before.value), period } : undefined,
+      after: { value, period },
+    });
+    return rv;
+  }
+
+  // Definição/correção de META
+  async setGoal(indicatorId: string, period: string, value: number, userId: string) {
+    const p = new Date(period);
+    const before = await this.prisma.goal.findUnique({
+      where: { indicatorId_period: { indicatorId, period: p } },
+    });
+    const goal = await this.prisma.goal.upsert({
+      where: { indicatorId_period: { indicatorId, period: p } },
+      create: { indicatorId, period: p, value },
+      update: { value },
+    });
+    await this.audit.log({
+      userId,
+      action: before ? 'UPDATE' : 'CREATE',
+      entity: 'Goal',
+      entityId: goal.id,
+      before: before ? { value: Number(before.value), period } : undefined,
+      after: { value, period },
+    });
+    return goal;
+  }
+
   async getTree(rootId?: string) {
     const graph = await this.calcEngine.buildGraph();
 

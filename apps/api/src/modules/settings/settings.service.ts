@@ -38,6 +38,15 @@ export class SettingsService {
   }
 
   async createIndicator(data: any, userId: string) {
+    // Gera código automático (ex.: FIN-001) quando não informado
+    if (!data.code) {
+      const prefix = (data.category || 'IND')
+        .replace(/[^A-Za-z]/g, '')
+        .slice(0, 3)
+        .toUpperCase() || 'IND';
+      const count = await this.prisma.indicator.count();
+      data.code = `${prefix}-${String(count + 1).padStart(3, '0')}`;
+    }
     const created = await this.prisma.indicator.create({ data });
     await this.audit.log({ userId, action: 'CREATE', entity: 'Indicator', entityId: created.id, after: created });
     return created;

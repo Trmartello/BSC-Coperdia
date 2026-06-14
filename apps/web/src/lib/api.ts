@@ -40,6 +40,10 @@ export const indicatorsApi = {
   impactChain: (id: string) => api.get(`/indicators/${id}/impact-chain`),
   updateForecast: (data: { indicatorId: string; scenarioId: string; period: string; value: number }) =>
     api.patch('/indicators/forecast', data),
+  setRealized: (id: string, data: { period: string; value: number }) =>
+    api.post(`/indicators/${id}/realized`, data),
+  setGoal: (id: string, data: { period: string; value: number }) =>
+    api.post(`/indicators/${id}/goal`, data),
 };
 
 // ─── Scenarios ────────────────────────────────────────────────────────────────

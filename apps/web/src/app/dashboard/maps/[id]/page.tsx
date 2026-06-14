@@ -10,11 +10,12 @@ import ReactFlow, {
   NodeProps, Handle, Panel,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil } from 'lucide-react';
 import { mapsApi, indicatorsApi } from '../../../../lib/api';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
 import { cn, formatValue } from '../../../../lib/utils';
 import { IndicatorDetailPanel } from '../../../../components/indicators/IndicatorDetailPanel';
+import { IndicatorFormPanel } from '../../../../components/indicators/IndicatorFormPanel';
 import { toast } from 'sonner';
 
 // ─── Indicator Node ───────────────────────────────────────────────────────────
@@ -119,8 +120,31 @@ function buildNodesAndEdges(entries: MapEntry[], savedFlow?: any) {
 
 // ─── Add Indicator Panel ──────────────────────────────────────────────────────
 
-function AddIndicatorPanel({ existingIds, onAdd, onClose }: {
-  existingIds: Set<string>; onAdd: (id: string) => void; onClose: () => void;
+function IndicatorRow({ ind, onMap, onAdd, onEdit }: {
+  ind: any; onMap?: boolean; onAdd?: () => void; onEdit: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 hover:bg-white/5">
+      <span className="text-[10px] font-mono text-white/30 w-14 flex-shrink-0">{ind.code}</span>
+      <span className="text-sm text-white/70 truncate flex-1">{ind.name}</span>
+      <button onClick={onEdit} title="Editar cadastro" className="text-white/30 hover:text-white/80">
+        <Pencil size={12} />
+      </button>
+      {!onMap && onAdd && (
+        <button onClick={onAdd} title="Adicionar ao mapa" className="text-white/30 hover:text-emerald-400">
+          <Plus size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClose }: {
+  existingIds: Set<string>;
+  onAdd: (id: string) => void;
+  onCreateNew: () => void;
+  onEdit: (id: string) => void;
+  onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
   const { data: allInds = [] } = useQuery({
@@ -128,36 +152,57 @@ function AddIndicatorPanel({ existingIds, onAdd, onClose }: {
     queryFn: () => indicatorsApi.list().then((r) => r.data),
   });
 
-  const filtered = (allInds as any[]).filter(
-    (ind) => !existingIds.has(ind.id) &&
-      (ind.name.toLowerCase().includes(search.toLowerCase()) ||
-        ind.code.toLowerCase().includes(search.toLowerCase())),
-  );
+  const q = search.toLowerCase();
+  const match = (ind: any) =>
+    ind.name.toLowerCase().includes(q) || ind.code.toLowerCase().includes(q);
+  const list = allInds as any[];
+  const onMapList = list.filter((i) => existingIds.has(i.id) && match(i));
+  const available = list.filter((i) => !existingIds.has(i.id) && match(i));
 
   return (
-    <div className="absolute top-14 right-4 z-10 w-72 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-      <div className="p-3 border-b border-white/5 flex items-center gap-2">
+    <div className="absolute top-14 right-4 z-10 w-80 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="p-3 border-b border-white/5 flex items-center justify-between">
+        <p className="text-sm font-semibold text-white">Gerenciar Indicadores</p>
+        <button onClick={onClose} className="text-white/30 hover:text-white/70 text-xs">✕</button>
+      </div>
+      <div className="p-3 border-b border-white/5 space-y-2">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar indicador..."
           autoFocus
-          className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 focus:outline-none"
+          className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none"
         />
-        <button onClick={onClose} className="text-white/30 hover:text-white/70 text-xs">✕</button>
+        <button
+          onClick={onCreateNew}
+          className="w-full flex items-center justify-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-200 text-xs py-2 rounded-lg hover:bg-purple-600/30"
+        >
+          <Plus size={13} /> Criar novo indicador
+        </button>
       </div>
-      <div className="max-h-64 overflow-y-auto">
-        {filtered.slice(0, 20).map((ind: any) => (
-          <button
+      <div className="max-h-72 overflow-y-auto">
+        {onMapList.length > 0 && (
+          <>
+            <p className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-widest text-white/30">
+              No mapa ({onMapList.length})
+            </p>
+            {onMapList.map((ind) => (
+              <IndicatorRow key={ind.id} ind={ind} onMap onEdit={() => onEdit(ind.id)} />
+            ))}
+          </>
+        )}
+        <p className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-widest text-white/30">
+          Disponíveis ({available.length})
+        </p>
+        {available.slice(0, 40).map((ind) => (
+          <IndicatorRow
             key={ind.id}
-            onClick={() => onAdd(ind.id)}
-            className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 text-left transition-colors"
-          >
-            <span className="text-[10px] font-mono text-white/30 w-12 flex-shrink-0">{ind.code}</span>
-            <span className="text-sm text-white/70 truncate">{ind.name}</span>
-          </button>
+            ind={ind}
+            onAdd={() => onAdd(ind.id)}
+            onEdit={() => onEdit(ind.id)}
+          />
         ))}
-        {filtered.length === 0 && (
+        {available.length === 0 && onMapList.length === 0 && (
           <p className="text-center text-xs text-white/30 py-6">Nenhum indicador encontrado.</p>
         )}
       </div>
@@ -173,6 +218,10 @@ export default function MapEditorPage() {
   const qc = useQueryClient();
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [selectedIndicatorId, setSelectedIndicatorId] = useState<string | null>(null);
+  const [indicatorForm, setIndicatorForm] = useState<{ open: boolean; editId: string | null }>({
+    open: false,
+    editId: null,
+  });
 
   const { data: map, isLoading } = useQuery<IndicatorMap>({
     queryKey: ['map', id],
@@ -267,12 +316,20 @@ export default function MapEditorPage() {
             className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-white/60 hover:text-white/80 transition-colors"
           >
             <Plus size={13} />
-            Adicionar indicador
+            Gerenciar indicadores
           </button>
           {showAddPanel && (
-            <AddIndicatorPanel
+            <ManageIndicatorsPanel
               existingIds={existingIds}
               onAdd={(indId) => addIndMutation.mutate(indId)}
+              onCreateNew={() => {
+                setShowAddPanel(false);
+                setIndicatorForm({ open: true, editId: null });
+              }}
+              onEdit={(indId) => {
+                setShowAddPanel(false);
+                setIndicatorForm({ open: true, editId: indId });
+              }}
               onClose={() => setShowAddPanel(false)}
             />
           )}
@@ -334,6 +391,19 @@ export default function MapEditorPage() {
           />
         )}
       </div>
+
+      {/* Formulário de criar/editar indicador (barra lateral direita) */}
+      {indicatorForm.open && (
+        <IndicatorFormPanel
+          mapId={id}
+          editIndicatorId={indicatorForm.editId}
+          onClose={() => setIndicatorForm({ open: false, editId: null })}
+          onSaved={() => {
+            setIndicatorForm({ open: false, editId: null });
+            qc.invalidateQueries({ queryKey: ['map', id] });
+          }}
+        />
+      )}
     </div>
   );
 }
