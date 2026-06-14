@@ -10,7 +10,7 @@ import ReactFlow, {
   NodeProps, Handle, Panel,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil, Info, Maximize2 } from 'lucide-react';
+import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil, Info, Maximize2, Trash2 } from 'lucide-react';
 import { mapsApi, indicatorsApi } from '../../../../lib/api';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
 import { cn, formatValue } from '../../../../lib/utils';
@@ -29,7 +29,7 @@ function unitLabel(unit: string): string {
 // ─── Indicator Node ───────────────────────────────────────────────────────────
 
 function MapIndicatorNode({ data, selected }: NodeProps) {
-  const { indicator, realized, goal, estimate, onInfo, onExpand } = data;
+  const { indicator, realized, goal, estimate, onInfo, onExpand, onRemove } = data;
   const effective = estimate ?? realized;
   const dev = goal && effective != null && goal !== 0
     ? ((effective - goal) / Math.abs(goal)) * 100 : null;
@@ -69,6 +69,13 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
               title="Expandir"
             >
               <Maximize2 size={12} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove?.(indicator.id, indicator.name); }}
+              className="text-white/30 hover:text-red-400 transition-colors"
+              title="Remover do mapa"
+            >
+              <Trash2 size={12} />
             </button>
           </div>
         </div>
@@ -117,7 +124,11 @@ const nodeTypes = { mapIndicator: MapIndicatorNode };
 function buildNodesAndEdges(
   entries: MapEntry[],
   savedFlow?: any,
-  handlers?: { onInfo: (id: string) => void; onExpand: (id: string) => void },
+  handlers?: {
+    onInfo: (id: string) => void;
+    onExpand: (id: string) => void;
+    onRemove: (id: string, name: string) => void;
+  },
 ) {
   const nodes: Node[] = entries.map((entry, i) => {
     const savedNode = savedFlow?.nodes?.find((n: any) => n.id === entry.indicatorId);
@@ -130,7 +141,10 @@ function buildNodesAndEdges(
       id: entry.indicatorId,
       type: 'mapIndicator',
       position: savedNode?.position ?? { x: (i % 3) * 280, y: Math.floor(i / 3) * 220 },
-      data: { indicator: ind, realized, goal, estimate, onInfo: handlers?.onInfo, onExpand: handlers?.onExpand },
+      data: {
+        indicator: ind, realized, goal, estimate,
+        onInfo: handlers?.onInfo, onExpand: handlers?.onExpand, onRemove: handlers?.onRemove,
+      },
     };
   });
 
@@ -147,6 +161,7 @@ function buildNodesAndEdges(
           animated: false,
           style: { stroke: '#6366f1', strokeWidth: 1.5, strokeDasharray: '5 3' },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
+          data: { parentId: entry.indicatorId, childId: rel.child.id },
         });
       }
     }
@@ -269,26 +284,71 @@ export default function MapEditorPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+  const handleRemoveIndicator = useCallback(async (indId: string, name: string) => {
+    if (typeof window !== 'undefined' && !window.confirm(`Remover "${name}" deste mapa?`)) return;
+    try {
+      await mapsApi.removeIndicator(id, indId);
+      setSelectedIndicatorId((prev) => (prev === indId ? null : prev));
+      qc.invalidateQueries({ queryKey: ['map', id] });
+      toast.success('Indicador removido do mapa');
+    } catch {
+      toast.error('Erro ao remover indicador');
+    }
+  }, [id, qc]);
+
   useEffect(() => {
     if (!map?.entries) return;
     const { nodes: n, edges: e } = buildNodesAndEdges(map.entries, map.flowData, {
       onInfo: (indId) => setInfoIndicatorId(indId),
       onExpand: (indId) => setSelectedIndicatorId((prev) => (prev === indId ? null : indId)),
+      onRemove: handleRemoveIndicator,
     });
     setNodes(n);
     setEdges(e);
   }, [map]);
 
+  // Criar conexão: source = causa (filho), target = recebe impacto (pai)
   const onConnect = useCallback(
-    (params: Connection) =>
+    async (params: Connection) => {
+      if (!params.source || !params.target) return;
+      const parentId = params.target;
+      const childId = params.source;
       setEdges((eds) =>
         addEdge({
           ...params, type: 'smoothstep', animated: false,
           style: { stroke: '#6366f1', strokeWidth: 1.5, strokeDasharray: '5 3' },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
+          data: { parentId, childId },
         }, eds),
-      ),
-    [setEdges],
+      );
+      try {
+        await indicatorsApi.addRelation(parentId, childId);
+        toast.success('Conexão criada');
+      } catch (e: any) {
+        toast.error(e?.response?.data?.message || 'Erro ao criar conexão');
+      } finally {
+        qc.invalidateQueries({ queryKey: ['map', id] });
+      }
+    },
+    [setEdges, qc, id],
+  );
+
+  // Remover conexão (selecione a seta e tecle Delete)
+  const onEdgesDelete = useCallback(
+    async (deleted: Edge[]) => {
+      for (const edge of deleted) {
+        const parentId = (edge.data as any)?.parentId ?? edge.target;
+        const childId = (edge.data as any)?.childId ?? edge.source;
+        try {
+          await indicatorsApi.removeRelation(parentId, childId);
+        } catch {
+          toast.error('Erro ao remover conexão');
+        }
+      }
+      if (deleted.length) toast.success('Conexão removida');
+      qc.invalidateQueries({ queryKey: ['map', id] });
+    },
+    [qc, id],
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -345,11 +405,9 @@ export default function MapEditorPage() {
             {map.category.name}
           </span>
         )}
-        {selectedIndicatorId && (
-          <span className="text-[10px] text-white/30 italic">
-            · clique no canvas para fechar o painel
-          </span>
-        )}
+        <span className="text-[10px] text-white/30 italic hidden lg:inline">
+          · arraste as alças dos cards para conectar · selecione uma seta e tecle Delete para remover
+        </span>
         <div className="flex-1" />
         <div className="relative">
           <button
@@ -393,6 +451,7 @@ export default function MapEditorPage() {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onEdgesDelete={onEdgesDelete}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Patch, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Patch, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -39,6 +39,19 @@ export class IndicatorsController {
   @Post()
   create(@Body() dto: CreateIndicatorDto) {
     return this.service.create(dto);
+  }
+
+  // Conexões da árvore de impacto: ADMIN e CONTROLADORIA
+  @Roles('ADMIN', 'CONTROLADORIA')
+  @Post('relations')
+  addRelation(@Body() body: { parentId: string; childId: string }, @Request() req: any) {
+    return this.service.addRelation(body.parentId, body.childId, req.user.id);
+  }
+
+  @Roles('ADMIN', 'CONTROLADORIA')
+  @Delete('relations')
+  removeRelation(@Body() body: { parentId: string; childId: string }, @Request() req: any) {
+    return this.service.removeRelation(body.parentId, body.childId, req.user.id);
   }
 
   // Simulação/projeção: ADMIN, CONTROLADORIA e GESTOR

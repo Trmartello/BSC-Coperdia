@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../../common/audit/audit.service';
 import { CalcEngineService, IndicatorNode } from '../calc-engine/calc-engine.service';
@@ -144,6 +144,39 @@ export class IndicatorsService {
       after: { value, period },
     });
     return goal;
+  }
+
+  // ── Conexões da árvore de impacto (parent = recebe impacto, child = causa) ──
+  async addRelation(parentId: string, childId: string, userId: string) {
+    if (parentId === childId) {
+      throw new BadRequestException('Não é possível conectar um indicador a ele mesmo');
+    }
+    // Evita ciclo direto: se já existe child→parent, bloquear o inverso
+    const inverse = await this.prisma.indicatorRelation.findUnique({
+      where: { parentId_childId: { parentId: childId, childId: parentId } },
+    });
+    if (inverse) {
+      throw new BadRequestException('Conexão inversa já existe (geraria um ciclo)');
+    }
+    const rel = await this.prisma.indicatorRelation.upsert({
+      where: { parentId_childId: { parentId, childId } },
+      create: { parentId, childId },
+      update: {},
+    });
+    await this.audit.log({
+      userId, action: 'CREATE', entity: 'IndicatorRelation', entityId: rel.id,
+      after: { parentId, childId },
+    });
+    return rel;
+  }
+
+  async removeRelation(parentId: string, childId: string, userId: string) {
+    await this.prisma.indicatorRelation.deleteMany({ where: { parentId, childId } });
+    await this.audit.log({
+      userId, action: 'DELETE', entity: 'IndicatorRelation', entityId: `${parentId}:${childId}`,
+      before: { parentId, childId },
+    });
+    return { success: true };
   }
 
   async getTree(rootId?: string) {
