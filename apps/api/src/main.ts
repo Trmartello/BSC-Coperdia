@@ -2,6 +2,7 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { DecimalInterceptor } from './common/interceptors/decimal.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -13,7 +14,10 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );
-  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  app.useGlobalInterceptors(
+    new ClassSerializerInterceptor(app.get(Reflector)),
+    new DecimalInterceptor(),
+  );
 
   const config = new DocumentBuilder()
     .setTitle('BSC Coperdia API')
