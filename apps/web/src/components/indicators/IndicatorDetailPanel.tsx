@@ -17,6 +17,20 @@ function fmtMonth(d: Date) {
   return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
 }
 
+function fmtLarge(v: number | null | undefined, unit: string): string {
+  if (v == null) return '—';
+  if (unit === 'PERCENTAGE') return `${v.toFixed(1)}%`;
+  if (unit === 'CURRENCY') {
+    if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)} M`;
+    if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(1)} k`;
+    return `R$ ${v.toFixed(2)}`;
+  }
+  if (unit === 'DAYS') return `${v % 1 === 0 ? v : v.toFixed(1)} d`;
+  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)} M`;
+  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)} k`;
+  return v % 1 === 0 ? String(v) : v.toFixed(1);
+}
+
 const UNIT_NAME: Record<string, string> = {
   CURRENCY: 'Reais (R$)', PERCENTAGE: 'Percentual (%)', DAYS: 'Dias', NUMBER: 'Número', INDEX: 'Índice',
 };
@@ -409,53 +423,55 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
               <div className="px-5 py-4 border-b border-white/5 space-y-3">
                 <div className="grid grid-cols-3 gap-2">
                   {/* REALIZADO */}
-                  <div className="bg-white/[0.03] rounded-xl p-3">
-                    <p className="text-[9px] text-white/30 uppercase tracking-wider">Realizado</p>
-                    <p className="text-[9px] text-white/25 mt-0.5">{curPoint ? fmtMonth(curPoint.period) : '—'}</p>
-                    <p className={cn('text-2xl font-black mt-1', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
-                      {formatValue(effective, unit)}
+                  <div className="bg-white/[0.03] rounded-xl p-3 flex flex-col">
+                    <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">Realizado</p>
+                    <p className="text-[9px] text-white/35 mt-1">{curPoint ? fmtMonth(curPoint.period) : '—'}</p>
+                    <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
+                      {fmtLarge(effective, unit)}
                     </p>
-                    <p className="text-[9px] text-white/30 mt-0.5">{score != null ? `Score: ${score.toFixed(1)} pts` : '—'}</p>
+                    {score != null && (
+                      <p className="text-[9px] text-white/25 mt-1.5">Score {score.toFixed(0)} pts</p>
+                    )}
                   </div>
 
                   {/* VS ANO ANTERIOR */}
-                  <div className="bg-white/[0.03] rounded-xl p-3">
-                    <p className="text-[9px] text-white/30 uppercase tracking-wider">VS Ano Anterior</p>
-                    <p className="text-[9px] text-white/25 mt-0.5">
-                      {yoyPoint ? `${fmtMonth(yoyPoint.period)} · ${formatValue(yoyPoint.value, unit)}` : '—'}
+                  <div className="bg-white/[0.03] rounded-xl p-3 flex flex-col">
+                    <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Ano Anterior</p>
+                    <p className="text-[9px] text-white/35 mt-1">
+                      {yoyPoint ? `${fmtMonth(yoyPoint.period)} · ${fmtLarge(yoyPoint.value, unit)}` : 'Sem histórico'}
                     </p>
-                    <p className={cn('text-2xl font-black mt-1 flex items-center gap-1', goodYoy == null ? 'text-white' : goodYoy ? 'text-emerald-400' : 'text-red-400')}>
-                      {goodYoy != null && (goodYoy ? <TrendingUp size={15} /> : <TrendingDown size={15} />)}
+                    <p className={cn('text-[26px] font-black mt-1 leading-none', goodYoy == null ? 'text-white/40' : goodYoy ? 'text-emerald-400' : 'text-red-400')}>
                       {yoy != null ? `${yoy > 0 ? '+' : ''}${yoy.toFixed(1)}%` : '—'}
                     </p>
-                    <p className={cn('text-[9px] mt-0.5', goodYoy == null ? 'text-white/30' : goodYoy ? 'text-emerald-400/70' : 'text-red-400/70')}>
-                      {goodYoy == null ? 'Sem histórico' : goodYoy ? 'Melhorou em relação ao ano anterior' : 'Piorou em relação ao ano anterior'}
-                    </p>
+                    <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodYoy == null ? 'text-white/25' : goodYoy ? 'text-emerald-400/70' : 'text-red-400/70')}>
+                      {goodYoy != null && (goodYoy ? <TrendingUp size={9} /> : <TrendingDown size={9} />)}
+                      <span className="leading-tight">{goodYoy == null ? '—' : goodYoy ? 'Melhorou' : 'Piorou'} vs ano anterior</span>
+                    </div>
                   </div>
 
                   {/* VS META */}
-                  <div className="bg-white/[0.03] rounded-xl p-3">
-                    <p className="text-[9px] text-white/30 uppercase tracking-wider">VS Meta</p>
-                    <p className="text-[9px] text-white/25 mt-0.5">
+                  <div className="bg-white/[0.03] rounded-xl p-3 flex flex-col">
+                    <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Meta</p>
+                    <p className="text-[9px] text-white/35 mt-1">
                       {goal != null
-                        ? `Meta: ${formatValue(goal, unit)}${goalDiff != null && goodVsGoal != null ? ` · ${formatValue(goalDiff, unit)} ${goodVsGoal ? 'acima' : 'abaixo'}` : ''}`
-                        : '—'}
+                        ? `Meta: ${fmtLarge(goal, unit)}${goalDiff != null && goodVsGoal != null ? ` · ${fmtLarge(goalDiff, unit)} ${goodVsGoal ? 'acima' : 'abaixo'}` : ''}`
+                        : 'Sem meta definida'}
                     </p>
-                    <p className={cn('text-2xl font-black mt-1 flex items-center gap-1', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
-                      {goodVsGoal != null && (goodVsGoal ? <TrendingUp size={15} /> : <TrendingDown size={15} />)}
+                    <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white/40' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
                       {vsGoal != null ? `${vsGoal > 0 ? '+' : ''}${vsGoal.toFixed(1)}%` : '—'}
                     </p>
-                    <p className={cn('text-[9px] mt-0.5', goodVsGoal == null ? 'text-white/30' : goodVsGoal ? 'text-emerald-400/70' : 'text-red-400/70')}>
-                      {goodVsGoal == null ? 'Sem meta' : goodVsGoal ? '✓ Acima da meta' : 'Abaixo da meta'}
-                    </p>
+                    <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodVsGoal == null ? 'text-white/25' : goodVsGoal ? 'text-emerald-400/70' : 'text-red-400/70')}>
+                      {goodVsGoal != null && (goodVsGoal ? <TrendingUp size={9} /> : <TrendingDown size={9} />)}
+                      <span className="leading-tight">{goodVsGoal == null ? 'Sem meta' : goodVsGoal ? 'Acima da meta' : 'Abaixo da meta'}</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Strip compacto: mês anterior + estimativa (sem poluir os tiles) */}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-white/40">
+                {/* Strip compacto: mês anterior + estimativa */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-white/35 border-t border-white/5 pt-2">
                   <span>
                     Mês anterior:{' '}
-                    <span className="text-white/70">{prevPoint ? formatValue(prevPoint.value, unit) : '—'}</span>
+                    <span className="text-white/60">{prevPoint ? fmtLarge(prevPoint.value, unit) : '—'}</span>
                     {mom != null && (
                       <span className={cn('ml-1', goodMom ? 'text-emerald-400/80' : 'text-red-400/80')}>
                         ({mom > 0 ? '+' : ''}{mom.toFixed(1)}%)
@@ -464,7 +480,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                   </span>
                   {showEstimate && (
                     <span>
-                      Estimativa: <span className="text-white/70">{formatValue(estimate, unit)}</span>
+                      Estimativa: <span className="text-white/60">{fmtLarge(estimate, unit)}</span>
                     </span>
                   )}
                 </div>
