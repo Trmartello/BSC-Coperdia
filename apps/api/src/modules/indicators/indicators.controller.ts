@@ -72,6 +72,17 @@ export class IndicatorsController {
     return this.service.setRealized(id, body.period, body.value, req.user.id);
   }
 
+  // Lançamento de estimativa (forecast baseline): ADMIN, CONTROLADORIA e GESTOR
+  @Roles('ADMIN', 'CONTROLADORIA', 'GESTOR')
+  @Post(':id/estimate')
+  setEstimate(
+    @Param('id') id: string,
+    @Body() body: { period: string; value: number },
+    @Request() req: any,
+  ) {
+    return this.service.setEstimate(id, body.period, body.value, req.user.id);
+  }
+
   // Definição de meta: ADMIN e CONTROLADORIA
   @Roles('ADMIN', 'CONTROLADORIA')
   @Post(':id/goal')

@@ -56,7 +56,7 @@ export class MapsService {
               include: {
                 formula: true,
                 realizedValues: { orderBy: { period: 'desc' }, take: 1 },
-                forecastValues: { orderBy: { period: 'desc' }, take: 1 },
+                forecastValues: { where: { scenarioId: null }, orderBy: { period: 'desc' }, take: 1 },
                 goals: { orderBy: { period: 'desc' }, take: 1 },
                 parents: { include: { parent: { select: { id: true, code: true, name: true } } } },
                 children: { include: { child: { select: { id: true, code: true, name: true } } } },

@@ -111,6 +111,7 @@ export default function IndicatorsPage() {
                   realized: ind.realizedValues?.[0]?.value ?? null,
                   goal: ind.goals?.[0]?.value ?? null,
                   estimate: ind.forecastValues?.[0]?.value ?? null,
+                  period: ind.realizedValues?.[0]?.period ?? ind.goals?.[0]?.period ?? CURRENT_PERIOD,
                 }}
                 onOpenInfo={() => setInfoId(ind.id)}
                 onOpenDetail={() => setDetailId((prev) => prev === ind.id ? null : ind.id)}

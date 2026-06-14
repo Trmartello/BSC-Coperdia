@@ -24,7 +24,7 @@ export class IndicatorsService {
         parents: { include: { parent: { select: { id: true, code: true, name: true } } } },
         children: { include: { child: { select: { id: true, code: true, name: true } } } },
         realizedValues: { orderBy: { period: 'desc' }, take: 1 },
-        forecastValues: { orderBy: { period: 'desc' }, take: 1 },
+        forecastValues: { where: { scenarioId: null }, orderBy: { period: 'desc' }, take: 1 },
         goals: { orderBy: { period: 'desc' }, take: 1 },
       },
       orderBy: { sortOrder: 'asc' },
@@ -40,7 +40,7 @@ export class IndicatorsService {
         parents: { include: { parent: true } },
         children: { include: { child: true } },
         realizedValues: { orderBy: { period: 'desc' }, take: 12 },
-        forecastValues: { orderBy: { period: 'desc' }, take: 12 },
+        forecastValues: { where: { scenarioId: null }, orderBy: { period: 'desc' }, take: 12 },
         goals: { orderBy: { period: 'desc' }, take: 12 },
       },
     });
@@ -128,6 +128,36 @@ export class IndicatorsService {
     // Keep CALCULATED indicators in sync after input change
     await this.calcEngine.recalculateRealized();
     return rv;
+  }
+
+  // Lançamento/correção de ESTIMATIVA (forecast baseline, sem cenário)
+  async setEstimate(indicatorId: string, period: string, value: number, userId: string) {
+    const indicator = await this.prisma.indicator.findUnique({ where: { id: indicatorId } });
+    if (!indicator) throw new NotFoundException();
+    if (indicator.type === 'CALCULATED') {
+      throw new BadRequestException('A estimativa de um indicador calculado é derivada da fórmula');
+    }
+    const p = new Date(period);
+    // Índice único trata scenarioId NULL como distinto → findFirst + update/create
+    const existing = await this.prisma.forecastValue.findFirst({
+      where: { indicatorId, scenarioId: null, period: p },
+    });
+    const fv = existing
+      ? await this.prisma.forecastValue.update({ where: { id: existing.id }, data: { value, isManual: true } })
+      : await this.prisma.forecastValue.create({
+          data: { indicatorId, scenarioId: null, period: p, value, isManual: true, userId },
+        });
+    await this.audit.log({
+      userId,
+      action: existing ? 'UPDATE' : 'CREATE',
+      entity: 'ForecastValue',
+      entityId: fv.id,
+      before: existing ? { value: Number(existing.value), period } : undefined,
+      after: { value, period, baseline: true },
+    });
+    // Recalcula a estimativa dos indicadores calculados que dependem deste insumo
+    await this.calcEngine.recalculateForecast(userId);
+    return fv;
   }
 
   // Definição/correção de META

@@ -304,6 +304,74 @@ export class CalcEngineService {
     if (upserts.length) this.logger.log(`recalculateRealized: upserted ${upserts.length} computed realized values`);
   }
 
+  // ── Recalculate baseline ESTIMATE (forecast w/ scenarioId=null) ──────────────
+  // A estimativa de um indicador calculado é derivada da fórmula aplicada às
+  // estimativas dos insumos (regra "estimate ?? realized" por insumo). Roda
+  // somente nos períodos que já têm alguma estimativa lançada.
+  // Obs.: usa findFirst/update-by-id em vez de upsert porque o índice único
+  // [indicatorId, scenarioId, period] trata NULL como distinto no Postgres.
+
+  async recalculateForecast(userId: string): Promise<void> {
+    const graph = await this.buildGraph();
+    const evalOrder = [...this.topologicalSort(graph)].reverse();
+
+    const [allRealized, baselineForecasts] = await Promise.all([
+      this.prisma.realizedValue.findMany({ select: { indicatorId: true, period: true, value: true } }),
+      this.prisma.forecastValue.findMany({
+        where: { scenarioId: null },
+        select: { id: true, indicatorId: true, period: true, value: true },
+      }),
+    ]);
+
+    const realizedByPeriod = new Map<string, Map<string, Decimal>>();
+    for (const rv of allRealized) {
+      const k = rv.period.toISOString();
+      if (!realizedByPeriod.has(k)) realizedByPeriod.set(k, new Map());
+      realizedByPeriod.get(k)!.set(rv.indicatorId, new Decimal(rv.value.toString()));
+    }
+
+    const periods = new Map<string, Date>();
+    const forecastByPeriod = new Map<string, Map<string, Decimal>>();
+    const existingFc = new Map<string, { id: string; value: Decimal }>();
+    for (const fv of baselineForecasts) {
+      const k = fv.period.toISOString();
+      periods.set(k, fv.period);
+      if (!forecastByPeriod.has(k)) forecastByPeriod.set(k, new Map());
+      const dec = new Decimal(fv.value.toString());
+      forecastByPeriod.get(k)!.set(fv.indicatorId, dec);
+      existingFc.set(`${fv.indicatorId}|${k}`, { id: fv.id, value: dec });
+    }
+
+    const ops: any[] = [];
+    for (const [k, period] of periods.entries()) {
+      // values = realizado, sobrescrito pela estimativa lançada (estimate ?? realized)
+      const values = new Map<string, Decimal>();
+      for (const [id, v] of realizedByPeriod.get(k) ?? new Map()) values.set(id, v);
+      for (const [id, v] of forecastByPeriod.get(k) ?? new Map()) values.set(id, v);
+
+      for (const id of evalOrder) {
+        const node = graph.get(id);
+        if (!node || node.type !== 'CALCULATED' || !node.formulaExpression || !node.formulaVariables) continue;
+        const computed = this.evaluateFormula(node.formulaExpression, node.formulaVariables, values);
+        if (computed === null) continue;
+        values.set(id, computed);
+        const computedStr = computed.toFixed(6);
+        const existing = existingFc.get(`${id}|${k}`);
+        if (existing) {
+          if (existing.value.toFixed(6) === computedStr) continue;
+          ops.push(this.prisma.forecastValue.update({ where: { id: existing.id }, data: { value: computedStr } }));
+        } else {
+          ops.push(this.prisma.forecastValue.create({
+            data: { indicatorId: id, scenarioId: null, period, value: computedStr, isManual: false, userId },
+          }));
+        }
+      }
+    }
+
+    if (ops.length) await this.prisma.$transaction(ops);
+    if (ops.length) this.logger.log(`recalculateForecast: wrote ${ops.length} computed estimate values`);
+  }
+
   async getImpactChain(
     indicatorId: string,
     graph: Map<string, IndicatorNode>,

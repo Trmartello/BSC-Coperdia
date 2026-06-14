@@ -44,6 +44,8 @@ export const indicatorsApi = {
     api.post(`/indicators/${id}/realized`, data),
   setGoal: (id: string, data: { period: string; value: number }) =>
     api.post(`/indicators/${id}/goal`, data),
+  setEstimate: (id: string, data: { period: string; value: number }) =>
+    api.post(`/indicators/${id}/estimate`, data),
   addRelation: (parentId: string, childId: string) =>
     api.post('/indicators/relations', { parentId, childId }),
   removeRelation: (parentId: string, childId: string) =>

@@ -205,6 +205,25 @@ async function main() {
     create: { indicatorId: pme.id, scenarioId: scenario.id, period, value: 28, isManual: true, userId: admin.id },
   });
 
+  // ── Estimativas baseline (sem cenário) p/ exibição/edição nos cards ─────────
+  const baselineEstimates: { id: string; value: number }[] = [
+    { id: pmr.id, value: 26 },
+    { id: pme.id, value: 24 },
+    { id: pmp.id, value: 46 },
+  ];
+  for (const est of baselineEstimates) {
+    const existing = await prisma.forecastValue.findFirst({
+      where: { indicatorId: est.id, scenarioId: null, period },
+    });
+    if (existing) {
+      await prisma.forecastValue.update({ where: { id: existing.id }, data: { value: est.value } });
+    } else {
+      await prisma.forecastValue.create({
+        data: { indicatorId: est.id, scenarioId: null, period, value: est.value, isManual: true, userId: admin.id },
+      });
+    }
+  }
+
   // ════════════════════════════════════════════════════════════════════════════
   // ÁRVORE FINANCEIRA ESTRATÉGICA (Receita → EBITDA → NOPAT → ROIC ; → ROE)
   // Valores em R$ milhões. Códigos batem com o Dashboard Executivo.

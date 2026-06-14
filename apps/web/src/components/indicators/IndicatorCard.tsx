@@ -13,6 +13,7 @@ interface CardData {
   realized: number | null;
   goal: number | null;
   estimate: number | null; // previsto (se null, usa realized)
+  period?: string;         // período exibido (para salvar a estimativa no período correto)
   actionCount?: number;
   attachmentCount?: number;
   commentCount?: number;
@@ -50,8 +51,8 @@ function deviationLabel(pct: number | null, direction: 'HIGHER_IS_BETTER' | 'LOW
 }
 
 export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo, onOpenDetail, onOpenActionPlan, onUpdated }: Props) {
-  const { indicator, realized, goal, estimate, actionCount = 0, attachmentCount = 0, commentCount = 0 } = data;
-  const { activeScenario, activePeriod } = useScenarioStore();
+  const { indicator, realized, goal, estimate, period, actionCount = 0, attachmentCount = 0, commentCount = 0 } = data;
+  const { activePeriod } = useScenarioStore();
 
   const [editing, setEditing] = useState(false);
   const [inputValue, setInputValue] = useState(String(estimate ?? ''));
@@ -66,23 +67,23 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
   const devGoalInfo = deviationLabel(devVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
   const devEstInfo = deviationLabel(devRealized, indicator.direction ?? 'HIGHER_IS_BETTER');
 
-  const canEdit = showEstimate && indicator.type === 'INPUT' && !!activeScenario;
+  // Estimativa de insumos é editável; calculados derivam da fórmula.
+  const canEdit = showEstimate && indicator.type === 'INPUT';
 
   async function handleSave() {
-    if (!activeScenario) return;
+    const value = parseFloat(inputValue);
+    if (Number.isNaN(value)) { toast.error('Informe um valor numérico'); return; }
     setSaving(true);
     try {
-      await indicatorsApi.updateForecast({
-        indicatorId: indicator.id,
-        scenarioId: activeScenario.id,
-        period: activePeriod,
-        value: parseFloat(inputValue),
+      await indicatorsApi.setEstimate(indicator.id, {
+        period: (period ?? activePeriod).slice(0, 10),
+        value,
       });
-      toast.success('Estimativa salva. Recalculando impactos...');
+      toast.success('Estimativa salva. Recalculando fórmula...');
       setEditing(false);
       onUpdated?.();
-    } catch {
-      toast.error('Erro ao salvar estimativa');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao salvar estimativa');
     } finally {
       setSaving(false);
     }
