@@ -21,6 +21,7 @@ interface CardData {
 interface Props {
   data: CardData;
   onDelete?: () => void;
+  onOpenInfo?: () => void;
   onOpenDetail?: () => void;
   onOpenActionPlan?: () => void;
   onUpdated?: () => void;
@@ -47,7 +48,7 @@ function deviationLabel(pct: number | null, direction: 'HIGHER_IS_BETTER' | 'LOW
   return { label: `${sign}${pct.toFixed(1)}% vs meta`, positive: isGood };
 }
 
-export function IndicatorCard({ data, onDelete, onOpenDetail, onOpenActionPlan, onUpdated }: Props) {
+export function IndicatorCard({ data, onDelete, onOpenInfo, onOpenDetail, onOpenActionPlan, onUpdated }: Props) {
   const { indicator, realized, goal, estimate, actionCount = 0, attachmentCount = 0, commentCount = 0 } = data;
   const { activeScenario, activePeriod } = useScenarioStore();
 
@@ -97,13 +98,13 @@ export function IndicatorCard({ data, onDelete, onOpenDetail, onOpenActionPlan, 
           <span className="text-[10px] text-white/50 font-medium border border-white/15 rounded px-1.5 py-0.5">
             {unitLabel(indicator.unit)}
           </span>
-          <button onClick={onOpenDetail} className="text-white/30 hover:text-white/70 transition-colors">
+          <button onClick={(e) => { e.stopPropagation(); onOpenInfo?.(); }} className="text-white/30 hover:text-white/70 transition-colors" title="Informações">
             <Info size={13} />
           </button>
-          <button onClick={onOpenDetail} className="text-white/30 hover:text-white/70 transition-colors">
+          <button onClick={(e) => { e.stopPropagation(); onOpenDetail?.(); }} className="text-white/30 hover:text-white/70 transition-colors" title="Expandir">
             <Maximize2 size={13} />
           </button>
-          <button onClick={onDelete} className="text-white/30 hover:text-red-400 transition-colors">
+          <button onClick={(e) => { e.stopPropagation(); onDelete?.(); }} className="text-white/30 hover:text-red-400 transition-colors">
             <Trash2 size={13} />
           </button>
         </div>
