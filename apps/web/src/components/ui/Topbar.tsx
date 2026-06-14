@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/auth.store';
 import { useScenarioStore } from '../../store/scenario.store';
-import { scenariosApi, indicatorsApi } from '../../lib/api';
+import { scenariosApi, indicatorsApi, settingsApi } from '../../lib/api';
 import { Scenario } from '../../types';
 import { Bell, ChevronDown, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -13,6 +13,7 @@ export function Topbar() {
   const { user } = useAuthStore();
   const { activeScenario, setActiveScenario, activePeriod, setActivePeriod } = useScenarioStore();
   const [open, setOpen] = useState(false);
+  const qc = useQueryClient();
 
   const { data: scenarios = [] } = useQuery({
     queryKey: ['scenarios'],
@@ -22,6 +23,17 @@ export function Topbar() {
   const { data: periods = [] } = useQuery({
     queryKey: ['indicator-periods'],
     queryFn: () => indicatorsApi.periods().then((r) => r.data),
+  });
+
+  // Flag "Estimativa" (exibe a coluna Estimativa nos cards e painéis)
+  const { data: flags } = useQuery({
+    queryKey: ['settings-flags'],
+    queryFn: () => settingsApi.getFlags().then((r) => r.data),
+  });
+  const showEstimate = flags?.showEstimate ?? true;
+  const toggleEstimate = useMutation({
+    mutationFn: () => settingsApi.setFlag('showEstimate', !showEstimate),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings-flags'] }),
   });
 
   // Auto-seleciona o cenário baseline (ou o primeiro) quando nenhum está ativo
@@ -63,6 +75,19 @@ export function Topbar() {
       </div>
 
       <div className="flex-1" />
+
+      {/* Estimativa toggle */}
+      <button
+        onClick={() => toggleEstimate.mutate()}
+        disabled={toggleEstimate.isPending}
+        className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-1.5 transition-colors disabled:opacity-50"
+        title="Exibir coluna Estimativa nos cards e painéis"
+      >
+        <span className="text-xs text-white/60">Estimativa</span>
+        <span className={cn('relative w-8 h-4 rounded-full transition-colors', showEstimate ? 'bg-emerald-500' : 'bg-white/15')}>
+          <span className={cn('absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform', showEstimate ? 'translate-x-4' : 'translate-x-0')} />
+        </span>
+      </button>
 
       {/* Period selector */}
       <div className="flex items-center gap-1 bg-purple-600/15 border border-purple-500/25 rounded-xl px-2 py-1.5">

@@ -92,7 +92,7 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
   return (
     <div className="card-dark w-[260px] flex flex-col gap-0 overflow-hidden">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between px-4 pt-3 pb-2">
+      <div className="flex items-start justify-between px-4 pt-2.5 pb-1.5">
         <div className="flex-1 min-w-0">
           <p className="text-white/80 text-sm font-semibold leading-tight truncate">
             {indicator.name}
@@ -143,17 +143,14 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
         </div>
       )}
 
-      {/* ── Deviation rows ── */}
-      <div className="px-4 pb-2 space-y-0.5">
+      {/* ── Deviation rows (lado a lado p/ reduzir altura) ── */}
+      <div className="px-4 pb-2 flex items-start justify-between gap-2">
         <DeviationRow {...devGoalInfo} />
         {showEstimate && <DeviationRow {...devEstInfo} />}
       </div>
 
-      {/* ── Divider ── */}
-      <div className="border-t border-white/5 mx-4" />
-
       {/* ── Direction indicator ── */}
-      <div className="px-4 py-2 flex items-center gap-1.5">
+      <div className="px-4 pb-1.5 flex items-center gap-1.5">
         <div className={cn(
           'w-3 h-3 rounded-sm flex-shrink-0',
           indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-green-500',
@@ -164,7 +161,7 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
       </div>
 
       {/* ── Footer: actions / attachments / comments ── */}
-      <div className="border-t border-white/5 px-4 py-2 flex items-center gap-3">
+      <div className="border-t border-white/5 px-4 py-1.5 flex items-center gap-3">
         <FooterAction icon={<ClipboardList size={11} />} count={actionCount} label="ações" onClick={onOpenActionPlan} />
         <FooterAction icon={<Paperclip size={11} />} count={attachmentCount} label="Anexos" />
         <FooterAction icon={<MessageSquare size={11} />} count={commentCount} label="Comentários" />

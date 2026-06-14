@@ -8,7 +8,6 @@ import { useAuthStore } from '../../store/auth.store';
 import {
   ClipboardList,
   Users,
-  Settings,
   ChevronRight,
   Network,
   LayoutDashboard,
@@ -39,7 +38,6 @@ const NAV = [
     section: 'Administração',
     items: [
       { label: 'Usuários', href: '/dashboard/users', icon: Users },
-      { label: 'Configurações', href: '/dashboard/settings', icon: Settings },
     ],
   },
 ];
