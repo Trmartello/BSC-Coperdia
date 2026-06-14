@@ -121,6 +121,8 @@ export class IndicatorsService {
       before: before ? { value: Number(before.value), period } : undefined,
       after: { value, period },
     });
+    // Keep CALCULATED indicators in sync after input change
+    await this.calcEngine.recalculateRealized();
     return rv;
   }
 

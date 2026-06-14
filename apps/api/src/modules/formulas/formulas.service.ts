@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../../common/audit/audit.service';
+import { CalcEngineService } from '../calc-engine/calc-engine.service';
 import { evaluate } from 'mathjs';
 
 export interface UpsertFormulaDto {
@@ -15,6 +16,7 @@ export class FormulasService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private calcEngine: CalcEngineService,
   ) {}
 
   async upsert(dto: UpsertFormulaDto, userId: string) {
@@ -35,6 +37,8 @@ export class FormulasService {
       before,
       after: result,
     });
+    // Recompute all CALCULATED realized values so cards reflect the new formula immediately
+    await this.calcEngine.recalculateRealized();
     return result;
   }
 
@@ -54,6 +58,7 @@ export class FormulasService {
       entityId: before?.id ?? indicatorId,
       before,
     });
+    await this.calcEngine.recalculateRealized();
     return result;
   }
 

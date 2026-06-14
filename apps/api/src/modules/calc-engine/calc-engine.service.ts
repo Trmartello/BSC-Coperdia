@@ -248,7 +248,51 @@ export class CalcEngineService {
     await this.prisma.$transaction(upserts);
   }
 
-  // ── Impact chain for a single indicator change ──────────────────────────────
+  // ── Recalculate CALCULATED indicators from realized values (no scenario) ─────
+  // Called after formula create/update or after setRealized, so cards always
+  // display an up-to-date computed value in the "REAL." column.
+
+  async recalculateRealized(): Promise<void> {
+    const graph = await this.buildGraph();
+    const order = this.topologicalSort(graph);
+
+    // Collect realized values grouped by period
+    const allRealized = await this.prisma.realizedValue.findMany({
+      select: { indicatorId: true, period: true, value: true },
+      orderBy: { period: 'asc' },
+    });
+
+    // Group input realized values by period (Date object keyed by ISO string)
+    const periodMap = new Map<string, { period: Date; values: Map<string, Decimal> }>();
+    for (const rv of allRealized) {
+      const key = rv.period.toISOString();
+      if (!periodMap.has(key)) periodMap.set(key, { period: rv.period, values: new Map() });
+      periodMap.get(key)!.values.set(rv.indicatorId, new Decimal(rv.value.toString()));
+    }
+
+    const upserts: ReturnType<typeof this.prisma.realizedValue.upsert>[] = [];
+
+    for (const { period, values } of periodMap.values()) {
+      for (const id of order) {
+        const node = graph.get(id);
+        if (!node || node.type !== 'CALCULATED' || !node.formulaExpression || !node.formulaVariables) continue;
+        const computed = this.evaluateFormula(node.formulaExpression, node.formulaVariables, values);
+        if (computed !== null) {
+          values.set(id, computed); // make available for downstream CALCULATED nodes
+          upserts.push(
+            this.prisma.realizedValue.upsert({
+              where: { indicatorId_period: { indicatorId: id, period } },
+              create: { indicatorId: id, period, value: computed.toFixed(6) },
+              update: { value: computed.toFixed(6) },
+            }),
+          );
+        }
+      }
+    }
+
+    if (upserts.length) await this.prisma.$transaction(upserts);
+    this.logger.log(`recalculateRealized: upserted ${upserts.length} computed realized values`);
+  }
 
   async getImpactChain(
     indicatorId: string,
