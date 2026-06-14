@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsApi, formulasApi, indicatorsApi, mapsApi } from '../../lib/api';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
-import { X } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 
 const UNITS = [
   { v: 'CURRENCY', l: 'Reais (R$)' },
@@ -132,6 +132,24 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
     onError: (e: any) =>
       toast.error(e?.response?.data?.message || 'Erro ao salvar (verifique sua permissão)'),
   });
+
+  const deleteMut = useMutation({
+    mutationFn: () => settingsApi.deleteIndicator(editIndicatorId as string),
+    onSuccess: () => {
+      toast.success('Indicador excluído');
+      qc.invalidateQueries({ queryKey: ['indicators'] });
+      if (mapId) qc.invalidateQueries({ queryKey: ['map', mapId] });
+      onSaved();
+    },
+    onError: (e: any) =>
+      toast.error(e?.response?.data?.message || 'Erro ao excluir (verifique sua permissão)'),
+  });
+
+  function handleDelete() {
+    if (typeof window !== 'undefined' &&
+        !window.confirm(`Excluir o indicador "${form.name}" definitivamente? Esta ação não pode ser desfeita.`)) return;
+    deleteMut.mutate();
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
@@ -308,6 +326,17 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
           >
             {saveMut.isPending ? 'Salvando...' : isEdit ? 'Salvar alterações' : 'Criar indicador'}
           </button>
+
+          {isEdit && (
+            <button
+              onClick={handleDelete}
+              disabled={deleteMut.isPending}
+              className="w-full mt-1 border border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm py-2.5 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <Trash2 size={14} />
+              {deleteMut.isPending ? 'Excluindo...' : 'Excluir indicador'}
+            </button>
+          )}
         </div>
       </div>
     </div>

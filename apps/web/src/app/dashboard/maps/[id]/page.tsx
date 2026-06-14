@@ -12,119 +12,56 @@ import ReactFlow, {
   getSmoothStepPath, reconnectEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil, Info, Maximize2, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Pencil, X } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
-import { cn, formatValue } from '../../../../lib/utils';
+import { cn } from '../../../../lib/utils';
+import { IndicatorCard } from '../../../../components/indicators/IndicatorCard';
 import { IndicatorDetailPanel } from '../../../../components/indicators/IndicatorDetailPanel';
 import { IndicatorDetailModal } from '../../../../components/indicators/IndicatorDetailModal';
 import { IndicatorFormPanel } from '../../../../components/indicators/IndicatorFormPanel';
 import { toast } from 'sonner';
 
-function unitLabel(unit: string): string {
-  const map: Record<string, string> = {
-    CURRENCY: 'R$', PERCENTAGE: '%', NUMBER: 'Nº', DAYS: 'Dias', INDEX: 'Índice',
-  };
-  return map[unit] ?? unit;
-}
+// ─── Indicator Node — usa o card padrão do sistema (IndicatorCard) ─────────────
 
-// ─── Indicator Node ───────────────────────────────────────────────────────────
+// alças nos 4 lados; em ConnectionMode.Loose cada uma é origem e destino,
+// permitindo conectar por qualquer lado do card.
+const HANDLE_STYLE = {
+  background: '#6366f1', border: '2px solid #0d0f17', width: 11, height: 11,
+  opacity: 0, transition: 'opacity 0.15s',
+} as const;
+const HANDLES = ([
+  ['top', Position.Top],
+  ['right', Position.Right],
+  ['bottom', Position.Bottom],
+  ['left', Position.Left],
+] as const);
 
 function MapIndicatorNode({ data, selected }: NodeProps) {
-  const { indicator, realized, goal, estimate, showEstimate = true, onInfo, onExpand, onRemove } = data;
-  const effective = showEstimate ? (estimate ?? realized) : realized;
-  const dev = goal && effective != null && goal !== 0
-    ? ((effective - goal) / Math.abs(goal)) * 100 : null;
-  const isGood = dev === null ? null
-    : (indicator.direction === 'LOWER_IS_BETTER' ? dev <= 0 : dev >= 0);
-
-  const handleStyle = {
-    background: '#6366f1', border: '2px solid #0d0f17', width: 11, height: 11,
-    opacity: 0, transition: 'opacity 0.15s',
-  } as const;
-
-  // 4 alças (topo/direita/baixo/esquerda) — em ConnectionMode.Loose cada uma
-  // funciona como origem e destino, permitindo conectar por qualquer lado do card.
-  const handles = ([
-    ['top', Position.Top],
-    ['right', Position.Right],
-    ['bottom', Position.Bottom],
-    ['left', Position.Left],
-  ] as const);
+  const {
+    indicator, realized, goal, estimate, period, showEstimate = true,
+    actionCount, attachmentCount, commentCount,
+    onInfo, onRemove, onOpenActionPlan, onUpdated,
+  } = data;
 
   return (
-    <div className={cn(
-      'group bg-[#1a1f2e] border rounded-2xl w-[220px] shadow-xl transition-all cursor-pointer',
-      selected ? 'border-indigo-500 shadow-indigo-500/20' : 'border-white/10 hover:border-white/25',
-      '[&:hover_.rf-handle]:!opacity-100',
-    )}>
-      {handles.map(([hid, pos]) => (
-        <Handle key={hid} id={hid} type="source" position={pos} className="rf-handle" style={handleStyle} />
+    <div className={cn('group relative rounded-2xl transition-shadow [&:hover_.rf-handle]:!opacity-100',
+      selected ? 'ring-2 ring-indigo-500 shadow-xl shadow-indigo-500/20' : '')}>
+      {HANDLES.map(([hid, pos]) => (
+        <Handle key={hid} id={hid} type="source" position={pos} className="rf-handle" style={HANDLE_STYLE} />
       ))}
-
-      <div className="px-3 pt-3 pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">{indicator.code}</p>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <span className="text-[9px] text-white/50 font-medium border border-white/15 rounded px-1.5 py-0.5">
-              {unitLabel(indicator.unit)}
-            </span>
-            <button
-              onClick={(e) => { e.stopPropagation(); onInfo?.(indicator.id); }}
-              className="text-white/30 hover:text-white/80 transition-colors"
-              title="Informações"
-            >
-              <Info size={12} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onExpand?.(indicator.id); }}
-              className="text-white/30 hover:text-white/80 transition-colors"
-              title="Expandir"
-            >
-              <Maximize2 size={12} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onRemove?.(indicator.id, indicator.name); }}
-              className="text-white/30 hover:text-red-400 transition-colors"
-              title="Remover do mapa"
-            >
-              <Trash2 size={12} />
-            </button>
-          </div>
-        </div>
-        <p className="text-sm font-semibold text-white/85 leading-snug mt-0.5">{indicator.name}</p>
-        <p className="text-[10px] text-white/30 mt-0.5">{indicator.category}</p>
-      </div>
-
-      <div className={cn('grid px-3 pb-2 gap-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
-        {[
-          { label: 'Real.', val: formatValue(realized, indicator.unit) },
-          { label: 'Meta', val: formatValue(goal, indicator.unit) },
-          ...(showEstimate ? [{ label: 'Est.', val: formatValue(effective, indicator.unit) }] : []),
-        ].map((col) => (
-          <div key={col.label} className="text-center">
-            <p className="text-[8px] text-white/25 uppercase">{col.label}</p>
-            <p className="text-xs font-bold text-white/80">{col.val}</p>
-          </div>
-        ))}
-      </div>
-
-      {dev !== null && (
-        <div className={cn('px-3 pb-1.5 text-[10px] font-medium flex items-center gap-1',
-          isGood ? 'text-emerald-400' : 'text-red-400')}>
-          {isGood ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-          {Math.abs(dev).toFixed(1)}% vs meta
-        </div>
-      )}
-
-      <div className="px-3 pb-2.5 flex items-center gap-1.5">
-        <div className={cn('w-2 h-2 rounded-sm',
-          indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-emerald-500')} />
-        <p className="text-[9px] text-white/25">
-          {indicator.direction === 'LOWER_IS_BETTER' ? 'Quanto menor melhor' : 'Quanto maior melhor'}
-        </p>
-      </div>
+      <IndicatorCard
+        data={{
+          indicator, realized, goal, estimate, period,
+          actionCount, attachmentCount, commentCount,
+        }}
+        showEstimate={showEstimate}
+        onOpenInfo={() => onInfo?.(indicator.id)}
+        onDelete={() => onRemove?.(indicator.id, indicator.name)}
+        onOpenActionPlan={() => onOpenActionPlan?.(indicator.id)}
+        onUpdated={onUpdated}
+      />
     </div>
   );
 }
@@ -187,26 +124,36 @@ function buildNodesAndEdges(
   savedFlow?: any,
   handlers?: {
     onInfo: (id: string) => void;
-    onExpand: (id: string) => void;
     onRemove: (id: string, name: string) => void;
     onRemoveEdge: (edgeId: string, parentId: string, childId: string) => void;
+    onOpenActionPlan: (id: string) => void;
+    onUpdated: () => void;
   },
   showEstimate = true,
+  period?: string,
 ) {
   const nodes: Node[] = entries.map((entry, i) => {
     const savedNode = savedFlow?.nodes?.find((n: any) => n.id === entry.indicatorId);
-    const ind = entry.indicator;
+    const ind: any = entry.indicator;
     const realized = ind.realizedValues?.[0]?.value ? parseFloat(ind.realizedValues[0].value) : null;
     const goal = ind.goals?.[0]?.value ? parseFloat(ind.goals[0].value) : null;
     const estimate = ind.forecastValues?.[0]?.value ? parseFloat(ind.forecastValues[0].value) : null;
 
+    // Contadores do rodapé (ações / anexos / comentários)
+    const plans: any[] = ind.actionPlans ?? [];
+    const actionCount = plans.length;
+    const attachmentCount = plans.reduce((s, p) => s + (p._count?.attachments ?? 0), 0);
+    const commentCount = plans.reduce((s, p) => s + (p._count?.comments ?? 0), 0);
+
     return {
       id: entry.indicatorId,
       type: 'mapIndicator',
-      position: savedNode?.position ?? { x: (i % 3) * 280, y: Math.floor(i / 3) * 220 },
+      position: savedNode?.position ?? { x: (i % 3) * 300, y: Math.floor(i / 3) * 280 },
       data: {
-        indicator: ind, realized, goal, estimate, showEstimate,
-        onInfo: handlers?.onInfo, onExpand: handlers?.onExpand, onRemove: handlers?.onRemove,
+        indicator: ind, realized, goal, estimate, period, showEstimate,
+        actionCount, attachmentCount, commentCount,
+        onInfo: handlers?.onInfo, onRemove: handlers?.onRemove,
+        onOpenActionPlan: handlers?.onOpenActionPlan, onUpdated: handlers?.onUpdated,
       },
     };
   });
@@ -400,13 +347,14 @@ export default function MapEditorPage() {
     if (!map?.entries) return;
     const { nodes: n, edges: e } = buildNodesAndEdges(map.entries, map.flowData, {
       onInfo: (indId) => setInfoIndicatorId(indId),
-      onExpand: (indId) => setSelectedIndicatorId((prev) => (prev === indId ? null : indId)),
       onRemove: handleRemoveIndicator,
       onRemoveEdge: handleRemoveEdge,
-    }, showEstimate);
+      onOpenActionPlan: (indId) => setSelectedIndicatorId((prev) => (prev === indId ? null : indId)),
+      onUpdated: () => qc.invalidateQueries({ queryKey: ['map', id] }),
+    }, showEstimate, activePeriod);
     setNodes(n);
     setEdges(e);
-  }, [map, showEstimate]);
+  }, [map, showEstimate, activePeriod]);
 
   // Criar conexão: source = causa (filho), target = recebe impacto (pai)
   const onConnect = useCallback(
