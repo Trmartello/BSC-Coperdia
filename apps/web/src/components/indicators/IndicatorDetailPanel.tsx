@@ -74,103 +74,115 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
   const step = 42;
   const barW = step * 0.6;
   const chartW = n * step;
-  const chartH = 130;
+  const chartH = 120;
   const pad = 20;
-  const topPad = 26; // espaço para rótulos de valor / YoY acima das barras
+  const topPad = 52; // espaço para as duas linhas YoY acima das barras
 
-  // Índices destacados: 2 mais recentes (cor do status) ...
-  const recentIdx = new Set<number>();
-  if (n >= 1) recentIdx.add(n - 1);
-  if (n >= 2) recentIdx.add(n - 2);
-
-  // ... e os mesmos meses do ano anterior (cor roxa)
-  const prevYearIdx = new Map<number, number>(); // idx do ano anterior -> idx recente correspondente
-  recentIdx.forEach((ri) => {
+  // Para cada um dos 2 meses mais recentes, encontrar o mesmo mês do ano anterior
+  interface YoyPair {
+    recentIdx: number;
+    prevIdx: number;
+    pct: number;
+    good: boolean;
+    lineY: number; // offset vertical para separar as duas linhas
+  }
+  const yoyPairs: YoyPair[] = [];
+  for (let offset = 0; offset <= 1; offset++) {
+    const ri = n - 1 - offset;
+    if (ri < 0) continue;
     const rp = pts[ri].period;
-    const j = pts.findIndex((p) => p.period.getUTCMonth() === rp.getUTCMonth()
+    const pi = pts.findIndex((p) => p.period.getUTCMonth() === rp.getUTCMonth()
       && p.period.getUTCFullYear() === rp.getUTCFullYear() - 1);
-    if (j >= 0) prevYearIdx.set(j, ri);
-  });
+    if (pi < 0) continue;
+    const pct = pts[pi].value !== 0
+      ? ((pts[ri].value - pts[pi].value) / Math.abs(pts[pi].value)) * 100 : 0;
+    const good = direction === 'LOWER_IS_BETTER' ? pct <= 0 : pct >= 0;
+    yoyPairs.push({ recentIdx: ri, prevIdx: pi, pct, good, lineY: offset === 0 ? topPad - 16 : topPad - 32 });
+  }
+  const prevYearIdxSet = new Set(yoyPairs.map((p) => p.prevIdx));
 
   const goalLine = currentGoal ?? null;
-
   const allVals = pts.map((p) => p.value).filter((v) => v > 0);
   const maxVal = Math.max(...allVals, goalLine ?? 0, 1) * 1.15;
 
   const x = (i: number) => pad + i * step + step / 2;
   const y = (v: number) => topPad + (chartH - (v / maxVal) * chartH);
   const baseY = topPad + chartH;
-
-  // status das barras recentes (verde/vermelho conforme a meta atual)
-  const statusOf = (p: Pt): boolean | null => {
-    if (goalLine == null) return null;
-    return direction === 'LOWER_IS_BETTER' ? p.value <= goalLine : p.value >= goalLine;
-  };
-
-  // YoY entre o mês mais recente e o mesmo mês do ano anterior
-  const last = pts[n - 1];
-  const lastPrev = pts.find((p) => p.period.getUTCMonth() === last.period.getUTCMonth()
-    && p.period.getUTCFullYear() === last.period.getUTCFullYear() - 1);
-  const yoy = last && lastPrev && lastPrev.value !== 0
-    ? ((last.value - lastPrev.value) / Math.abs(lastPrev.value)) * 100 : null;
-  const yoyGood = yoy == null ? null
-    : direction === 'LOWER_IS_BETTER' ? yoy <= 0 : yoy >= 0;
-
   const fullW = chartW + pad * 2;
+
+  // cor de cada barra: todas coloridas por status vs meta do período ou meta atual
+  const barStatus = (p: Pt, i: number): boolean | null => {
+    const g = p.goal ?? (goalLine ?? null);
+    if (g == null) return null;
+    return direction === 'LOWER_IS_BETTER' ? p.value <= g : p.value >= g;
+  };
 
   return (
     <div className="w-full overflow-x-auto">
       <svg width="100%" height={baseY + 24} viewBox={`0 0 ${fullW} ${baseY + 24}`} preserveAspectRatio="xMidYMid meet">
-        {/* anotação YoY no topo, centralizada, com hastes nas pontas */}
-        {yoy != null && (
-          <g>
-            <line x1={x(0)} x2={x(n - 1)} y1={topPad - 14} y2={topPad - 14}
-              stroke="rgba(255,255,255,0.18)" strokeWidth={1} strokeDasharray="4 3" />
-            <line x1={x(0)} x2={x(0)} y1={topPad - 18} y2={topPad - 10} stroke="rgba(255,255,255,0.18)" strokeWidth={1} />
-            <line x1={x(n - 1)} x2={x(n - 1)} y1={topPad - 18} y2={topPad - 10} stroke="rgba(255,255,255,0.18)" strokeWidth={1} />
-            <rect x={fullW / 2 - 34} y={topPad - 22} width={68} height={15} rx={4} fill="#161b27" />
-            <text x={fullW / 2} y={topPad - 11} textAnchor="middle" fontSize="9" fontWeight="700"
-              fill={yoyGood ? '#34d399' : '#f87171'}>
-              {yoy > 0 ? '+' : ''}{yoy.toFixed(1)}% YoY
-            </text>
-          </g>
-        )}
 
-        {/* linha de meta tracejada + rótulo à direita */}
+        {/* duas linhas YoY tracejadas com hastes e label central */}
+        {yoyPairs.map((pair, pi) => {
+          const lx1 = x(pair.prevIdx);
+          const lx2 = x(pair.recentIdx);
+          const ly = pair.lineY;
+          const midX = (lx1 + lx2) / 2;
+          const color = pair.good ? 'rgba(52,211,153,0.7)' : 'rgba(248,113,113,0.7)';
+          const labelColor = pair.good ? '#34d399' : '#f87171';
+          const label = `${pair.pct > 0 ? '+' : ''}${pair.pct.toFixed(1)}% YoY`;
+          const labelW = label.length * 5.2 + 8;
+          return (
+            <g key={`yoy-${pi}`}>
+              <line x1={lx1} x2={lx2} y1={ly} y2={ly} stroke={color} strokeWidth={1} strokeDasharray="4 3" />
+              <line x1={lx1} x2={lx1} y1={ly - 4} y2={ly + 4} stroke={color} strokeWidth={1} />
+              <line x1={lx2} x2={lx2} y1={ly - 4} y2={ly + 4} stroke={color} strokeWidth={1} />
+              <rect x={midX - labelW / 2} y={ly - 9} width={labelW} height={13} rx={3} fill="#161b27" />
+              <text x={midX} y={ly + 1} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={labelColor}>
+                {label}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* linha de meta tracejada + rótulo */}
         {goalLine != null && (
           <g>
             <line x1={pad} x2={fullW - pad} y1={y(goalLine)} y2={y(goalLine)}
-              stroke="rgba(255,255,255,0.22)" strokeWidth={1} strokeDasharray="4 4" />
-            <text x={fullW - pad + 2} y={y(goalLine) + 3} textAnchor="end" fontSize="7.5" fill="rgba(255,255,255,0.3)">
-              {fmtBar(goalLine, unit)}
+              stroke="rgba(255,255,255,0.20)" strokeWidth={1} strokeDasharray="4 4" />
+            <text x={fullW - pad - 2} y={y(goalLine) - 3} textAnchor="end" fontSize="7" fill="rgba(255,255,255,0.28)">
+              meta {fmtBar(goalLine, unit)}
             </text>
           </g>
         )}
 
-        {/* barras */}
+        {/* barras — todas coloridas por status vs meta */}
         {pts.map((p, i) => {
-          const isRecent = recentIdx.has(i);
-          const isPrevYear = prevYearIdx.has(i);
-          const good = isRecent ? statusOf(p) : null;
-          let barColor = 'rgba(255,255,255,0.07)';
-          let labelColor = 'rgba(255,255,255,0.5)';
+          const isPrevYear = prevYearIdxSet.has(i);
+          const isRecent = i >= n - 2;
+          const good = isPrevYear ? null : barStatus(p, i);
+
+          let barColor: string;
+          let labelColor: string;
           if (isPrevYear) {
-            barColor = 'rgba(129,140,248,0.85)';
+            barColor = 'rgba(129,140,248,0.75)';
             labelColor = 'rgba(165,180,252,0.95)';
-          } else if (isRecent) {
-            barColor = good === null ? 'rgba(255,255,255,0.3)' : good ? 'rgba(16,185,129,0.9)' : 'rgba(239,68,68,0.9)';
-            labelColor = good === null ? 'rgba(255,255,255,0.6)' : good ? 'rgba(52,211,153,1)' : 'rgba(248,113,113,1)';
+          } else if (good === null) {
+            barColor = 'rgba(255,255,255,0.08)';
+            labelColor = 'rgba(255,255,255,0.4)';
+          } else if (good) {
+            barColor = isRecent ? 'rgba(16,185,129,0.90)' : 'rgba(16,185,129,0.45)';
+            labelColor = 'rgba(52,211,153,0.95)';
+          } else {
+            barColor = isRecent ? 'rgba(239,68,68,0.90)' : 'rgba(239,68,68,0.45)';
+            labelColor = 'rgba(248,113,113,0.95)';
           }
+
           const showLabel = isRecent || isPrevYear;
           return (
             <g key={`b-${i}`}>
-              <rect
-                x={x(i) - barW / 2} width={barW}
-                y={y(p.value)} height={baseY - y(p.value)}
-                rx={3} fill={barColor}
-              />
+              <rect x={x(i) - barW / 2} width={barW} y={y(p.value)} height={baseY - y(p.value)} rx={3} fill={barColor} />
               {showLabel && (
-                <text x={x(i)} y={y(p.value) - 5} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={labelColor}>
+                <text x={x(i)} y={y(p.value) - 4} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={labelColor}>
                   {fmtBar(p.value, unit)}
                 </text>
               )}
@@ -180,7 +192,7 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
 
         {/* labels de período: destaque (negrito) nos meses realçados, demais esmaecidos */}
         {pts.map((p, i) => {
-          const highlight = recentIdx.has(i) || prevYearIdx.has(i);
+          const highlight = i >= n - 2 || prevYearIdxSet.has(i);
           const show = highlight || i === 0 || i % 4 === 0;
           if (!show) return null;
           return (
