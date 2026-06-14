@@ -164,25 +164,6 @@ function RealizedRow({ rv, unit, indicatorId, onSaved }: {
   );
 }
 
-// ─── Metric Tile ───────────────────────────────────────────────────────────────
-
-function MetricTile({ label, sub, value, hint, good }: {
-  label: string; sub?: string; value: string; hint?: string; good?: boolean | null;
-}) {
-  const color = good == null ? 'text-white' : good ? 'text-emerald-400' : 'text-red-400';
-  return (
-    <div className="bg-white/[0.03] rounded-xl p-3">
-      <p className="text-[9px] text-white/30 uppercase tracking-wider">{label}</p>
-      {sub && <p className="text-[9px] text-white/25 mt-0.5">{sub}</p>}
-      <p className={cn('text-xl font-black mt-1 flex items-center gap-1', color)}>
-        {good != null && (good ? <TrendingUp size={13} /> : <TrendingDown size={13} />)}
-        {value}
-      </p>
-      {hint && <p className={cn('text-[9px] mt-0.5', good == null ? 'text-white/30' : good ? 'text-emerald-400/70' : 'text-red-400/70')}>{hint}</p>}
-    </div>
-  );
-}
-
 // ─── Main Detail Panel ──────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'realized';
@@ -260,6 +241,12 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   // VS ANO ANTERIOR (YoY)
   const yoy = curPoint && yoyPoint && yoyPoint.value !== 0 ? ((curPoint.value - yoyPoint.value) / Math.abs(yoyPoint.value)) * 100 : null;
   const goodYoy = isImprovement(yoy, direction);
+  // Score vs meta (100 = na meta). HIGHER: real/meta; LOWER: meta/real
+  const score = (effective != null && effective !== 0 && goal != null && goal !== 0)
+    ? (direction === 'LOWER_IS_BETTER' ? (goal / effective) * 100 : (effective / goal) * 100)
+    : null;
+  // Diferença absoluta vs meta (para "X acima/abaixo")
+  const goalDiff = (effective != null && goal != null) ? Math.abs(effective - goal) : null;
 
   // Dados do gráfico
   const chartData: Pt[] = realizedAsc.slice(-15).map((p) => {
@@ -359,40 +346,68 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
         <div className="flex-1 overflow-y-auto">
           {tab === 'overview' && (
             <>
-              {/* Métricas principais */}
-              <div className="px-5 py-4 border-b border-white/5 space-y-2">
+              {/* Métricas principais (3 tiles — Realizado / VS Ano Anterior / VS Meta) */}
+              <div className="px-5 py-4 border-b border-white/5 space-y-3">
                 <div className="grid grid-cols-3 gap-2">
-                  <MetricTile
-                    label="Realizado" sub={curPoint ? fmtMonth(curPoint.period) : undefined}
-                    value={formatValue(effective, unit)}
-                  />
-                  <MetricTile
-                    label="VS Ano Anterior"
-                    sub={yoyPoint ? `${fmtMonth(yoyPoint.period)} · ${formatValue(yoyPoint.value, unit)}` : '—'}
-                    value={yoy != null ? `${yoy > 0 ? '+' : ''}${yoy.toFixed(1)}%` : '—'}
-                    good={goodYoy}
-                    hint={goodYoy == null ? undefined : goodYoy ? 'Melhorou vs ano anterior' : 'Piorou vs ano anterior'}
-                  />
-                  <MetricTile
-                    label="VS Meta"
-                    sub={goal != null ? `Meta: ${formatValue(goal, unit)}` : '—'}
-                    value={vsGoal != null ? `${vsGoal > 0 ? '+' : ''}${vsGoal.toFixed(1)}%` : '—'}
-                    good={goodVsGoal}
-                    hint={goodVsGoal == null ? undefined : goodVsGoal ? 'Dentro da meta' : 'Fora da meta'}
-                  />
+                  {/* REALIZADO */}
+                  <div className="bg-white/[0.03] rounded-xl p-3">
+                    <p className="text-[9px] text-white/30 uppercase tracking-wider">Realizado</p>
+                    <p className="text-[9px] text-white/25 mt-0.5">{curPoint ? fmtMonth(curPoint.period) : '—'}</p>
+                    <p className={cn('text-2xl font-black mt-1', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
+                      {formatValue(effective, unit)}
+                    </p>
+                    <p className="text-[9px] text-white/30 mt-0.5">{score != null ? `Score: ${score.toFixed(1)} pts` : '—'}</p>
+                  </div>
+
+                  {/* VS ANO ANTERIOR */}
+                  <div className="bg-white/[0.03] rounded-xl p-3">
+                    <p className="text-[9px] text-white/30 uppercase tracking-wider">VS Ano Anterior</p>
+                    <p className="text-[9px] text-white/25 mt-0.5">
+                      {yoyPoint ? `${fmtMonth(yoyPoint.period)} · ${formatValue(yoyPoint.value, unit)}` : '—'}
+                    </p>
+                    <p className={cn('text-2xl font-black mt-1 flex items-center gap-1', goodYoy == null ? 'text-white' : goodYoy ? 'text-emerald-400' : 'text-red-400')}>
+                      {goodYoy != null && (goodYoy ? <TrendingUp size={15} /> : <TrendingDown size={15} />)}
+                      {yoy != null ? `${yoy > 0 ? '+' : ''}${yoy.toFixed(1)}%` : '—'}
+                    </p>
+                    <p className={cn('text-[9px] mt-0.5', goodYoy == null ? 'text-white/30' : goodYoy ? 'text-emerald-400/70' : 'text-red-400/70')}>
+                      {goodYoy == null ? 'Sem histórico' : goodYoy ? 'Melhorou em relação ao ano anterior' : 'Piorou em relação ao ano anterior'}
+                    </p>
+                  </div>
+
+                  {/* VS META */}
+                  <div className="bg-white/[0.03] rounded-xl p-3">
+                    <p className="text-[9px] text-white/30 uppercase tracking-wider">VS Meta</p>
+                    <p className="text-[9px] text-white/25 mt-0.5">
+                      {goal != null
+                        ? `Meta: ${formatValue(goal, unit)}${goalDiff != null && goodVsGoal != null ? ` · ${formatValue(goalDiff, unit)} ${goodVsGoal ? 'acima' : 'abaixo'}` : ''}`
+                        : '—'}
+                    </p>
+                    <p className={cn('text-2xl font-black mt-1 flex items-center gap-1', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
+                      {goodVsGoal != null && (goodVsGoal ? <TrendingUp size={15} /> : <TrendingDown size={15} />)}
+                      {vsGoal != null ? `${vsGoal > 0 ? '+' : ''}${vsGoal.toFixed(1)}%` : '—'}
+                    </p>
+                    <p className={cn('text-[9px] mt-0.5', goodVsGoal == null ? 'text-white/30' : goodVsGoal ? 'text-emerald-400/70' : 'text-red-400/70')}>
+                      {goodVsGoal == null ? 'Sem meta' : goodVsGoal ? '✓ Acima da meta' : 'Abaixo da meta'}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Linha secundária: VS mês anterior + meta + estimativa (condicional) */}
-                <div className={cn('grid gap-2', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
-                  <MetricTile
-                    label="VS Mês Anterior"
-                    sub={prevPoint ? `${fmtMonth(prevPoint.period)} · ${formatValue(prevPoint.value, unit)}` : '—'}
-                    value={mom != null ? `${mom > 0 ? '+' : ''}${mom.toFixed(1)}%` : '—'}
-                    good={goodMom}
-                    hint={goodMom == null ? undefined : goodMom ? 'Melhorando' : 'Piorando'}
-                  />
-                  <MetricTile label="Meta" value={formatValue(goal, unit)} />
-                  {showEstimate && <MetricTile label="Estimativa" value={formatValue(estimate, unit)} />}
+                {/* Strip compacto: mês anterior + estimativa (sem poluir os tiles) */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-white/40">
+                  <span>
+                    Mês anterior:{' '}
+                    <span className="text-white/70">{prevPoint ? formatValue(prevPoint.value, unit) : '—'}</span>
+                    {mom != null && (
+                      <span className={cn('ml-1', goodMom ? 'text-emerald-400/80' : 'text-red-400/80')}>
+                        ({mom > 0 ? '+' : ''}{mom.toFixed(1)}%)
+                      </span>
+                    )}
+                  </span>
+                  {showEstimate && (
+                    <span>
+                      Estimativa: <span className="text-white/70">{formatValue(estimate, unit)}</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -408,10 +423,9 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                 </div>
                 <HistoryChart data={chartData} direction={direction} />
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-                  <Legend swatch="bg-emerald-500/70" label="Atual (cor do status)" />
+                  <Legend swatch="bg-emerald-500/70" label="Atual + penúltimo (cor do status)" />
                   <Legend swatch="bg-indigo-400/50" label="Mesmo período ano anterior" />
-                  <Legend line="border-purple-400" label="Evolução mês a mês" />
-                  <Legend line="border-white/40" label="Meta do período" />
+                  <Legend line="border-white/40" label="Meta do período atual" />
                 </div>
               </div>
 
