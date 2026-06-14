@@ -133,6 +133,7 @@ model Indicator {
   active      Boolean            @default(true)
   sortOrder   Int                @default(0)
   direction   IndicatorDirection @default(HIGHER_IS_BETTER)
+  monitoringPoints String[]      @default([])
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 

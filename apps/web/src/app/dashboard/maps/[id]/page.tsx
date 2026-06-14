@@ -10,35 +10,69 @@ import ReactFlow, {
   NodeProps, Handle, Panel,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil } from 'lucide-react';
+import { ArrowLeft, Save, Plus, TrendingUp, TrendingDown, Pencil, Info, Maximize2 } from 'lucide-react';
 import { mapsApi, indicatorsApi } from '../../../../lib/api';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
 import { cn, formatValue } from '../../../../lib/utils';
 import { IndicatorDetailPanel } from '../../../../components/indicators/IndicatorDetailPanel';
+import { IndicatorDetailModal } from '../../../../components/indicators/IndicatorDetailModal';
 import { IndicatorFormPanel } from '../../../../components/indicators/IndicatorFormPanel';
 import { toast } from 'sonner';
+
+function unitLabel(unit: string): string {
+  const map: Record<string, string> = {
+    CURRENCY: 'R$', PERCENTAGE: '%', NUMBER: 'Nº', DAYS: 'Dias', INDEX: 'Índice',
+  };
+  return map[unit] ?? unit;
+}
 
 // ─── Indicator Node ───────────────────────────────────────────────────────────
 
 function MapIndicatorNode({ data, selected }: NodeProps) {
-  const { indicator, realized, goal, estimate } = data;
+  const { indicator, realized, goal, estimate, onInfo, onExpand } = data;
   const effective = estimate ?? realized;
   const dev = goal && effective != null && goal !== 0
     ? ((effective - goal) / Math.abs(goal)) * 100 : null;
   const isGood = dev === null ? null
     : (indicator.direction === 'LOWER_IS_BETTER' ? dev <= 0 : dev >= 0);
 
+  const handleStyle = {
+    background: '#6366f1', border: 'none', width: 10, height: 10,
+    opacity: 0, transition: 'opacity 0.15s',
+  } as const;
+
   return (
     <div className={cn(
-      'bg-[#1a1f2e] border rounded-2xl w-[220px] shadow-xl transition-all cursor-pointer',
+      'group bg-[#1a1f2e] border rounded-2xl w-[220px] shadow-xl transition-all cursor-pointer',
       selected ? 'border-indigo-500 shadow-indigo-500/20' : 'border-white/10 hover:border-white/25',
+      '[&:hover_.rf-handle]:!opacity-100',
     )}>
-      <Handle type="target" position={Position.Left}
-        style={{ background: '#6366f1', border: 'none', width: 10, height: 10 }} />
+      <Handle type="target" position={Position.Left} className="rf-handle" style={handleStyle} />
 
       <div className="px-3 pt-3 pb-2">
-        <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">{indicator.code}</p>
-        <p className="text-sm font-semibold text-white/85 leading-snug">{indicator.name}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">{indicator.code}</p>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="text-[9px] text-white/50 font-medium border border-white/15 rounded px-1.5 py-0.5">
+              {unitLabel(indicator.unit)}
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onInfo?.(indicator.id); }}
+              className="text-white/30 hover:text-white/80 transition-colors"
+              title="Informações"
+            >
+              <Info size={12} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onExpand?.(indicator.id); }}
+              className="text-white/30 hover:text-white/80 transition-colors"
+              title="Expandir"
+            >
+              <Maximize2 size={12} />
+            </button>
+          </div>
+        </div>
+        <p className="text-sm font-semibold text-white/85 leading-snug mt-0.5">{indicator.name}</p>
         <p className="text-[10px] text-white/30 mt-0.5">{indicator.category}</p>
       </div>
 
@@ -71,8 +105,7 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
         </p>
       </div>
 
-      <Handle type="source" position={Position.Right}
-        style={{ background: '#6366f1', border: 'none', width: 10, height: 10 }} />
+      <Handle type="source" position={Position.Right} className="rf-handle" style={handleStyle} />
     </div>
   );
 }
@@ -81,7 +114,11 @@ const nodeTypes = { mapIndicator: MapIndicatorNode };
 
 // ─── Build nodes/edges ────────────────────────────────────────────────────────
 
-function buildNodesAndEdges(entries: MapEntry[], savedFlow?: any) {
+function buildNodesAndEdges(
+  entries: MapEntry[],
+  savedFlow?: any,
+  handlers?: { onInfo: (id: string) => void; onExpand: (id: string) => void },
+) {
   const nodes: Node[] = entries.map((entry, i) => {
     const savedNode = savedFlow?.nodes?.find((n: any) => n.id === entry.indicatorId);
     const ind = entry.indicator;
@@ -93,7 +130,7 @@ function buildNodesAndEdges(entries: MapEntry[], savedFlow?: any) {
       id: entry.indicatorId,
       type: 'mapIndicator',
       position: savedNode?.position ?? { x: (i % 3) * 280, y: Math.floor(i / 3) * 220 },
-      data: { indicator: ind, realized, goal, estimate },
+      data: { indicator: ind, realized, goal, estimate, onInfo: handlers?.onInfo, onExpand: handlers?.onExpand },
     };
   });
 
@@ -218,6 +255,7 @@ export default function MapEditorPage() {
   const qc = useQueryClient();
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [selectedIndicatorId, setSelectedIndicatorId] = useState<string | null>(null);
+  const [infoIndicatorId, setInfoIndicatorId] = useState<string | null>(null);
   const [indicatorForm, setIndicatorForm] = useState<{ open: boolean; editId: string | null }>({
     open: false,
     editId: null,
@@ -233,7 +271,10 @@ export default function MapEditorPage() {
 
   useEffect(() => {
     if (!map?.entries) return;
-    const { nodes: n, edges: e } = buildNodesAndEdges(map.entries, map.flowData);
+    const { nodes: n, edges: e } = buildNodesAndEdges(map.entries, map.flowData, {
+      onInfo: (indId) => setInfoIndicatorId(indId),
+      onExpand: (indId) => setSelectedIndicatorId((prev) => (prev === indId ? null : indId)),
+    });
     setNodes(n);
     setEdges(e);
   }, [map]);
@@ -391,6 +432,20 @@ export default function MapEditorPage() {
           />
         )}
       </div>
+
+      {/* Modal de informações (fórmula + pontos de monitoria) */}
+      {infoIndicatorId && (
+        <IndicatorDetailModal
+          indicatorId={infoIndicatorId}
+          onClose={() => setInfoIndicatorId(null)}
+          onOpenActionPlan={() => {
+            const id = infoIndicatorId;
+            setInfoIndicatorId(null);
+            setSelectedIndicatorId(id);
+          }}
+          onUpdated={() => qc.invalidateQueries({ queryKey: ['map', id] })}
+        />
+      )}
 
       {/* Formulário de criar/editar indicador (barra lateral direita) */}
       {indicatorForm.open && (

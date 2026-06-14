@@ -46,6 +46,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
     goal: '',
     expression: '',
     vars: [] as string[],
+    monitoring: '',
   });
 
   const { data: editData } = useQuery({
@@ -67,6 +68,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         goal: editData.goals?.[0]?.value != null ? String(editData.goals[0].value) : '',
         expression: editData.formula?.expression ?? '',
         vars: editData.formula?.variables ? (Object.values(editData.formula.variables) as string[]) : [],
+        monitoring: (editData.monitoringPoints ?? []).join('\n'),
       }));
     }
   }, [editData]);
@@ -90,6 +92,10 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         direction: form.direction,
         periodicity: 'MONTHLY',
         responsible: form.responsible || null,
+        monitoringPoints: form.monitoring
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean),
       };
 
       if (isEdit) {
@@ -280,6 +286,19 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
               onChange={(e) => setForm({ ...form, responsible: e.target.value })}
               placeholder="Ex: Controladoria"
             />
+          </Field>
+
+          <Field label="Pontos de monitoria (uma frente de trabalho por linha)">
+            <textarea
+              className="input-dark w-full resize-none"
+              rows={4}
+              value={form.monitoring}
+              onChange={(e) => setForm({ ...form, monitoring: e.target.value })}
+              placeholder={'Ex:\nAging de recebíveis\nInadimplência e provisão\nPolítica de crédito'}
+            />
+            <p className="text-[10px] text-white/30 mt-1">
+              Aparecem como guia de possibilidades de trabalho no modal de informações.
+            </p>
           </Field>
 
           <button

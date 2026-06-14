@@ -23,12 +23,20 @@ async function main() {
 
   // ── Indicators: Capital de Giro ────────────────────────────────────────────
 
+  const pmrMonitoring = [
+    'Aging de recebíveis (0-30, 31-60, 61-90, +90 dias)',
+    'Inadimplência e provisão para devedores duvidosos',
+    'Política de crédito e prazo médio concedido por canal',
+    'Mix cooperados (crédito diferenciado) vs mercado',
+    'Régua de cobrança e renegociação de inadimplentes',
+  ];
   const pmr = await prisma.indicator.upsert({
     where: { code: 'PMR' },
-    update: {},
+    update: { monitoringPoints: pmrMonitoring, description: 'Contas a Receber / (Receita Bruta / 30). Dias médios para receber.' },
     create: {
       code: 'PMR',
       name: 'PMR - Prazo Médio de Recebimento',
+      description: 'Contas a Receber / (Receita Bruta / 30). Dias médios para receber.',
       category: 'Capital de Giro',
       type: 'INPUT',
       unit: 'DAYS',
@@ -36,15 +44,24 @@ async function main() {
       direction: 'LOWER_IS_BETTER',
       responsible: 'Financeiro',
       sortOrder: 1,
+      monitoringPoints: pmrMonitoring,
     },
   });
 
+  const pmeMonitoring = [
+    'Giro de estoque por categoria e curva ABC',
+    'Estoque obsoleto, vencido e baixa rotatividade',
+    'Acuracidade de inventário e rupturas',
+    'Lote econômico de compra e lead time de fornecedores',
+    'Sazonalidade e previsão de demanda',
+  ];
   const pme = await prisma.indicator.upsert({
     where: { code: 'PME' },
-    update: {},
+    update: { monitoringPoints: pmeMonitoring, description: 'Estoque Médio / (CPV / 30). Dias médios em estoque.' },
     create: {
       code: 'PME',
       name: 'PME - Prazo Médio de Estoque',
+      description: 'Estoque Médio / (CPV / 30). Dias médios em estoque.',
       category: 'Capital de Giro',
       type: 'INPUT',
       unit: 'DAYS',
@@ -52,15 +69,23 @@ async function main() {
       direction: 'LOWER_IS_BETTER',
       responsible: 'Logística',
       sortOrder: 2,
+      monitoringPoints: pmeMonitoring,
     },
   });
 
+  const pmpMonitoring = [
+    'Negociação de prazo com fornecedores estratégicos',
+    'Aproveitamento de descontos por antecipação vs prazo',
+    'Concentração de fornecedores e poder de barganha',
+    'Calendário de pagamentos e gestão de fluxo',
+  ];
   const pmp = await prisma.indicator.upsert({
     where: { code: 'PMP' },
-    update: {},
+    update: { monitoringPoints: pmpMonitoring, description: 'Contas a Pagar / (Compras / 30). Dias médios para pagar.' },
     create: {
       code: 'PMP',
       name: 'PMP - Prazo Médio de Pagamento',
+      description: 'Contas a Pagar / (Compras / 30). Dias médios para pagar.',
       category: 'Capital de Giro',
       type: 'INPUT',
       unit: 'DAYS',
@@ -68,15 +93,23 @@ async function main() {
       direction: 'HIGHER_IS_BETTER',
       responsible: 'Financeiro',
       sortOrder: 3,
+      monitoringPoints: pmpMonitoring,
     },
   });
 
+  const ncgMonitoring = [
+    'Equilíbrio entre PMR, PME e PMP (ciclo financeiro)',
+    'Capital de giro próprio vs financiamento de terceiros',
+    'Sazonalidade da necessidade de caixa',
+    'Antecipação de recebíveis e custo financeiro',
+  ];
   const ncg = await prisma.indicator.upsert({
     where: { code: 'NCG' },
-    update: {},
+    update: { monitoringPoints: ncgMonitoring, description: 'PMR + PME - PMP. Necessidade de Capital de Giro em dias.' },
     create: {
       code: 'NCG',
       name: 'NCG - Necessidade de Capital de Giro',
+      description: 'PMR + PME - PMP. Necessidade de Capital de Giro em dias.',
       category: 'Capital de Giro',
       type: 'CALCULATED',
       unit: 'CURRENCY',
@@ -84,6 +117,7 @@ async function main() {
       direction: 'LOWER_IS_BETTER',
       responsible: 'Controladoria',
       sortOrder: 4,
+      monitoringPoints: ncgMonitoring,
     },
   });
 
@@ -210,16 +244,39 @@ async function main() {
 
   const fin: Record<string, string> = {}; // code -> id
 
+  // Pontos de monitoria / frentes de trabalho por indicador estratégico
+  const monitoring: Record<string, string[]> = {
+    RECEITA: ['Mix de produtos e margem por linha', 'Preço médio vs volume', 'Penetração por canal e região', 'Novos cooperados e retenção'],
+    CUSTOS: ['Custo de matéria-prima e contratos de fornecimento', 'Eficiência operacional e perdas', 'Produtividade fabril (OEE)', 'Renegociação de insumos críticos'],
+    DESPESAS: ['Despesas fixas vs variáveis', 'Headcount e produtividade', 'Despesas comerciais vs receita', 'Contratos recorrentes e SaaS'],
+    IMPOSTOS: ['Planejamento tributário e regime', 'Créditos fiscais não aproveitados', 'Incentivos para cooperativas'],
+    ESTOQUES: ['Giro e cobertura de estoque', 'Estoque obsoleto e vencido', 'Acuracidade de inventário'],
+    CONTAS_RECEBER: ['Aging e inadimplência', 'Política de crédito', 'Antecipação de recebíveis'],
+    ATIVO_IMOBILIZADO: ['Retorno sobre ativos (capex)', 'Ociosidade e capacidade instalada', 'Plano de investimentos'],
+    PATRIMONIO: ['Distribuição de sobras vs reinvestimento', 'Capitalização de cooperados', 'Reservas e fundos'],
+    DIVIDA: ['Custo médio da dívida (CDI+)', 'Perfil de vencimento (curto vs longo)', 'Covenants e alavancagem'],
+    FLUXO_CAIXA: ['Conversão de EBITDA em caixa', 'Ciclo de conversão de caixa', 'Capex vs geração operacional'],
+    EBITDA: ['Alavancas de receita e custo', 'Margem EBITDA por unidade de negócio', 'Despesas controláveis'],
+    NOPAT: ['Eficiência operacional após impostos', 'Planejamento tributário', 'Alocação de capital'],
+    LUCRO_LIQUIDO: ['Resultado financeiro líquido', 'Itens não recorrentes', 'Distribuição de sobras'],
+    CAPITAL_INVESTIDO: ['Capital de giro vs imobilizado', 'Desinvestimento de ativos ociosos', 'Eficiência de capex'],
+    CAPITAL_GIRO: ['Ciclo financeiro (PMR+PME-PMP)', 'Estoques e recebíveis', 'Linhas de capital de giro'],
+    ROIC: ['NOPAT vs capital investido', 'Spread ROIC - WACC', 'Disciplina de alocação de capital'],
+    ROE: ['Alavancagem financeira', 'Margem líquida e giro do ativo', 'Retorno aos cooperados'],
+    ENDIVIDAMENTO: ['Dívida líquida / EBITDA', 'Estrutura de capital alvo', 'Custo e perfil da dívida'],
+  };
+
   // Indicadores de ENTRADA + realizado + meta
   let order = 10;
   for (const def of inputDefs) {
     const ind = await prisma.indicator.upsert({
       where: { code: def.code },
-      update: {},
+      update: { monitoringPoints: monitoring[def.code] ?? [] },
       create: {
         code: def.code, name: def.name, category: 'Estratégico', type: 'INPUT',
         unit: def.unit, periodicity: 'MONTHLY', direction: def.direction,
         responsible: def.responsible, sortOrder: order++,
+        monitoringPoints: monitoring[def.code] ?? [],
       },
     });
     fin[def.code] = ind.id;
@@ -238,11 +295,12 @@ async function main() {
   for (const def of calcDefs) {
     const ind = await prisma.indicator.upsert({
       where: { code: def.code },
-      update: {},
+      update: { monitoringPoints: monitoring[def.code] ?? [] },
       create: {
         code: def.code, name: def.name, category: 'Estratégico', type: 'CALCULATED',
         unit: def.unit, periodicity: 'MONTHLY', direction: def.direction,
         responsible: 'Controladoria', sortOrder: order++,
+        monitoringPoints: monitoring[def.code] ?? [],
       },
     });
     fin[def.code] = ind.id;
