@@ -268,24 +268,18 @@ export class IndicatorsService {
     wb.created = new Date();
 
     const PURPLE = 'FF6B3FA0';
-    const BLUE   = 'FF1E40AF';
-    const GREEN  = 'FF166534';
-    const AMBER  = 'FF92400E';
     const lockFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D0F17' } };
     const lockFont: Partial<ExcelJS.Font> = { color: { argb: 'FF888888' } };
 
     // ── Aba única: Lançamento ────────────────────────────────────────────────
     const ws = wb.addWorksheet('Lançamento', { properties: { tabColor: { argb: PURPLE } } });
 
-    ws.addRow(['Preencha as colunas Realizado, Meta e/ou Estimativa. Deixe em branco o que não deseja carregar.'])
+    ws.addRow(['Preencha as colunas Realizado, Meta e/ou Estimativa. Deixe em branco o que não deseja carregar. Se Estimativa vazia, será preenchida automaticamente com o valor do Realizado.'])
       .font = { italic: true, color: { argb: 'FF888888' } };
     ws.addRow([]);
 
-    const hdr = ws.addRow([
-      'Código', 'Nome do Indicador', 'Período (AAAA-MM)',
-      'Realizado', 'Meta', 'Estimativa',
-    ]);
-    const colColors = ['', '', '', BLUE, GREEN, AMBER];
+    const hdr = ws.addRow(['Código', 'Nome do Indicador', 'Período (AAAA-MM)', 'Realizado', 'Meta', 'Estimativa']);
+    const colColors = ['', '', '', 'FF1E40AF', 'FF166534', 'FF92400E'];
     hdr.eachCell((cell, col) => {
       const color = colColors[col - 1] || PURPLE;
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
@@ -295,22 +289,20 @@ export class IndicatorsService {
     });
 
     ws.columns = [
-      { key: 'cod',      width: 14 },
-      { key: 'nome',     width: 44 },
-      { key: 'periodo',  width: 20 },
-      { key: 'realizado', width: 16 },
-      { key: 'meta',     width: 16 },
+      { key: 'cod',        width: 14 },
+      { key: 'nome',       width: 44 },
+      { key: 'periodo',    width: 20 },
+      { key: 'realizado',  width: 16 },
+      { key: 'meta',       width: 16 },
       { key: 'estimativa', width: 16 },
     ];
 
     for (const ind of indicators) {
       const isCalc = ind.type === 'CALCULATED';
       const row = ws.addRow([ind.code, ind.name, period, '', '', '']);
-      // Código e Nome: estilo somente leitura
       row.getCell(1).fill = lockFill; row.getCell(1).font = lockFont;
       row.getCell(2).fill = lockFill; row.getCell(2).font = lockFont;
       row.getCell(3).alignment = { horizontal: 'center' };
-      // Realizado: bloqueado para indicadores calculados
       if (isCalc) {
         row.getCell(4).fill = lockFill;
         row.getCell(4).font = { color: { argb: 'FF555555' }, italic: true };
@@ -325,23 +317,23 @@ export class IndicatorsService {
     ws.getRow(3).height = 22;
     ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
 
-    // ── Aba de instruções ────────────────────────────────────────────────────
+    // ── Instruções ───────────────────────────────────────────────────────────
     const info = wb.addWorksheet('ℹ️ Instruções');
     info.columns = [{ width: 80 }];
     const instrucoes = [
       ['BSC Copérdia — Planilha Modelo de Carga de Dados'],
       [''],
       ['COMO USAR:'],
-      ['1. Na aba "Lançamento", altere o campo Período para o mês desejado (formato AAAA-MM, ex.: 2026-04).'],
-      ['2. Preencha as colunas Realizado, Meta e/ou Estimativa conforme necessário.'],
-      ['3. Deixe em branco qualquer célula que não deseja alterar.'],
-      ['4. Salve o arquivo e faça upload pelo botão "Importar Planilha" no sistema.'],
+      ['1. Na aba "Lançamento", informe o Período desejado (formato AAAA-MM, ex.: 2026-04).'],
+      ['2. Preencha Realizado, Meta e/ou Estimativa para cada indicador.'],
+      ['3. Campos em branco são ignorados. Se Estimativa estiver vazia, o sistema usa o valor do Realizado.'],
+      ['4. Salve e faça upload pelo botão "Importar Planilha" no sistema.'],
       [''],
       ['REGRAS:'],
       ['• Não altere o Código nem o Nome dos indicadores.'],
       ['• Formato do período: AAAA-MM (ex.: 2026-01).'],
-      ['• Realizado: células marcadas como "(calculado)" são ignoradas — o sistema recalcula automaticamente.'],
-      ['• Meta e Estimativa podem ser lançadas para todos os indicadores.'],
+      ['• Linhas marcadas como "(calculado)" no Realizado são ignoradas — o sistema recalcula automaticamente.'],
+      ['• Estimativa vazia → sistema preenche com o valor do Realizado (quando informado).'],
     ];
     for (const l of instrucoes) {
       const row = info.addRow(l);
@@ -492,25 +484,62 @@ export class IndicatorsService {
       return this.normalizePeriod(String(v).trim());
     };
 
-    // Suporta formato unificado (aba "Lançamento") e legado (3 abas separadas)
-    const ws = wb.getWorksheet('Lançamento');
-    if (ws) {
-      // Novo formato: col4=Realizado, col5=Meta, col6=Estimativa
+    const processSheet = (sheetName: string, type: 'realized' | 'goal' | 'estimate', skipCalculated = false) => {
+      const ws = wb.getWorksheet(sheetName);
+      if (!ws) return;
       ws.eachRow((row, rowNum) => {
-        if (rowNum <= 3) return;
+        if (rowNum <= 3) return; // skip instruction + header rows
         const code = String(row.getCell(1).value ?? '').trim().toUpperCase();
         if (!code) return;
         const periodRaw = row.getCell(3).value;
+        const valorRaw = row.getCell(4).value;
+        const value = parseValue(valorRaw);
+        if (value === null) { skipped.push({ aba: sheetName, codigo: code, motivo: 'valor em branco ou inválido' }); return; }
         const period = parsePeriod(periodRaw);
-        if (!period) { skipped.push({ aba: 'Lançamento', codigo: code, motivo: `período inválido (${periodRaw})` }); return; }
+        if (!period) { skipped.push({ aba: sheetName, codigo: code, motivo: `período inválido (${periodRaw})` }); return; }
+        const ind = byCode.get(code);
+        if (!ind) { skipped.push({ aba: sheetName, codigo: code, motivo: 'código não encontrado' }); return; }
+        if (skipCalculated && (ind.type === 'CALCULATED' || ind.formula)) {
+          skipped.push({ aba: sheetName, codigo: code, motivo: 'ignorado — calculado por fórmula' }); return;
+        }
+        importedPeriods.add(period.toISOString());
+        if (type === 'realized') {
+          realizedCount++;
+          realizedOps.push(this.prisma.realizedValue.upsert({
+            where: { indicatorId_period: { indicatorId: ind.id, period } },
+            create: { indicatorId: ind.id, period, value },
+            update: { value },
+          }));
+        } else if (type === 'goal') {
+          goalsCount++;
+          goalOps.push(this.prisma.goal.upsert({
+            where: { indicatorId_period: { indicatorId: ind.id, period } },
+            create: { indicatorId: ind.id, period, value },
+            update: { value },
+          }));
+        } else {
+          estimatesCount++;
+          estimateItems.push({ indicatorId: ind.id, period, value });
+        }
+      });
+    };
+
+    const unifiedWs = wb.getWorksheet('Lançamento');
+    if (unifiedWs) {
+      unifiedWs.eachRow((row, rowNum) => {
+        if (rowNum <= 3) return;
+        const code = String(row.getCell(1).value ?? '').trim().toUpperCase();
+        if (!code) return;
+        const period = parsePeriod(row.getCell(3).value);
+        if (!period) { skipped.push({ aba: 'Lançamento', codigo: code, motivo: `período inválido (${row.getCell(3).value})` }); return; }
         const ind = byCode.get(code);
         if (!ind) { skipped.push({ aba: 'Lançamento', codigo: code, motivo: 'código não encontrado' }); return; }
         importedPeriods.add(period.toISOString());
 
-        // Realizado (col 4) — apenas INPUT
+        const isCalculated = ind.type === 'CALCULATED' || !!ind.formula;
         const vReal = parseValue(row.getCell(4).value);
         if (vReal !== null) {
-          if (ind.type === 'CALCULATED' || ind.formula) {
+          if (isCalculated) {
             skipped.push({ aba: 'Lançamento', codigo: code, motivo: 'Realizado ignorado — calculado por fórmula' });
           } else {
             realizedCount++;
@@ -522,7 +551,6 @@ export class IndicatorsService {
           }
         }
 
-        // Meta (col 5)
         const vMeta = parseValue(row.getCell(5).value);
         if (vMeta !== null) {
           goalsCount++;
@@ -533,35 +561,14 @@ export class IndicatorsService {
           }));
         }
 
-        // Estimativa (col 6)
         const vEst = parseValue(row.getCell(6).value);
-        if (vEst !== null) {
+        const estToSave = vEst !== null ? vEst : (!isCalculated && vReal !== null ? vReal : null);
+        if (estToSave !== null) {
           estimatesCount++;
-          estimateItems.push({ indicatorId: ind.id, period, value: vEst });
+          estimateItems.push({ indicatorId: ind.id, period, value: estToSave });
         }
       });
     } else {
-      // Fallback: formato legado com 3 abas separadas
-      const processSheet = (sheetName: string, type: 'realized' | 'goal' | 'estimate', skipCalculated = false) => {
-        const s = wb.getWorksheet(sheetName);
-        if (!s) return;
-        s.eachRow((row, rowNum) => {
-          if (rowNum <= 3) return;
-          const code = String(row.getCell(1).value ?? '').trim().toUpperCase();
-          if (!code) return;
-          const period = parsePeriod(row.getCell(3).value);
-          if (!period) { skipped.push({ aba: sheetName, codigo: code, motivo: 'período inválido' }); return; }
-          const value = parseValue(row.getCell(4).value);
-          if (value === null) return;
-          const ind = byCode.get(code);
-          if (!ind) { skipped.push({ aba: sheetName, codigo: code, motivo: 'código não encontrado' }); return; }
-          if (skipCalculated && (ind.type === 'CALCULATED' || ind.formula)) return;
-          importedPeriods.add(period.toISOString());
-          if (type === 'realized') { realizedCount++; realizedOps.push(this.prisma.realizedValue.upsert({ where: { indicatorId_period: { indicatorId: ind.id, period } }, create: { indicatorId: ind.id, period, value }, update: { value } })); }
-          else if (type === 'goal') { goalsCount++; goalOps.push(this.prisma.goal.upsert({ where: { indicatorId_period: { indicatorId: ind.id, period } }, create: { indicatorId: ind.id, period, value }, update: { value } })); }
-          else { estimatesCount++; estimateItems.push({ indicatorId: ind.id, period, value }); }
-        });
-      };
       processSheet('Realizados', 'realized', true);
       processSheet('Metas', 'goal', false);
       processSheet('Estimativas', 'estimate', false);
