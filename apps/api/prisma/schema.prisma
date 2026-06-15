@@ -111,7 +111,8 @@ model User {
   planAttachments PlanAttachment[]
   planAuditLogs   PlanAuditLog[]
   initiatives     Initiative[]
-  actionItems     ActionItem[]
+  actionItems         ActionItem[] @relation("ActionItemCreator")
+  ownedActionItems    ActionItem[] @relation("ActionItemOwner")
   mapCategories   MapCategory[]
   indicatorMaps   IndicatorMap[]
 
@@ -217,7 +218,8 @@ model ActionItem {
   userId        String
 
   initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  user       User       @relation(fields: [userId], references: [id])
+  user       User       @relation("ActionItemCreator", fields: [userId], references: [id])
+  owner      User?      @relation("ActionItemOwner", fields: [ownerId], references: [id])
 
   @@index([initiativeId])
   @@map("action_items")

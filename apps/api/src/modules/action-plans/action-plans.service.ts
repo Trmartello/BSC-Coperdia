@@ -93,7 +93,7 @@ export class ActionPlansService {
         indicator: { select: { id: true, code: true, name: true, unit: true } },
         initiatives: {
           include: {
-            actions: { orderBy: { createdAt: 'asc' } },
+            actions: { include: { owner: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'asc' } },
           },
           orderBy: { sortOrder: 'asc' },
         },

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, CalendarDays } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { actionPlansApi } from '../../lib/api';
 import {
@@ -9,7 +9,7 @@ import {
   ACTION_STATUS_LABEL, PRIORITY_LABEL,
 } from '../../types/action-plan';
 import { toast } from 'sonner';
-import { cn } from '../../lib/utils';
+import { UserSelector } from '../ui/UserSelector';
 
 interface Props {
   initiativeId: string;
@@ -20,14 +20,9 @@ interface Props {
 const PRIORITIES: ActionItemPriority[] = ['HIGH', 'MEDIUM', 'LOW'];
 const STATUSES: ActionItemStatus[] = ['PENDING', 'IN_PROGRESS', 'DONE', 'CANCELLED'];
 
-const PRIORITY_BTN: Record<ActionItemPriority, string> = {
-  HIGH: 'bg-red-600 text-white',
-  MEDIUM: 'bg-amber-500 text-white',
-  LOW: 'bg-blue-600 text-white',
-};
-
 export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
   const qc = useQueryClient();
+  const dateRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -35,12 +30,19 @@ export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
     status: 'PENDING' as ActionItemStatus,
     dueDate: '',
     ownerName: '',
+    ownerId: '',
     progress: 0,
     observations: '',
   });
+  const [owner, setOwner] = useState<{ id: string; name: string } | null>(null);
 
   const mutation = useMutation({
-    mutationFn: () => actionPlansApi.createAction(initiativeId, form).then((r) => r.data),
+    mutationFn: () =>
+      actionPlansApi.createAction(initiativeId, {
+        ...form,
+        ownerName: owner?.name ?? form.ownerName,
+        ownerId: owner?.id ?? undefined,
+      }).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['action-plan', planId] });
       qc.invalidateQueries({ queryKey: ['action-plans'] });
@@ -50,6 +52,10 @@ export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
     },
     onError: () => toast.error('Erro ao criar ação'),
   });
+
+  const displayDate = form.dueDate
+    ? new Date(form.dueDate + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+    : '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -78,7 +84,7 @@ export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
             <textarea
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="descrição da ação 01"
+              placeholder="Descrição da ação"
               rows={2}
               className="w-full bg-white/5 border border-white/10 focus:border-purple-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none resize-none transition-colors"
             />
@@ -112,20 +118,29 @@ export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-white/50 mb-1.5 block">Prazo</label>
-              <input
-                type="date"
-                value={form.dueDate}
-                onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
-                className="w-full bg-[#0d0f17] border border-white/10 focus:border-purple-500 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none transition-colors"
-              />
+              <div
+                className="relative flex items-center bg-[#0d0f17] border border-white/10 hover:border-white/20 focus-within:border-purple-500 rounded-xl px-3 py-2.5 transition-colors cursor-pointer"
+                onClick={() => dateRef.current?.showPicker?.()}
+              >
+                <span className="flex-1 text-sm text-white/80 select-none">
+                  {displayDate || <span className="text-white/25">DD/MM/AAAA</span>}
+                </span>
+                <CalendarDays size={15} className="text-white/30 flex-shrink-0" />
+                <input
+                  ref={dateRef}
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  tabIndex={-1}
+                />
+              </div>
             </div>
             <div>
               <label className="text-xs text-white/50 mb-1.5 block">Progresso: {form.progress}%</label>
               <input
                 type="range"
-                min={0}
-                max={100}
-                step={5}
+                min={0} max={100} step={5}
                 value={form.progress}
                 onChange={(e) => setForm((f) => ({ ...f, progress: Number(e.target.value) }))}
                 className="w-full mt-2 accent-purple-500"
@@ -136,11 +151,10 @@ export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
           {/* Responsável */}
           <div>
             <label className="text-xs text-white/50 mb-1.5 block">Responsável</label>
-            <input
-              value={form.ownerName}
-              onChange={(e) => setForm((f) => ({ ...f, ownerName: e.target.value }))}
-              placeholder="Nome do responsável"
-              className="w-full bg-white/5 border border-white/10 focus:border-purple-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none transition-colors"
+            <UserSelector
+              value={owner}
+              onChange={setOwner}
+              placeholder="Selecionar responsável"
             />
           </div>
 
@@ -150,7 +164,7 @@ export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
             <textarea
               value={form.observations}
               onChange={(e) => setForm((f) => ({ ...f, observations: e.target.value }))}
-              placeholder="observação para executar a ação"
+              placeholder="Observação para executar a ação"
               rows={2}
               className="w-full bg-white/5 border border-white/10 focus:border-purple-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none resize-none transition-colors"
             />

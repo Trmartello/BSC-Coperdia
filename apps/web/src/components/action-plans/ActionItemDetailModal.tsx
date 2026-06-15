@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { X, Paperclip, Download, Trash2, Send } from 'lucide-react';
+import { X, Paperclip, Download, Trash2, Send, CalendarDays } from 'lucide-react';
+import { UserSelector } from '../ui/UserSelector';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { actionPlansApi } from '../../lib/api';
 import {
@@ -42,6 +43,10 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
   const [uploading, setUploading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+  const [owner, setOwner] = useState<{ id: string; name: string } | null>(
+    initialAction.ownerId ? { id: initialAction.ownerId, name: initialAction.ownerName ?? '' } : null
+  );
 
   const deleteMutation = useMutation({
     mutationFn: () => actionPlansApi.deleteAction(action.id),
@@ -188,15 +193,14 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
 
               <div className="grid grid-cols-2 gap-3">
                 <FormRow label="RESPONSÁVEL">
-                  <div className="relative">
-                    <input
-                      value={action.ownerName ?? ''}
-                      onChange={(e) => setAction((a) => ({ ...a, ownerName: e.target.value }))}
-                      placeholder="Diretor Copérdia"
-                      className="input-dark pr-8"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 text-xs">▾</span>
-                  </div>
+                  <UserSelector
+                    value={owner}
+                    onChange={(u) => {
+                      setOwner(u);
+                      setAction((a) => ({ ...a, ownerName: u?.name ?? '', ownerId: u?.id ?? undefined }));
+                    }}
+                    placeholder="Selecionar"
+                  />
                 </FormRow>
 
                 <FormRow label="PRIORIDADE">
@@ -223,12 +227,25 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
 
               <div className="grid grid-cols-2 gap-3">
                 <FormRow label="PRAZO">
-                  <input
-                    type="date"
-                    value={action.dueDate ? action.dueDate.slice(0, 10) : ''}
-                    onChange={(e) => setAction((a) => ({ ...a, dueDate: e.target.value }))}
-                    className="input-dark"
-                  />
+                  <div
+                    className="relative flex items-center bg-white/5 border border-white/10 hover:border-white/20 focus-within:border-purple-500 rounded-xl px-3 py-2.5 cursor-pointer transition-colors"
+                    onClick={() => dateRef.current?.showPicker?.()}
+                  >
+                    <span className="flex-1 text-sm text-white/80 select-none">
+                      {action.dueDate
+                        ? new Date(action.dueDate.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+                        : <span className="text-white/25">DD/MM/AAAA</span>}
+                    </span>
+                    <CalendarDays size={14} className="text-white/30 flex-shrink-0" />
+                    <input
+                      ref={dateRef}
+                      type="date"
+                      value={action.dueDate ? action.dueDate.slice(0, 10) : ''}
+                      onChange={(e) => setAction((a) => ({ ...a, dueDate: e.target.value }))}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      tabIndex={-1}
+                    />
+                  </div>
                 </FormRow>
                 <FormRow label="STATUS">
                   <select
@@ -387,7 +404,7 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
                 Cancelar
               </button>
               <button
-                onClick={() => updateMutation.mutate(action)}
+                onClick={() => updateMutation.mutate({ ...action, ownerName: owner?.name ?? action.ownerName, ownerId: owner?.id ?? action.ownerId })}
                 disabled={updateMutation.isPending}
                 className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm bg-purple-600 hover:bg-purple-700 text-white font-medium disabled:opacity-50 transition-colors"
               >
