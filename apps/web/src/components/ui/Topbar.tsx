@@ -6,13 +6,15 @@ import { useAuthStore } from '../../store/auth.store';
 import { useScenarioStore } from '../../store/scenario.store';
 import { scenariosApi, indicatorsApi, settingsApi } from '../../lib/api';
 import { Scenario } from '../../types';
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, Layers, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { NewScenarioModal } from '../scenarios/NewScenarioModal';
 
 export function Topbar() {
   const { user } = useAuthStore();
   const { activeScenario, setActiveScenario, activePeriod, setActivePeriod } = useScenarioStore();
   const [open, setOpen] = useState(false);
+  const [showNewScenario, setShowNewScenario] = useState(false);
   const qc = useQueryClient();
 
   const { data: scenarios = [] } = useQuery({
@@ -138,6 +140,24 @@ export function Topbar() {
           </>
         )}
       </div>
+
+      {/* + Novo Cenário */}
+      <button
+        onClick={() => setShowNewScenario(true)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs text-white font-medium transition-colors"
+        title="Criar novo cenário"
+      >
+        <Plus size={13} />
+        Novo Cenário
+      </button>
+
+      {showNewScenario && (
+        <NewScenarioModal
+          period={activePeriod}
+          onClose={() => setShowNewScenario(false)}
+          onCreated={(s) => { setActiveScenario(s as Scenario); setShowNewScenario(false); }}
+        />
+      )}
 
       {/* Right: notification + user */}
       <button className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white/80 transition-colors">

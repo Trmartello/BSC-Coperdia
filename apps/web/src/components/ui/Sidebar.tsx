@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Network,
   LayoutDashboard,
-  Layers,
 } from 'lucide-react';
 
 const NAV = [
@@ -20,12 +19,6 @@ const NAV = [
     items: [
       { label: 'Dashboard', href: '/dashboard/executive', icon: LayoutDashboard },
       { label: 'Mapa Estratégico', href: '/dashboard/maps', icon: Network },
-    ],
-  },
-  {
-    section: 'Análise',
-    items: [
-      { label: 'Cenários', href: '/dashboard/scenarios', icon: Layers },
     ],
   },
   {
