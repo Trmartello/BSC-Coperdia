@@ -6,15 +6,17 @@ import { useAuthStore } from '../../store/auth.store';
 import { useScenarioStore } from '../../store/scenario.store';
 import { scenariosApi, indicatorsApi, settingsApi } from '../../lib/api';
 import { Scenario } from '../../types';
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, Layers, Plus } from 'lucide-react';
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, Layers, Plus, FileSpreadsheet } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { NewScenarioModal } from '../scenarios/NewScenarioModal';
+import { ImportDataModal } from '../indicators/ImportDataModal';
 
 export function Topbar() {
   const { user } = useAuthStore();
   const { activeScenario, setActiveScenario, activePeriod, setActivePeriod } = useScenarioStore();
   const [open, setOpen] = useState(false);
   const [showNewScenario, setShowNewScenario] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const qc = useQueryClient();
 
   const { data: scenarios = [] } = useQuery({
@@ -77,6 +79,16 @@ export function Topbar() {
       </div>
 
       <div className="flex-1" />
+
+      {/* Import data */}
+      <button
+        onClick={() => setShowImport(true)}
+        className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-1.5 transition-colors"
+        title="Carga de dados via planilha"
+      >
+        <FileSpreadsheet size={13} className="text-emerald-400" />
+        <span className="text-xs text-white/60">Importar</span>
+      </button>
 
       {/* Estimativa toggle */}
       <button
@@ -149,6 +161,8 @@ export function Topbar() {
           </>
         )}
       </div>
+
+      {showImport && <ImportDataModal onClose={() => setShowImport(false)} />}
 
       {showNewScenario && (
         <NewScenarioModal

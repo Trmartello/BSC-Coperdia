@@ -1,7 +1,8 @@
 import {
   Controller, Get, Post, Delete, Body, Param, Patch, Query, UseGuards, Request,
-  Header, UseInterceptors, UploadedFile, BadRequestException,
+  Header, Res, UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -33,21 +34,25 @@ export class IndicatorsController {
     return this.service.getTree(rootId);
   }
 
-  // Modelo de planilha (CSV) para carga de dados — apenas indicadores de entrada
+  // Modelo Excel (.xlsx) para carga de dados
   @Get('import/template')
-  @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header('Content-Disposition', 'attachment; filename="modelo_carga_indicadores.csv"')
-  getImportTemplate() {
-    return this.service.generateImportTemplate();
+  async getImportTemplate(@Res() res: Response) {
+    const buf = await this.service.generateImportTemplate();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="modelo_carga_bsc.xlsx"',
+      'Content-Length': buf.length,
+    });
+    res.end(buf);
   }
 
-  // Carga de dados via planilha: ADMIN e CONTROLADORIA
+  // Carga completa via planilha Excel (Realizados + Metas + Estimativas)
   @Roles('ADMIN', 'CONTROLADORIA')
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   importData(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
-    if (!file) throw new BadRequestException('Envie um arquivo CSV (use a planilha modelo)');
-    return this.service.importRealizedValues(file.buffer.toString('utf-8'), req.user.id);
+    if (!file) throw new BadRequestException('Envie o arquivo Excel gerado pelo modelo.');
+    return this.service.importSpreadsheet(file.buffer, req.user.id);
   }
 
   @Get(':id')
