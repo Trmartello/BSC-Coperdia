@@ -197,7 +197,7 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
                     value={owner}
                     onChange={(u) => {
                       setOwner(u);
-                      setAction((a) => ({ ...a, ownerName: u?.name ?? '', ownerId: u?.id ?? undefined }));
+                      setAction((a) => ({ ...a, ownerName: u?.name ?? '', ownerId: u?.id ?? null }));
                     }}
                     placeholder="Selecionar"
                   />
@@ -404,7 +404,7 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
                 Cancelar
               </button>
               <button
-                onClick={() => updateMutation.mutate({ ...action, ownerName: owner?.name ?? action.ownerName, ownerId: owner?.id ?? action.ownerId })}
+                onClick={() => updateMutation.mutate({ ...action, ownerName: owner?.name ?? action.ownerName, ownerId: owner?.id ?? action.ownerId ?? null })}
                 disabled={updateMutation.isPending}
                 className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm bg-purple-600 hover:bg-purple-700 text-white font-medium disabled:opacity-50 transition-colors"
               >
