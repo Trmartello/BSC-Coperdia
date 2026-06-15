@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 type Tab = 'edit' | 'comments' | 'attachments';
 
@@ -39,7 +40,22 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
   const [comment, setComment] = useState('');
   const [commentProgress, setCommentProgress] = useState(action.progress);
   const [uploading, setUploading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => actionPlansApi.deleteAction(action.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['action-plan', plan.id] });
+      qc.invalidateQueries({ queryKey: ['action-plans'] });
+      qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
+      qc.invalidateQueries({ queryKey: ['map'] });
+      toast.success('Ação excluída');
+      setConfirmDelete(false);
+      onClose();
+    },
+    onError: () => toast.error('Erro ao excluir ação'),
+  });
 
   const comments: PlanComment[] = (plan.comments ?? []).filter(Boolean);
   const attachments: PlanAttachment[] = (plan.attachments ?? []).filter(Boolean);
@@ -358,21 +374,40 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
 
         {/* ── Footer ── */}
         {tab === 'edit' && (
-          <div className="flex justify-between px-5 py-4 border-t border-white/5 flex-shrink-0">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-white/50 hover:text-white/80 border border-white/10 hover:border-white/20 transition-colors">
-              Cancelar
-            </button>
+          <div className="flex items-center justify-between px-5 py-4 border-t border-white/5 flex-shrink-0">
             <button
-              onClick={() => updateMutation.mutate(action)}
-              disabled={updateMutation.isPending}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm bg-purple-600 hover:bg-purple-700 text-white font-medium disabled:opacity-50 transition-colors"
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors"
             >
-              <span>💾</span>
-              {updateMutation.isPending ? 'Salvando...' : 'Salvar alterações'}
+              <Trash2 size={14} />
+              Excluir
             </button>
+            <div className="flex gap-2">
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-white/50 hover:text-white/80 border border-white/10 hover:border-white/20 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={() => updateMutation.mutate(action)}
+                disabled={updateMutation.isPending}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm bg-purple-600 hover:bg-purple-700 text-white font-medium disabled:opacity-50 transition-colors"
+              >
+                <span>💾</span>
+                {updateMutation.isPending ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {confirmDelete && (
+        <ConfirmDialog
+          message="Tem certeza que deseja excluir esta ação? Esta operação não poderá ser desfeita."
+          confirmLabel="Excluir"
+          loading={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate()}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 }
