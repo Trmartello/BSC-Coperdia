@@ -85,10 +85,9 @@ export function ImportDataModal({ onClose }: { onClose: () => void }) {
           <div className="flex gap-3 bg-purple-600/8 border border-purple-500/20 rounded-xl p-4">
             <Info size={16} className="text-purple-400 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-white/55 leading-relaxed space-y-1">
-              <p>Baixe o modelo Excel, preencha as abas desejadas e faça o upload.</p>
+              <p>Baixe o modelo Excel, preencha a aba <strong className="text-white/80">Lançamento</strong> e faça o upload.</p>
               <p className="text-white/35 text-xs">
-                <strong className="text-white/50">Realizados</strong> — valores de entrada (indicadores calculados são derivados automaticamente).
-                {' '}<strong className="text-white/50">Metas</strong> e <strong className="text-white/50">Estimativas</strong> — disponíveis para todos os indicadores.
+                Cada linha tem colunas para <strong className="text-white/50">Realizado</strong>, <strong className="text-white/50">Meta</strong> e <strong className="text-white/50">Estimativa</strong> — preencha só o que deseja carregar e deixe o restante em branco.
               </p>
             </div>
           </div>
@@ -97,7 +96,7 @@ export function ImportDataModal({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-3 gap-3 text-center">
             {[
               { n: '1', label: 'Baixar modelo', desc: 'Arquivo Excel com todos os indicadores pré-preenchidos' },
-              { n: '2', label: 'Preencher', desc: 'Informe o período e os valores nas abas desejadas' },
+              { n: '2', label: 'Preencher', desc: 'Na aba Lançamento, informe o período e os valores de Realizado, Meta e/ou Estimativa' },
               { n: '3', label: 'Importar', desc: 'Faça upload da planilha preenchida' },
             ].map((s) => (
               <div key={s.n} className="bg-white/3 border border-white/8 rounded-xl p-3">
