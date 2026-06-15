@@ -6,27 +6,31 @@ import { usePathname } from 'next/navigation';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/auth.store';
 import {
-  LayoutGrid,
   ClipboardList,
   Users,
-  Settings,
   ChevronRight,
+  Network,
+  LayoutDashboard,
 } from 'lucide-react';
 
 const NAV = [
   {
     section: 'Visão Geral',
-    items: [{ label: 'Mapas Indicadores', href: '/dashboard/maps', icon: LayoutGrid }],
+    items: [
+      { label: 'Dashboard', href: '/dashboard/executive', icon: LayoutDashboard },
+      { label: 'Mapa Estratégico', href: '/dashboard/maps', icon: Network },
+    ],
   },
   {
     section: 'Execução',
-    items: [{ label: 'Plano de ação', href: '/dashboard/action-plans', icon: ClipboardList }],
+    items: [
+      { label: 'Plano de Ação', href: '/dashboard/action-plans', icon: ClipboardList },
+    ],
   },
   {
     section: 'Administração',
     items: [
-      { label: 'Usuário', href: '/dashboard/users', icon: Users },
-      { label: 'Configuração', href: '/dashboard/settings', icon: Settings },
+      { label: 'Usuários', href: '/dashboard/users', icon: Users },
     ],
   },
 ];

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Trash2, Info, Maximize2, ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
+import { Trash2, Info, ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
 import { cn, formatValue } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
@@ -13,6 +13,7 @@ interface CardData {
   realized: number | null;
   goal: number | null;
   estimate: number | null; // previsto (se null, usa realized)
+  period?: string;         // período exibido (para salvar a estimativa no período correto)
   actionCount?: number;
   attachmentCount?: number;
   commentCount?: number;
@@ -20,7 +21,9 @@ interface CardData {
 
 interface Props {
   data: CardData;
+  showEstimate?: boolean; // controla a exibição da coluna "Estimativa"
   onDelete?: () => void;
+  onOpenInfo?: () => void;
   onOpenDetail?: () => void;
   onOpenActionPlan?: () => void;
   onUpdated?: () => void;
@@ -47,38 +50,40 @@ function deviationLabel(pct: number | null, direction: 'HIGHER_IS_BETTER' | 'LOW
   return { label: `${sign}${pct.toFixed(1)}% vs meta`, positive: isGood };
 }
 
-export function IndicatorCard({ data, onDelete, onOpenDetail, onOpenActionPlan, onUpdated }: Props) {
-  const { indicator, realized, goal, estimate, actionCount = 0, attachmentCount = 0, commentCount = 0 } = data;
-  const { activeScenario, activePeriod } = useScenarioStore();
+export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo, onOpenDetail, onOpenActionPlan, onUpdated }: Props) {
+  const { indicator, realized, goal, estimate, period, actionCount = 0, attachmentCount = 0, commentCount = 0 } = data;
+  const { activePeriod } = useScenarioStore();
 
   const [editing, setEditing] = useState(false);
   const [inputValue, setInputValue] = useState(String(estimate ?? ''));
   const [saving, setSaving] = useState(false);
 
-  const effective = effectiveEstimate(realized, estimate);
+  // Quando a estimativa está desabilitada nas configurações, o desvio é medido
+  // sobre o valor realizado (não há "previsto" a considerar).
+  const effective = showEstimate ? effectiveEstimate(realized, estimate) : realized;
   const devVsGoal = deviation(effective, goal);
   const devRealized = deviation(effective, realized);
 
-  const devGoalInfo = deviationLabel(devVsGoal, indicator.direction as any);
-  const devEstInfo = deviationLabel(devRealized, indicator.direction as any);
+  const devGoalInfo = deviationLabel(devVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
+  const devEstInfo = deviationLabel(devRealized, indicator.direction ?? 'HIGHER_IS_BETTER');
 
-  const canEdit = indicator.type === 'INPUT' && !!activeScenario;
+  // Estimativa de insumos é editável; calculados derivam da fórmula.
+  const canEdit = showEstimate && indicator.type === 'INPUT';
 
   async function handleSave() {
-    if (!activeScenario) return;
+    const value = parseFloat(inputValue);
+    if (Number.isNaN(value)) { toast.error('Informe um valor numérico'); return; }
     setSaving(true);
     try {
-      await indicatorsApi.updateForecast({
-        indicatorId: indicator.id,
-        scenarioId: activeScenario.id,
-        period: activePeriod,
-        value: parseFloat(inputValue),
+      await indicatorsApi.setEstimate(indicator.id, {
+        period: (period ?? activePeriod).slice(0, 10),
+        value,
       });
-      toast.success('Estimativa salva. Recalculando impactos...');
+      toast.success('Estimativa salva. Recalculando fórmula...');
       setEditing(false);
       onUpdated?.();
-    } catch {
-      toast.error('Erro ao salvar estimativa');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao salvar estimativa');
     } finally {
       setSaving(false);
     }
@@ -87,7 +92,7 @@ export function IndicatorCard({ data, onDelete, onOpenDetail, onOpenActionPlan, 
   return (
     <div className="card-dark w-[260px] flex flex-col gap-0 overflow-hidden">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between px-4 pt-3 pb-2">
+      <div className="flex items-start justify-between px-4 pt-2.5 pb-1.5">
         <div className="flex-1 min-w-0">
           <p className="text-white/80 text-sm font-semibold leading-tight truncate">
             {indicator.name}
@@ -97,59 +102,55 @@ export function IndicatorCard({ data, onDelete, onOpenDetail, onOpenActionPlan, 
           <span className="text-[10px] text-white/50 font-medium border border-white/15 rounded px-1.5 py-0.5">
             {unitLabel(indicator.unit)}
           </span>
-          <button onClick={onOpenDetail} className="text-white/30 hover:text-white/70 transition-colors">
+          <button onClick={(e) => { e.stopPropagation(); onOpenInfo?.(); }} className="nodrag text-white/30 hover:text-white/70 transition-colors" title="Informações">
             <Info size={13} />
           </button>
-          <button onClick={onOpenDetail} className="text-white/30 hover:text-white/70 transition-colors">
-            <Maximize2 size={13} />
-          </button>
-          <button onClick={onDelete} className="text-white/30 hover:text-red-400 transition-colors">
+          <button onClick={(e) => { e.stopPropagation(); onDelete?.(); }} className="nodrag text-white/30 hover:text-red-400 transition-colors" title="Remover">
             <Trash2 size={13} />
           </button>
         </div>
       </div>
 
       {/* ── Values grid ── */}
-      <div className="grid grid-cols-3 px-4 pb-1">
+      <div className={cn('grid px-4 pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
         <ValueCol label="Realizado" value={formatValue(realized, indicator.unit)} />
         <ValueCol label="Meta" value={formatValue(goal, indicator.unit)} bold />
-        <ValueCol
-          label="Estimativa"
-          value={formatValue(effective, indicator.unit)}
-          editable={canEdit}
-          onEdit={() => { setInputValue(String(estimate ?? realized ?? '')); setEditing(true); }}
-        />
+        {showEstimate && (
+          <ValueCol
+            label="Estimativa"
+            value={formatValue(effective, indicator.unit)}
+            editable={canEdit}
+            onEdit={() => { setInputValue(String(estimate ?? realized ?? '')); setEditing(true); }}
+          />
+        )}
       </div>
 
       {/* Inline edit input */}
       {editing && (
-        <div className="px-4 pb-2 flex gap-1">
+        <div className="nodrag px-4 pb-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
           <input
             type="number"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             autoFocus
-            className="flex-1 bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-1 focus:outline-none focus:border-purple-500"
+            className="nodrag flex-1 bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-1 focus:outline-none focus:border-purple-500"
           />
-          <button onClick={handleSave} disabled={saving}
-            className="text-xs bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700 disabled:opacity-50">
+          <button onClick={(e) => { e.stopPropagation(); handleSave(); }} disabled={saving}
+            className="nodrag text-xs bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700 disabled:opacity-50">
             {saving ? '…' : 'OK'}
           </button>
-          <button onClick={() => setEditing(false)} className="text-xs text-white/40 hover:text-white/70 px-1">✕</button>
+          <button onClick={(e) => { e.stopPropagation(); setEditing(false); }} className="nodrag text-xs text-white/40 hover:text-white/70 px-1">✕</button>
         </div>
       )}
 
-      {/* ── Deviation rows ── */}
-      <div className="px-4 pb-2 space-y-0.5">
+      {/* ── Deviation rows (lado a lado p/ reduzir altura) ── */}
+      <div className="px-4 pb-2 flex items-start justify-between gap-2">
         <DeviationRow {...devGoalInfo} />
-        <DeviationRow {...devEstInfo} />
+        {showEstimate && <DeviationRow {...devEstInfo} />}
       </div>
 
-      {/* ── Divider ── */}
-      <div className="border-t border-white/5 mx-4" />
-
       {/* ── Direction indicator ── */}
-      <div className="px-4 py-2 flex items-center gap-1.5">
+      <div className="px-4 pb-1.5 flex items-center gap-1.5">
         <div className={cn(
           'w-3 h-3 rounded-sm flex-shrink-0',
           indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-green-500',
@@ -160,7 +161,7 @@ export function IndicatorCard({ data, onDelete, onOpenDetail, onOpenActionPlan, 
       </div>
 
       {/* ── Footer: actions / attachments / comments ── */}
-      <div className="border-t border-white/5 px-4 py-2 flex items-center gap-3">
+      <div className="border-t border-white/5 px-4 py-1.5 flex items-center gap-3">
         <FooterAction icon={<ClipboardList size={11} />} count={actionCount} label="ações" onClick={onOpenActionPlan} />
         <FooterAction icon={<Paperclip size={11} />} count={attachmentCount} label="Anexos" />
         <FooterAction icon={<MessageSquare size={11} />} count={commentCount} label="Comentários" />
@@ -178,9 +179,9 @@ function ValueCol({ label, value, bold, editable, onEdit }: {
     <div className="flex flex-col gap-0.5">
       <p className="text-label">{label}</p>
       <button
-        onClick={editable ? onEdit : undefined}
+        onClick={editable ? (e) => { e.stopPropagation(); onEdit?.(); } : undefined}
         className={cn(
-          'text-left text-base font-bold leading-tight',
+          'nodrag text-left text-base font-bold leading-tight',
           bold ? 'text-white' : 'text-white/80',
           editable ? 'hover:text-purple-300 cursor-pointer' : 'cursor-default',
         )}
@@ -204,8 +205,8 @@ function FooterAction({ icon, count, label, onClick }: {
 }) {
   return (
     <button
-      onClick={onClick}
-      className="flex items-center gap-1 text-white/40 hover:text-white/70 transition-colors"
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      className="nodrag flex items-center gap-1 text-white/40 hover:text-white/70 transition-colors"
     >
       {icon}
       <span className="text-[10px]">{count} {label}</span>

@@ -11,12 +11,16 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   @Get('executive')
-  executive(@Query('period') period: string, @Query('scenarioId') scenarioId?: string) {
-    return this.service.getExecutiveDashboard(new Date(period), scenarioId);
+  executive(@Query('period') period?: string, @Query('scenarioId') scenarioId?: string) {
+    const parsed = period ? new Date(period) : undefined;
+    const validPeriod = parsed && !isNaN(parsed.getTime()) ? parsed : undefined;
+    return this.service.getExecutiveDashboard(validPeriod, scenarioId);
   }
 
   @Get('audit-log')
   auditLog(@Query('limit') limit?: string) {
-    return this.service.getAuditLog(limit ? parseInt(limit) : 50);
+    const parsed = limit ? parseInt(limit, 10) : 50;
+    const safeLimit = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 200) : 50;
+    return this.service.getAuditLog(safeLimit);
   }
 }
