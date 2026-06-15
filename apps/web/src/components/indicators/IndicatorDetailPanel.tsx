@@ -236,73 +236,175 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
   );
 }
 
-// ─── Realized Value Row (edição inline) ────────────────────────────────────────
+// ─── Linha de histórico unificado (Realizado + Meta + Estimativa) ─────────────
 
-function RealizedRow({ rv, unit, indicatorId, onSaved }: {
-  rv: any; unit: any; indicatorId: string; onSaved: () => void;
+function PeriodRow({
+  period, realized, goal, estimate, unit, indicatorId, isCalculated, onSaved,
+}: {
+  period: string; // ISO date string
+  realized?: any; goal?: any; estimate?: any;
+  unit: string; indicatorId: string; isCalculated: boolean; onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(String(parseFloat(rv.value)));
+  const [vals, setVals] = useState({
+    realizado: realized ? String(parseFloat(realized.value)) : '',
+    meta: goal ? String(parseFloat(goal.value)) : '',
+    estimativa: estimate ? String(parseFloat(estimate?.value ?? '')) : '',
+  });
   const [saving, setSaving] = useState(false);
-  const period = new Date(rv.period).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+  const periodDate = new Date(period);
+  const periodLabel = periodDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' });
 
   async function save() {
     setSaving(true);
     try {
-      await indicatorsApi.setRealized(indicatorId, { period: rv.period.slice(0, 10), value: parseFloat(val) });
-      toast.success('Valor corrigido');
+      const periodKey = period.slice(0, 10);
+      const promises: Promise<any>[] = [];
+
+      // Realizado — só para INPUT
+      if (!isCalculated && vals.realizado.trim() !== '') {
+        const v = parseFloat(vals.realizado.replace(',', '.'));
+        if (!Number.isNaN(v)) promises.push(indicatorsApi.setRealized(indicatorId, { period: periodKey, value: v }));
+      }
+
+      // Meta — sempre disponível
+      if (vals.meta.trim() !== '') {
+        const v = parseFloat(vals.meta.replace(',', '.'));
+        if (!Number.isNaN(v)) promises.push(indicatorsApi.setGoal(indicatorId, { period: periodKey, value: v }));
+      }
+
+      // Estimativa — se vazia, usa Realizado (regra: Estimativa = Realizado)
+      let estVal = vals.estimativa.trim() !== '' ? parseFloat(vals.estimativa.replace(',', '.')) : null;
+      if (estVal === null && !isCalculated && vals.realizado.trim() !== '') {
+        estVal = parseFloat(vals.realizado.replace(',', '.'));
+      }
+      if (estVal !== null && !Number.isNaN(estVal)) {
+        promises.push(indicatorsApi.setEstimate(indicatorId, { period: periodKey, value: estVal }));
+      }
+
+      await Promise.all(promises);
+      toast.success('Valores salvos. Recalculando...');
       setEditing(false);
       onSaved();
-    } catch {
-      toast.error('Erro ao salvar');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao salvar');
     } finally {
       setSaving(false);
     }
   }
 
+  const fv = (v: any) => v != null ? formatValue(parseFloat(v.value), unit as any) : '—';
+
+  if (editing) {
+    return (
+      <div className="py-3 border-b border-white/5 space-y-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-medium text-white/60">{periodLabel}</span>
+          <div className="flex gap-1.5">
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 transition-colors">
+              <Check size={11} />{saving ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button onClick={() => setEditing(false)}
+              className="text-[10px] px-2.5 py-1 rounded-lg border border-white/10 text-white/40 hover:bg-white/5 transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { key: 'realizado', label: 'Realizado', disabled: isCalculated, hint: isCalculated ? 'Calculado' : undefined },
+            { key: 'meta', label: 'Meta', disabled: false },
+            { key: 'estimativa', label: 'Estimativa', disabled: false, hint: 'Vazio = usa Realizado' },
+          ].map(({ key, label, disabled, hint }) => (
+            <div key={key}>
+              <label className="text-[9px] text-white/30 uppercase tracking-wider block mb-0.5">{label}</label>
+              {hint && <p className="text-[8px] text-white/20 mb-0.5">{hint}</p>}
+              <input
+                type="number"
+                value={vals[key as keyof typeof vals]}
+                onChange={(e) => setVals((v) => ({ ...v, [key]: e.target.value }))}
+                disabled={disabled}
+                placeholder={disabled ? '—' : '0'}
+                className="w-full bg-white/5 border border-white/15 focus:border-purple-500 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-      <span className="text-[11px] text-white/40 w-16 flex-shrink-0">{period}</span>
-      {editing ? (
-        <div className="flex items-center gap-1 flex-1">
-          <input
-            type="number" value={val} onChange={(e) => setVal(e.target.value)} autoFocus
-            className="flex-1 bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-0.5 focus:outline-none focus:border-purple-500 min-w-0"
-          />
-          <button onClick={save} disabled={saving} className="text-emerald-400 hover:text-emerald-300 p-1 disabled:opacity-50"><Check size={12} /></button>
-          <button onClick={() => { setEditing(false); setVal(String(parseFloat(rv.value))); }} className="text-white/30 hover:text-white/60 p-1"><X size={12} /></button>
+    <div className="group flex items-center gap-3 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/[0.02] rounded transition-colors">
+      <span className="text-[11px] text-white/40 w-14 flex-shrink-0">{periodLabel}</span>
+      <div className="flex-1 grid grid-cols-3 gap-2 text-right">
+        <div>
+          <p className="text-[8px] text-white/25 uppercase tracking-wider">Realizado</p>
+          <p className="text-xs font-medium text-white/80">{fv(realized)}</p>
         </div>
-      ) : (
-        <div className="flex items-center gap-2 flex-1 justify-end">
-          <span className="text-xs font-medium text-white/80">{formatValue(parseFloat(rv.value), unit)}</span>
-          <button onClick={() => setEditing(true)} className="text-white/20 hover:text-white/60 p-1 transition-colors"><Pencil size={11} /></button>
+        <div>
+          <p className="text-[8px] text-white/25 uppercase tracking-wider">Meta</p>
+          <p className="text-xs font-medium text-white/60">{fv(goal)}</p>
         </div>
-      )}
+        <div>
+          <p className="text-[8px] text-white/25 uppercase tracking-wider">Estimativa</p>
+          <p className="text-xs font-medium text-white/60">{fv(estimate)}</p>
+        </div>
+      </div>
+      <button
+        onClick={() => setEditing(true)}
+        className="opacity-0 group-hover:opacity-100 text-white/25 hover:text-purple-400 p-1 transition-all flex-shrink-0"
+        title="Editar período"
+      >
+        <Pencil size={12} />
+      </button>
     </div>
   );
 }
 
-// ─── Novo lançamento manual (apenas indicadores de entrada) ─────────────────────
+// ─── Novo lançamento manual ──────────────────────────────────────────────────
 
-function NewRealizedForm({ indicatorId, defaultPeriod, onSaved }: {
-  indicatorId: string; defaultPeriod: string; onSaved: () => void;
+function NewEntryForm({ indicatorId, defaultPeriod, isCalculated, onSaved }: {
+  indicatorId: string; defaultPeriod: string; isCalculated: boolean; onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(defaultPeriod.slice(0, 7));
-  const [value, setValue] = useState('');
+  const [vals, setVals] = useState({ realizado: '', meta: '', estimativa: '' });
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    const v = parseFloat(value.replace(',', '.'));
-    if (Number.isNaN(v)) { toast.error('Informe um valor numérico'); return; }
+    const hasAny = Object.values(vals).some((v) => v.trim() !== '');
+    if (!hasAny) { toast.error('Informe pelo menos um valor'); return; }
     setSaving(true);
     try {
-      await indicatorsApi.setRealized(indicatorId, { period: `${month}-01`, value: v });
-      toast.success('Lançamento salvo. Recalculando fórmulas...');
-      setOpen(false); setValue('');
+      const periodKey = `${month}-01`;
+      const promises: Promise<any>[] = [];
+
+      if (!isCalculated && vals.realizado.trim() !== '') {
+        const v = parseFloat(vals.realizado.replace(',', '.'));
+        if (!Number.isNaN(v)) promises.push(indicatorsApi.setRealized(indicatorId, { period: periodKey, value: v }));
+      }
+      if (vals.meta.trim() !== '') {
+        const v = parseFloat(vals.meta.replace(',', '.'));
+        if (!Number.isNaN(v)) promises.push(indicatorsApi.setGoal(indicatorId, { period: periodKey, value: v }));
+      }
+      // Estimativa: vazia → usa Realizado
+      let estVal = vals.estimativa.trim() !== '' ? parseFloat(vals.estimativa.replace(',', '.')) : null;
+      if (estVal === null && !isCalculated && vals.realizado.trim() !== '') {
+        estVal = parseFloat(vals.realizado.replace(',', '.'));
+      }
+      if (estVal !== null && !Number.isNaN(estVal)) {
+        promises.push(indicatorsApi.setEstimate(indicatorId, { period: periodKey, value: estVal }));
+      }
+
+      await Promise.all(promises);
+      toast.success('Lançamento salvo. Recalculando...');
+      setOpen(false);
+      setVals({ realizado: '', meta: '', estimativa: '' });
       onSaved();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Erro ao salvar lançamento');
+      toast.error(e?.response?.data?.message || 'Erro ao salvar');
     } finally {
       setSaving(false);
     }
@@ -320,22 +422,44 @@ function NewRealizedForm({ indicatorId, defaultPeriod, onSaved }: {
   }
 
   return (
-    <div className="mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-2">
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label className="text-[9px] text-white/30 uppercase tracking-wider">Período</label>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
-            className="w-full bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-1.5 mt-0.5 focus:outline-none focus:border-purple-500" />
-        </div>
-        <div className="flex-1">
-          <label className="text-[9px] text-white/30 uppercase tracking-wider">Valor</label>
-          <input type="number" value={value} onChange={(e) => setValue(e.target.value)} autoFocus placeholder="0"
-            className="w-full bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-1.5 mt-0.5 focus:outline-none focus:border-purple-500" />
-        </div>
+    <div className="mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
+      <div>
+        <label className="text-[9px] text-white/30 uppercase tracking-wider">Período</label>
+        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
+          className="w-full bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-1.5 mt-0.5 focus:outline-none focus:border-purple-500" />
       </div>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { key: 'realizado', label: 'Realizado', disabled: isCalculated, hint: isCalculated ? 'Calculado automaticamente' : undefined },
+          { key: 'meta', label: 'Meta' },
+          { key: 'estimativa', label: 'Estimativa', hint: 'Vazio = usa Realizado' },
+        ].map(({ key, label, disabled, hint }) => (
+          <div key={key}>
+            <label className="text-[9px] text-white/30 uppercase tracking-wider block mb-0.5">{label}</label>
+            {hint && <p className="text-[8px] text-white/20 mb-0.5">{hint}</p>}
+            <input
+              type="number"
+              value={vals[key as keyof typeof vals]}
+              onChange={(e) => setVals((v) => ({ ...v, [key]: e.target.value }))}
+              disabled={!!disabled}
+              placeholder={disabled ? '—' : '0'}
+              className="w-full bg-white/5 border border-white/15 focus:border-purple-500 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-[9px] text-white/25">
+        Campos em branco são ignorados · Se Estimativa vazia, assume o valor do Realizado
+      </p>
       <div className="flex gap-2">
-        <button onClick={() => { setOpen(false); setValue(''); }} className="flex-1 py-1.5 rounded-lg border border-white/10 text-xs text-white/40 hover:bg-white/5">Cancelar</button>
-        <button onClick={save} disabled={saving} className="flex-1 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs text-white disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar'}</button>
+        <button onClick={() => { setOpen(false); setVals({ realizado: '', meta: '', estimativa: '' }); }}
+          className="flex-1 py-1.5 rounded-lg border border-white/10 text-xs text-white/40 hover:bg-white/5 transition-colors">
+          Cancelar
+        </button>
+        <button onClick={save} disabled={saving}
+          className="flex-1 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs text-white disabled:opacity-50 transition-colors">
+          {saving ? 'Salvando...' : 'Salvar'}
+        </button>
       </div>
     </div>
   );
@@ -469,6 +593,16 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
 
   const realizedHistory = [...(ind?.realizedValues ?? [])].sort(
     (a: any, b: any) => new Date(b.period).getTime() - new Date(a.period).getTime());
+
+  // Histórico unificado: merge de realizados + metas + estimativas por período
+  const goalsByPeriod = new Map((ind?.goals ?? []).map((g: any) => [g.period.slice(0, 10), g]));
+  const estimatesByPeriod = new Map((ind?.forecastValues ?? []).map((f: any) => [f.period.slice(0, 10), f]));
+  const allPeriods = Array.from(new Set([
+    ...(ind?.realizedValues ?? []).map((r: any) => r.period.slice(0, 10)),
+    ...(ind?.goals ?? []).map((g: any) => g.period.slice(0, 10)),
+    ...(ind?.forecastValues ?? []).map((f: any) => f.period.slice(0, 10)),
+  ])).sort((a, b) => b.localeCompare(a));
+  const realizedByPeriod = new Map(realizedHistory.map((r: any) => [r.period.slice(0, 10), r]));
 
   const dirLabel = direction === 'LOWER_IS_BETTER' ? 'Quanto menor, melhor' : 'Quanto maior, melhor';
 
@@ -644,23 +778,50 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
 
           {tab === 'realized' && (
             <div className="px-5 py-4">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Lançamentos Realizados</p>
-                <span className="text-[10px] text-white/30">{realizedHistory.length} registros</span>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Lançamentos</p>
+                <span className="text-[10px] text-white/30">{allPeriods.length} registros</span>
               </div>
-              {ind?.type === 'CALCULATED' ? (
+
+              {ind?.type === 'CALCULATED' && (
                 <div className="mb-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300">
-                  Indicador calculado. Valores gerados automaticamente pela fórmula.
+                  Indicador calculado — Realizado gerado automaticamente pela fórmula. Meta e Estimativa podem ser informadas manualmente.
                 </div>
-              ) : (
-                <NewRealizedForm indicatorId={indicatorId} defaultPeriod={period} onSaved={() => refetch()} />
               )}
-              {realizedHistory.length === 0 ? (
+
+              <NewEntryForm
+                indicatorId={indicatorId}
+                defaultPeriod={period}
+                isCalculated={ind?.type === 'CALCULATED'}
+                onSaved={() => refetch()}
+              />
+
+              {/* Cabeçalho das colunas */}
+              {allPeriods.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 text-right mb-1 px-1 pr-8">
+                  <div />
+                  {['Realizado', 'Meta', 'Estimativa'].map((h) => (
+                    <p key={h} className="text-[8px] text-white/25 uppercase tracking-wider col-span-1">{h}</p>
+                  ))}
+                </div>
+              )}
+
+              {allPeriods.length === 0 ? (
                 <p className="text-xs text-white/20 text-center py-8">Nenhum valor lançado.</p>
               ) : (
                 <div>
-                  {realizedHistory.map((rv: any) => (
-                    <RealizedRow key={rv.id} rv={rv} unit={unit} indicatorId={indicatorId} onSaved={() => refetch()} />
+                  {allPeriods.map((p) => (
+                    <PeriodRow
+                      key={p}
+                      period={p}
+                      realized={realizedByPeriod.get(p)}
+                      goal={goalsByPeriod.get(p)}
+                      estimate={estimatesByPeriod.get(p)}
+                      unit={unit}
+                      indicatorId={indicatorId}
+                      isCalculated={ind?.type === 'CALCULATED'}
+                      onSaved={() => refetch()}
+                    />
                   ))}
                 </div>
               )}
