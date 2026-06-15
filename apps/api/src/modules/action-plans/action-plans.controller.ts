@@ -55,6 +55,12 @@ export class ActionPlansController {
     return this.service.create(dto, req.user.id);
   }
 
+  // Plano vinculado a indicador (problema implícito): get-or-create canônico
+  @Post('indicator/:indicatorId/ensure')
+  ensureForIndicator(@Param('indicatorId') indicatorId: string, @Request() req: any) {
+    return this.service.ensureForIndicator(indicatorId, req.user.id);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdatePlanDto, @Request() req: any) {
     return this.service.update(id, dto, req.user.id);

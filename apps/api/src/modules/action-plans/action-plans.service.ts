@@ -131,6 +131,30 @@ export class ActionPlansService {
     return plan;
   }
 
+  // Plano vinculado a indicador: o "problema" é implícito (o próprio indicador).
+  // Retorna o plano canônico (mais antigo) do indicador, criando um se não existir.
+  async ensureForIndicator(indicatorId: string, userId: string) {
+    const existing = await this.prisma.actionPlan.findFirst({
+      where: { indicatorId },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (existing) return existing;
+
+    const indicator = await this.prisma.indicator.findUnique({ where: { id: indicatorId } });
+    if (!indicator) throw new NotFoundException(`Indicator ${indicatorId} not found`);
+
+    const plan = await this.prisma.actionPlan.create({
+      data: {
+        indicatorId,
+        problem: indicator.name, // problema implícito = o próprio indicador
+        status: 'OPEN',
+        userId,
+      },
+    });
+    await this.audit(plan.id, userId, 'CREATE', undefined, undefined, plan);
+    return plan;
+  }
+
   async update(id: string, dto: UpdatePlanDto, userId: string) {
     const before = await this.prisma.actionPlan.findUnique({ where: { id } });
     if (!before) throw new NotFoundException();

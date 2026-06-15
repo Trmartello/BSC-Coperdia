@@ -83,6 +83,8 @@ export const actionPlansApi = {
   dashboard: () => api.get('/action-plans/dashboard'),
   create: (data: { problem: string; description?: string; status?: string; indicatorId?: string }) =>
     api.post('/action-plans', data),
+  ensureForIndicator: (indicatorId: string) =>
+    api.post(`/action-plans/indicator/${indicatorId}/ensure`),
   update: (id: string, data: any) => api.patch(`/action-plans/${id}`, data),
   delete: (id: string) => api.delete(`/action-plans/${id}`),
 

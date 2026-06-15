@@ -64,7 +64,12 @@ export class MapsService {
                 forecastValues: { where: { scenarioId: null, ...upto }, orderBy: { period: 'desc' }, take: 1 },
                 goals: { where: upto, orderBy: { period: 'desc' }, take: 1 },
                 // Contadores para o rodapé do card (ações/anexos/comentários)
-                actionPlans: { select: { id: true, _count: { select: { comments: true, attachments: true } } } },
+                actionPlans: {
+                  select: {
+                    _count: { select: { comments: true, attachments: true } },
+                    initiatives: { select: { _count: { select: { actions: true } } } },
+                  },
+                },
                 parents: { include: { parent: { select: { id: true, code: true, name: true } } } },
                 children: { include: { child: { select: { id: true, code: true, name: true } } } },
               },

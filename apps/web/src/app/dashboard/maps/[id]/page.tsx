@@ -139,9 +139,12 @@ function buildNodesAndEdges(
     const goal = ind.goals?.[0]?.value ? parseFloat(ind.goals[0].value) : null;
     const estimate = ind.forecastValues?.[0]?.value ? parseFloat(ind.forecastValues[0].value) : null;
 
-    // Contadores do rodapé (ações / anexos / comentários)
+    // Contadores do rodapé (ações = itens de ação; anexos; comentários)
     const plans: any[] = ind.actionPlans ?? [];
-    const actionCount = plans.length;
+    const actionCount = plans.reduce(
+      (s, p) => s + (p.initiatives?.reduce((t: number, i: any) => t + (i._count?.actions ?? 0), 0) ?? 0),
+      0,
+    );
     const attachmentCount = plans.reduce((s, p) => s + (p._count?.attachments ?? 0), 0);
     const commentCount = plans.reduce((s, p) => s + (p._count?.comments ?? 0), 0);
 

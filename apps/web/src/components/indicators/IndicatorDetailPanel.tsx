@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  X, TrendingUp, TrendingDown, ClipboardList,
-  Plus, ChevronRight, ChevronLeft, Pencil, Check,
+  X, TrendingUp, TrendingDown,
+  Plus, Pencil, Check,
 } from 'lucide-react';
 import { indicatorsApi, actionPlansApi, settingsApi } from '../../lib/api';
 import { ActionPlanDetail } from '../action-plans/ActionPlanDetail';
@@ -355,9 +355,10 @@ interface Props {
 export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('overview');
-  const [showNewPlan, setShowNewPlan] = useState(false);
-  const [newProblem, setNewProblem] = useState('');
-  const [openPlanId, setOpenPlanId] = useState<string | null>(null);
+  // Plano vinculado ao indicador: o problema é implícito (o próprio indicador),
+  // então o fluxo começa direto em Iniciativas → Ações.
+  const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
+  const [autoNewInitiative, setAutoNewInitiative] = useState(false);
 
   const { data: indicator, isLoading, refetch } = useQuery({
     queryKey: ['indicator-detail', indicatorId, period],
@@ -375,16 +376,22 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
     queryFn: () => actionPlansApi.list({ indicatorId }).then((r) => r.data),
   });
 
-  const createPlanMutation = useMutation({
-    mutationFn: () => actionPlansApi.create({ problem: newProblem, indicatorId }),
-    onSuccess: (res) => {
+  // Plano canônico do indicador (mais antigo) ou o recém-criado
+  const canonicalPlanId: string | null = createdPlanId
+    ?? ([...(plans as any[])].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )[0]?.id ?? null);
+
+  // Cria o plano implícito (problema = indicador) e já abre "Nova Iniciativa"
+  const ensurePlanMutation = useMutation({
+    mutationFn: () => actionPlansApi.ensureForIndicator(indicatorId).then((r) => r.data),
+    onSuccess: (plan: any) => {
+      setCreatedPlanId(plan.id);
+      setAutoNewInitiative(true);
       qc.invalidateQueries({ queryKey: ['action-plans', { indicatorId }] });
       qc.invalidateQueries({ queryKey: ['action-plans'] });
-      toast.success('Plano de ação criado');
-      setShowNewPlan(false);
-      setNewProblem('');
-      setOpenPlanId(res.data.id);
     },
+    onError: () => toast.error('Erro ao iniciar plano de ação'),
   });
 
   const ind = indicator as any;
@@ -471,20 +478,6 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
         className="w-[50vw] min-w-[460px] max-w-[800px] h-full bg-[#161b27] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Guided action plan overlay */}
-        {openPlanId && (
-          <div className="absolute inset-0 z-10 bg-[#161b27] flex flex-col overflow-hidden">
-            <div className="px-4 pt-4 pb-3 border-b border-white/5 flex items-center gap-2 flex-shrink-0">
-              <button onClick={() => setOpenPlanId(null)} className="text-white/40 hover:text-white/70 transition-colors flex items-center gap-1 text-xs">
-                <ChevronLeft size={14} /> Voltar
-              </button>
-              <span className="text-xs text-white/30">Plano de Ação</span>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <ActionPlanDetail planId={openPlanId} asPanel />
-            </div>
-          </div>
-        )}
         {/* Header */}
         <div className="px-5 pt-5 pb-4 border-b border-white/5">
           <div className="flex items-start justify-between">
@@ -618,53 +611,32 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                 </div>
               </div>
 
-              {/* Planos de ação */}
+              {/* Plano de Ação — vinculado ao indicador: problema implícito.
+                  Fluxo: Indicador → Iniciativas → Ações (sem campo "Problema"). */}
               <div className="px-5 py-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Plano de Ação</p>
-                  <button onClick={() => setShowNewPlan(true)} className="flex items-center gap-1 text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg transition-colors">
-                    <Plus size={11} /> Nova Ação
-                  </button>
+                  {!canonicalPlanId && (
+                    <button
+                      onClick={() => ensurePlanMutation.mutate()}
+                      disabled={ensurePlanMutation.isPending}
+                      className="flex items-center gap-1 text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <Plus size={11} /> Nova Iniciativa
+                    </button>
+                  )}
                 </div>
 
-                {showNewPlan && (
-                  <div className="mb-3 space-y-2">
-                    <textarea value={newProblem} onChange={(e) => setNewProblem(e.target.value)}
-                      placeholder="Descreva o problema a resolver..." rows={2} className="input-dark resize-none text-xs" />
-                    <div className="flex gap-2">
-                      <button onClick={() => setShowNewPlan(false)} className="flex-1 py-1.5 rounded-xl border border-white/10 text-xs text-white/40 hover:bg-white/5">Cancelar</button>
-                      <button onClick={() => createPlanMutation.mutate()} disabled={!newProblem.trim() || createPlanMutation.isPending}
-                        className="flex-1 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs text-white disabled:opacity-50">Criar plano</button>
-                    </div>
-                  </div>
-                )}
-
-                {(plans as any[]).length === 0 && !showNewPlan ? (
-                  <p className="text-xs text-white/20 text-center py-4">Nenhum plano vinculado.</p>
+                {canonicalPlanId ? (
+                  <ActionPlanDetail
+                    planId={canonicalPlanId}
+                    embedded
+                    autoNewInitiative={autoNewInitiative}
+                  />
                 ) : (
-                  <div className="space-y-2">
-                    {(plans as any[]).map((plan: any) => {
-                      const totalActions = plan.initiatives?.reduce((acc: number, ini: any) => acc + (ini.actions?.length ?? 0), 0) ?? 0;
-                      const doneActions = plan.initiatives?.reduce((acc: number, ini: any) => acc + (ini.actions?.filter((a: any) => a.status === 'DONE').length ?? 0), 0) ?? 0;
-                      return (
-                        <div key={plan.id} className="bg-white/[0.03] rounded-xl p-3 hover:bg-white/[0.05] transition-colors cursor-pointer" onClick={() => setOpenPlanId(plan.id)}>
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-xs text-white/70 leading-snug flex-1">{plan.problem}</p>
-                            <ChevronRight size={12} className="text-white/20 flex-shrink-0 mt-0.5" />
-                          </div>
-                          <div className="flex items-center gap-3 mt-2">
-                            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full border',
-                              plan.status === 'DONE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : plan.status === 'IN_PROGRESS' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                : 'bg-white/5 text-white/30 border-white/10')}>
-                              {plan.status === 'DONE' ? 'Concluído' : plan.status === 'IN_PROGRESS' ? 'Em andamento' : 'Aberto'}
-                            </span>
-                            {totalActions > 0 && <span className="text-[10px] text-white/30">{doneActions}/{totalActions} ações</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <p className="text-xs text-white/20 text-center py-4">
+                    Nenhuma iniciativa ainda. Clique em <span className="text-white/40">Nova Iniciativa</span> para começar.
+                  </p>
                 )}
               </div>
             </>

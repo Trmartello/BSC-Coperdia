@@ -26,9 +26,11 @@ interface Props {
   planId: string;
   onClose?: () => void;
   asPanel?: boolean; // true = painel lateral, false = página cheia
+  embedded?: boolean; // true = sem cabeçalho do problema, fluindo no container pai (uso dentro de indicador)
+  autoNewInitiative?: boolean; // abre o modal de nova iniciativa ao montar
 }
 
-export function ActionPlanDetail({ planId, onClose, asPanel }: Props) {
+export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewInitiative }: Props) {
   const [expandedInits, setExpandedInits] = useState<Set<string>>(new Set());
   const [showNewInit, setShowNewInit] = useState(false);
   const [newActionFor, setNewActionFor] = useState<string | null>(null);
@@ -38,6 +40,11 @@ export function ActionPlanDetail({ planId, onClose, asPanel }: Props) {
     queryKey: ['action-plan', planId],
     queryFn: () => actionPlansApi.get(planId).then((r) => r.data),
   });
+
+  // Abre automaticamente "Nova Iniciativa" quando solicitado (ex.: plano recém-criado)
+  React.useEffect(() => {
+    if (autoNewInitiative) setShowNewInit(true);
+  }, [autoNewInitiative]);
 
   function toggleInit(id: string) {
     setExpandedInits((s) => {
@@ -71,43 +78,45 @@ export function ActionPlanDetail({ planId, onClose, asPanel }: Props) {
 
   return (
     <>
-      <div className={cn('flex flex-col', asPanel ? 'h-full' : 'min-h-screen')}>
-        {/* ── Plan Header ── */}
-        <div className={cn('px-6 pt-5 pb-4', asPanel && 'border-b border-white/5')}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-white font-semibold text-base leading-snug">{plan.problem}</h2>
-              {plan.description && (
-                <p className="text-sm text-white/40 mt-0.5">{plan.description}</p>
+      <div className={cn('flex flex-col', embedded ? '' : asPanel ? 'h-full' : 'min-h-screen')}>
+        {/* ── Plan Header (oculto no modo embutido — problema implícito do indicador) ── */}
+        {!embedded && (
+          <div className={cn('px-6 pt-5 pb-4', asPanel && 'border-b border-white/5')}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-white font-semibold text-base leading-snug">{plan.problem}</h2>
+                {plan.description && (
+                  <p className="text-sm text-white/40 mt-0.5">{plan.description}</p>
+                )}
+              </div>
+              {onClose && (
+                <button onClick={onClose} className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0">
+                  <X size={18} />
+                </button>
               )}
             </div>
-            {onClose && (
-              <button onClick={onClose} className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0">
-                <X size={18} />
-              </button>
-            )}
-          </div>
 
-          <div className="flex items-center gap-3 mt-3">
-            <span className={cn('text-xs px-3 py-1 rounded-full border font-medium flex items-center gap-1.5', statusStyle)}>
-              <span className="w-1.5 h-1.5 rounded-full bg-current" />
-              {PLAN_STATUS_LABEL[plan.status]}
-            </span>
-            {plan.indicator && (
-              <span className="text-xs text-white/30 font-mono">
-                {plan.indicator.code} · {plan.indicator.name}
+            <div className="flex items-center gap-3 mt-3">
+              <span className={cn('text-xs px-3 py-1 rounded-full border font-medium flex items-center gap-1.5', statusStyle)}>
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                {PLAN_STATUS_LABEL[plan.status]}
               </span>
-            )}
-            {allActions.length > 0 && (
-              <span className="text-xs text-white/30 ml-auto">
-                {doneCount}/{allActions.length} concluídas
-              </span>
-            )}
+              {plan.indicator && (
+                <span className="text-xs text-white/30 font-mono">
+                  {plan.indicator.code} · {plan.indicator.name}
+                </span>
+              )}
+              {allActions.length > 0 && (
+                <span className="text-xs text-white/30 ml-auto">
+                  {doneCount}/{allActions.length} concluídas
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── Initiatives ── */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        <div className={cn('space-y-3', embedded ? '' : 'flex-1 overflow-y-auto px-6 py-4')}>
           {(plan.initiatives ?? []).map((initiative) => {
             const isOpen = expandedInits.has(initiative.id);
             const actions = initiative.actions ?? [];
