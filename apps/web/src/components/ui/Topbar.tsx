@@ -117,7 +117,16 @@ export function Topbar() {
           <>
             <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
             <div className="absolute right-0 top-10 z-30 w-60 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-              <p className="px-3 py-2 text-[10px] uppercase tracking-widest text-white/30 border-b border-white/5">Cenários</p>
+              <div className="px-3 py-2 flex items-center justify-between border-b border-white/5">
+                <p className="text-[10px] uppercase tracking-widest text-white/30">Cenários</p>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setOpen(false); setShowNewScenario(true); }}
+                  className="flex items-center gap-1 text-[10px] text-purple-300 hover:text-purple-200 bg-purple-600/20 border border-purple-500/30 px-2 py-0.5 rounded-lg transition-colors"
+                >
+                  <Plus size={11} />
+                  Novo Cenário
+                </button>
+              </div>
               <div className="max-h-64 overflow-y-auto py-1">
                 {scenarios.length === 0 && (
                   <p className="px-3 py-3 text-xs text-white/30">Nenhum cenário disponível.</p>
@@ -140,16 +149,6 @@ export function Topbar() {
           </>
         )}
       </div>
-
-      {/* + Novo Cenário */}
-      <button
-        onClick={() => setShowNewScenario(true)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs text-white font-medium transition-colors"
-        title="Criar novo cenário"
-      >
-        <Plus size={13} />
-        Novo Cenário
-      </button>
 
       {showNewScenario && (
         <NewScenarioModal
