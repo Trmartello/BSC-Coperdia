@@ -112,8 +112,7 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
       </div>
 
       {/* ── Values grid ── */}
-      <div className={cn('grid pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2',
-        canEdit ? 'pl-4 pr-1' : 'px-4')}>
+      <div className={cn('grid px-4 pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
         <ValueCol label="Realizado" value={formatValue(realized, indicator.unit)} />
         <ValueCol label="Meta" value={formatValue(goal, indicator.unit)} bold />
         {showEstimate && (
@@ -181,10 +180,10 @@ function ValueCol({ label, value, bold, editable, onEdit }: {
       <button
         onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
         title="Clique para editar a estimativa"
-        className="nodrag flex flex-col gap-0.5 rounded-lg border border-emerald-500/40 bg-emerald-500/8 px-2 py-1 mx-0.5 mb-1 hover:border-emerald-400/70 hover:bg-emerald-500/15 transition-colors cursor-pointer text-left"
+        className="nodrag flex flex-col gap-0.5 text-left cursor-pointer"
       >
-        <p className="text-label text-emerald-400/80">{label}</p>
-        <span className="text-base font-bold leading-tight text-emerald-300">
+        <p className="text-label">{label}</p>
+        <span className="flex items-center text-base font-bold leading-tight text-white bg-white/8 border border-white/20 hover:border-purple-400/60 hover:bg-purple-500/10 rounded-md px-2 py-0.5 transition-colors min-w-[56px]">
           {value}
         </span>
       </button>
