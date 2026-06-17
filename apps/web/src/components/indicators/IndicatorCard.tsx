@@ -183,7 +183,7 @@ function ValueCol({ label, value, bold, editable, onEdit }: {
         className="nodrag flex flex-col gap-0.5 text-left cursor-pointer"
       >
         <p className="text-label">{label}</p>
-        <span className="flex items-center text-base font-bold leading-tight text-white bg-white/8 border border-white/20 hover:border-purple-400/60 hover:bg-purple-500/10 rounded-md px-2 py-0.5 transition-colors min-w-[56px]">
+        <span className="flex items-center text-base font-bold leading-tight text-white bg-indigo-900/40 border border-indigo-400/50 hover:border-indigo-300/80 hover:bg-indigo-800/50 rounded-md px-2 py-0.5 transition-colors min-w-[56px] shadow-[0_0_8px_rgba(99,102,241,0.25)]">
           {value}
         </span>
       </button>
