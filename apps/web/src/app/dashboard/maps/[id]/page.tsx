@@ -12,7 +12,7 @@ import ReactFlow, {
   getSmoothStepPath, reconnectEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, Pencil, X, ChevronsRight, ChevronsLeft, Layers } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Pencil, X, ChevronsRight, ChevronsLeft } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
@@ -228,34 +228,145 @@ function buildNodesAndEdges(
 
 // ─── Add Indicator Panel ──────────────────────────────────────────────────────
 
-function IndicatorRow({ ind, onMap, onAdd, onEdit }: {
-  ind: any; onMap?: boolean; onAdd?: () => void; onEdit: () => void;
-}) {
+function LevelPicker({ value, onChange }: { value: number; onChange: (l: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState('');
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as globalThis.Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function commit(v: number) {
+    if (!Number.isNaN(v) && v >= 1) { onChange(v); setOpen(false); setCustom(''); }
+  }
+
   return (
-    <div className="flex items-center gap-2 px-3 py-2 hover:bg-white/5">
-      <span className="text-[10px] font-mono text-white/30 w-14 flex-shrink-0">{ind.code}</span>
-      <span className="text-sm text-white/70 truncate flex-1">{ind.name}</span>
-      <button onClick={onEdit} title="Editar cadastro" className="text-white/30 hover:text-white/80">
-        <Pencil size={12} />
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((s) => !s); }}
+        className="nodrag w-6 h-6 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-[10px] font-bold text-white transition-colors"
+        title="Editar nível"
+      >
+        {value}
       </button>
-      {!onMap && onAdd && (
-        <button onClick={onAdd} title="Adicionar ao mapa" className="text-white/30 hover:text-emerald-400">
-          <Plus size={14} />
-        </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-50 bg-[#1a1f2e] border border-white/15 rounded-xl shadow-2xl p-2 flex flex-col gap-1 min-w-[100px]">
+          <p className="text-[9px] uppercase tracking-widest text-white/30 px-1 pb-0.5">Nível</p>
+          <div className="flex gap-1 flex-wrap">
+            {[1, 2, 3, 4, 5].map((l) => (
+              <button
+                key={l}
+                onClick={() => commit(l)}
+                className={cn(
+                  'w-7 h-7 rounded-lg text-xs font-bold transition-colors',
+                  value === l ? 'bg-indigo-600 text-white' : 'bg-white/8 text-white/60 hover:bg-white/15',
+                )}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 mt-0.5">
+            <input
+              type="number"
+              min={1}
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commit(parseInt(custom)); }}
+              placeholder="outro"
+              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500 w-16"
+            />
+            <button
+              onClick={() => commit(parseInt(custom))}
+              className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs text-white font-medium"
+            >
+              OK
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClose }: {
+function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onLevelChange }: {
+  ind: any;
+  onMap?: boolean;
+  level?: number;
+  onAdd?: () => void;
+  onEdit: () => void;
+  onLevelChange?: (l: number) => void;
+}) {
+  const [pendingLevel, setPendingLevel] = useState(1);
+  const [showAddLevel, setShowAddLevel] = useState(false);
+
+  if (!onMap && onAdd) {
+    // Card disponível: botão + abre mini-picker de nível antes de adicionar
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 hover:bg-white/5">
+        <span className="text-[10px] font-mono text-white/30 w-14 flex-shrink-0">{ind.code}</span>
+        <span className="text-sm text-white/70 truncate flex-1">{ind.name}</span>
+        <button onClick={onEdit} title="Editar cadastro" className="text-white/30 hover:text-white/80 flex-shrink-0">
+          <Pencil size={12} />
+        </button>
+        {showAddLevel ? (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {[1, 2, 3, 4].map((l) => (
+              <button
+                key={l}
+                onClick={() => { setPendingLevel(l); onAdd(); setShowAddLevel(false); }}
+                className={cn(
+                  'w-6 h-6 rounded text-[10px] font-bold transition-colors',
+                  pendingLevel === l ? 'bg-indigo-600 text-white' : 'bg-white/8 text-white/50 hover:bg-white/15',
+                )}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowAddLevel(true)}
+            title="Adicionar ao mapa"
+            className="text-white/30 hover:text-emerald-400 flex-shrink-0"
+          >
+            <Plus size={14} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Card no mapa: mostra badge de nível clicável
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 hover:bg-white/5">
+      <span className="text-[10px] font-mono text-white/30 w-14 flex-shrink-0">{ind.code}</span>
+      <span className="text-sm text-white/70 truncate flex-1">{ind.name}</span>
+      <button onClick={onEdit} title="Editar cadastro" className="text-white/30 hover:text-white/80 flex-shrink-0">
+        <Pencil size={12} />
+      </button>
+      {onLevelChange && (
+        <LevelPicker value={level ?? 1} onChange={onLevelChange} />
+      )}
+    </div>
+  );
+}
+
+function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, onCreateNew, onEdit, onClose }: {
   existingIds: Set<string>;
+  nodeLevels: Map<string, number>;
   onAdd: (id: string, level: number) => void;
+  onLevelChange: (id: string, level: number) => void;
   onCreateNew: () => void;
   onEdit: (id: string) => void;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
-  const [addLevel, setAddLevel] = useState(1);
   const { data: allInds = [] } = useQuery({
     queryKey: ['indicators'],
     queryFn: () => indicatorsApi.list().then((r) => r.data),
@@ -274,7 +385,7 @@ function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClos
         <p className="text-sm font-semibold text-white">Gerenciar Indicadores</p>
         <button onClick={onClose} className="text-white/30 hover:text-white/70 text-xs">✕</button>
       </div>
-      <div className="p-3 border-b border-white/5 space-y-2">
+      <div className="p-3 border-b border-white/5">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -282,28 +393,9 @@ function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClos
           autoFocus
           className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none"
         />
-        {/* Level picker */}
-        <div className="flex items-center gap-2">
-          <Layers size={11} className="text-white/30 flex-shrink-0" />
-          <span className="text-[10px] text-white/30">Nível:</span>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4].map((l) => (
-              <button
-                key={l}
-                onClick={() => setAddLevel(l)}
-                className={cn(
-                  'w-6 h-6 rounded text-xs font-bold transition-colors',
-                  addLevel === l ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10',
-                )}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
         <button
           onClick={onCreateNew}
-          className="w-full flex items-center justify-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-200 text-xs py-2 rounded-lg hover:bg-purple-600/30"
+          className="w-full mt-2 flex items-center justify-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-200 text-xs py-2 rounded-lg hover:bg-purple-600/30"
         >
           <Plus size={13} /> Criar novo indicador
         </button>
@@ -315,7 +407,14 @@ function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClos
               No mapa ({onMapList.length})
             </p>
             {onMapList.map((ind) => (
-              <IndicatorRow key={ind.id} ind={ind} onMap onEdit={() => onEdit(ind.id)} />
+              <IndicatorRow
+                key={ind.id}
+                ind={ind}
+                onMap
+                level={nodeLevels.get(ind.id) ?? 1}
+                onEdit={() => onEdit(ind.id)}
+                onLevelChange={(l) => onLevelChange(ind.id, l)}
+              />
             ))}
           </>
         )}
@@ -326,7 +425,7 @@ function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClos
           <IndicatorRow
             key={ind.id}
             ind={ind}
-            onAdd={() => onAdd(ind.id, addLevel)}
+            onAdd={() => onAdd(ind.id, 1)}
             onEdit={() => onEdit(ind.id)}
           />
         ))}
@@ -552,6 +651,21 @@ export default function MapEditorPage() {
 
   const existingIds = new Set(map?.entries?.map((e) => e.indicatorId) ?? []);
 
+  // Map of indicatorId → current level (for the panel level picker)
+  const nodeLevels = React.useMemo(
+    () => new Map(nodes.map((n) => [n.id, n.data?.level ?? 1])),
+    [nodes],
+  );
+
+  // Update level of an existing node on the map (stored in node data; persisted on Save)
+  const handleNodeLevelChange = useCallback((indicatorId: string, level: number) => {
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === indicatorId ? { ...n, data: { ...n.data, level } } : n,
+      ),
+    );
+  }, [setNodes]);
+
 
   return (
     <div className="flex flex-col h-[calc(100vh-56px-48px)]">
@@ -618,7 +732,9 @@ export default function MapEditorPage() {
           {showAddPanel && (
             <ManageIndicatorsPanel
               existingIds={existingIds}
+              nodeLevels={nodeLevels}
               onAdd={(indId, level) => addIndMutation.mutate({ indicatorId: indId, level })}
+              onLevelChange={handleNodeLevelChange}
               onCreateNew={() => {
                 setShowAddPanel(false);
                 setIndicatorForm({ open: true, editId: null });
