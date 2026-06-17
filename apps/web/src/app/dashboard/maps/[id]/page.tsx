@@ -12,7 +12,7 @@ import ReactFlow, {
   getSmoothStepPath, reconnectEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, Pencil, X, ChevronsRight, ChevronsLeft, Layers } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Pencil, X } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
@@ -43,7 +43,6 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
     indicator, realized, goal, estimate, period, showEstimate = true,
     actionCount, attachmentCount, commentCount,
     onInfo, onRemove, onOpenActionPlan, onUpdated,
-    level = 1, onExpandLevel,
   } = data;
 
   return (
@@ -52,25 +51,6 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
       {HANDLES.map(([hid, pos]) => (
         <Handle key={hid} id={hid} type="source" position={pos} className="rf-handle" style={HANDLE_STYLE} />
       ))}
-
-      {/* Level badge */}
-      <div className="nodrag absolute -top-2.5 -left-1 z-10 flex items-center gap-1">
-        <div className="w-5 h-5 rounded-full bg-[#1a1f2e] border border-white/20 flex items-center justify-center">
-          <span className="text-[9px] font-bold text-white/50">{level}</span>
-        </div>
-      </div>
-
-      {/* Expand next level button — visible on hover */}
-      {onExpandLevel && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onExpandLevel(level); }}
-          className="nodrag absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/30 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Expandir/recolher próximo nível"
-        >
-          <ChevronsRight size={11} className="text-white" />
-        </button>
-      )}
-
       <IndicatorCard
         data={{
           indicator, realized, goal, estimate, period,
@@ -147,12 +127,10 @@ function buildNodesAndEdges(
     onRemove: (id: string, name: string) => void;
     onRemoveEdge: (edgeId: string, parentId: string, childId: string) => void;
     onOpenActionPlan: (id: string) => void;
-    onExpandLevel: (level: number) => void;
     onUpdated: () => void;
   },
   showEstimate = true,
   period?: string,
-  pendingLevels?: Map<string, number>,
 ) {
   const nodes: Node[] = entries.map((entry, i) => {
     const savedNode = savedFlow?.nodes?.find((n: any) => n.id === entry.indicatorId);
@@ -170,18 +148,14 @@ function buildNodesAndEdges(
     const attachmentCount = plans.reduce((s, p) => s + (p._count?.attachments ?? 0), 0);
     const commentCount = plans.reduce((s, p) => s + (p._count?.comments ?? 0), 0);
 
-    const level = savedNode?.data?.level ?? pendingLevels?.get(entry.indicatorId) ?? 1;
-
     return {
       id: entry.indicatorId,
       type: 'mapIndicator',
       position: savedNode?.position ?? { x: (i % 3) * 300, y: Math.floor(i / 3) * 280 },
       data: {
         indicator: ind, realized, goal, estimate, period, showEstimate,
-        level,
         actionCount, attachmentCount, commentCount,
         onInfo: handlers?.onInfo, onRemove: handlers?.onRemove,
-        onExpandLevel: handlers?.onExpandLevel,
         onOpenActionPlan: handlers?.onOpenActionPlan, onUpdated: handlers?.onUpdated,
       },
     };
@@ -249,13 +223,12 @@ function IndicatorRow({ ind, onMap, onAdd, onEdit }: {
 
 function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClose }: {
   existingIds: Set<string>;
-  onAdd: (id: string, level: number) => void;
+  onAdd: (id: string) => void;
   onCreateNew: () => void;
   onEdit: (id: string) => void;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
-  const [addLevel, setAddLevel] = useState(1);
   const { data: allInds = [] } = useQuery({
     queryKey: ['indicators'],
     queryFn: () => indicatorsApi.list().then((r) => r.data),
@@ -282,25 +255,6 @@ function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClos
           autoFocus
           className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none"
         />
-        {/* Level picker for new cards */}
-        <div className="flex items-center gap-2">
-          <Layers size={11} className="text-white/30 flex-shrink-0" />
-          <span className="text-[10px] text-white/30">Nível ao adicionar:</span>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4].map((l) => (
-              <button
-                key={l}
-                onClick={() => setAddLevel(l)}
-                className={cn(
-                  'w-6 h-6 rounded text-xs font-bold transition-colors',
-                  addLevel === l ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10',
-                )}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
         <button
           onClick={onCreateNew}
           className="w-full flex items-center justify-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-200 text-xs py-2 rounded-lg hover:bg-purple-600/30"
@@ -326,7 +280,7 @@ function ManageIndicatorsPanel({ existingIds, onAdd, onCreateNew, onEdit, onClos
           <IndicatorRow
             key={ind.id}
             ind={ind}
-            onAdd={() => onAdd(ind.id, addLevel)}
+            onAdd={() => onAdd(ind.id)}
             onEdit={() => onEdit(ind.id)}
           />
         ))}
@@ -352,11 +306,6 @@ export default function MapEditorPage() {
     open: false,
     editId: null,
   });
-
-  // Level expansion: show nodes with level <= visibleUpToLevel
-  const [visibleUpToLevel, setVisibleUpToLevel] = useState(99);
-  // Remember desired level for newly added nodes until first save
-  const pendingLevelsRef = React.useRef<Map<string, number>>(new Map());
 
   const { data: map, isLoading } = useQuery<IndicatorMap>({
     queryKey: ['map', id, activePeriod],
@@ -397,47 +346,18 @@ export default function MapEditorPage() {
     }
   }, [id, qc, setEdges]);
 
-  // Toggle next-level visibility when >> button is clicked on a card
-  const handleExpandLevel = useCallback((level: number) => {
-    setVisibleUpToLevel((prev) => (prev > level ? level : level + 1));
-  }, []);
-
   useEffect(() => {
     if (!map?.entries) return;
     const { nodes: n, edges: e } = buildNodesAndEdges(map.entries, map.flowData, {
       onInfo: (indId) => setInfoIndicatorId(indId),
       onRemove: handleRemoveIndicator,
       onRemoveEdge: handleRemoveEdge,
-      onExpandLevel: handleExpandLevel,
       onOpenActionPlan: (indId) => setSelectedIndicatorId((prev) => (prev === indId ? null : indId)),
       onUpdated: () => qc.invalidateQueries({ queryKey: ['map', id] }),
-    }, showEstimate, activePeriod, pendingLevelsRef.current);
+    }, showEstimate, activePeriod);
     setNodes(n);
     setEdges(e);
-  }, [map, showEstimate, activePeriod, handleExpandLevel]);
-
-  // Derive display nodes/edges with visibility filter applied
-  const maxDefinedLevel = React.useMemo(
-    () => Math.max(1, ...nodes.map((n) => n.data?.level ?? 1)),
-    [nodes],
-  );
-
-  const displayNodes = React.useMemo(
-    () => nodes.map((n) => ({ ...n, hidden: (n.data?.level ?? 1) > visibleUpToLevel })),
-    [nodes, visibleUpToLevel],
-  );
-
-  const displayEdges = React.useMemo(
-    () => {
-      const nodeLevel = new Map(nodes.map((n) => [n.id, n.data?.level ?? 1]));
-      return edges.map((e) => ({
-        ...e,
-        hidden: (nodeLevel.get(e.source) ?? 1) > visibleUpToLevel
-               || (nodeLevel.get(e.target) ?? 1) > visibleUpToLevel,
-      }));
-    },
-    [edges, nodes, visibleUpToLevel],
-  );
+  }, [map, showEstimate, activePeriod]);
 
   // Criar conexão: source = causa (filho), target = recebe impacto (pai)
   const onConnect = useCallback(
@@ -546,10 +466,8 @@ export default function MapEditorPage() {
   });
 
   const addIndMutation = useMutation({
-    mutationFn: ({ indicatorId }: { indicatorId: string; level: number }) =>
-      mapsApi.addIndicator(id, indicatorId),
-    onSuccess: (_, vars) => {
-      pendingLevelsRef.current.set(vars.indicatorId, vars.level);
+    mutationFn: (indicatorId: string) => mapsApi.addIndicator(id, indicatorId),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['map', id] });
       toast.success('Indicador adicionado ao mapa');
       setShowAddPanel(false);
@@ -583,44 +501,6 @@ export default function MapEditorPage() {
           · arraste as alças (4 lados) para conectar · clique na linha para selecionar e remover (✕) · arraste a ponta para reconectar
         </span>
         <div className="flex-1" />
-
-        {/* Level expand / collapse controls */}
-        <div className="flex items-center gap-1 border border-white/10 rounded-xl overflow-hidden">
-          <button
-            title="Recolher todos os níveis"
-            onClick={() => {
-              const selectedLevel = selectedIndicatorId
-                ? (nodes.find((n) => n.id === selectedIndicatorId)?.data?.level ?? 1)
-                : 1;
-              setVisibleUpToLevel(selectedLevel);
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 transition-colors text-xs"
-          >
-            <ChevronsLeft size={13} />
-            Recolher
-          </button>
-          <div className="w-px h-5 bg-white/10" />
-          <button
-            title="Expandir todos os níveis"
-            onClick={() => {
-              const selectedLevel = selectedIndicatorId
-                ? (nodes.find((n) => n.id === selectedIndicatorId)?.data?.level ?? maxDefinedLevel)
-                : maxDefinedLevel;
-              setVisibleUpToLevel(
-                visibleUpToLevel >= maxDefinedLevel ? selectedLevel : maxDefinedLevel,
-              );
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 transition-colors text-xs"
-          >
-            <ChevronsRight size={13} />
-            Expandir
-          </button>
-          {/* Current level indicator */}
-          <div className="px-2 py-1.5 bg-indigo-600/20 text-indigo-300 text-[10px] font-semibold">
-            Nível {visibleUpToLevel >= maxDefinedLevel ? 'todos' : `1–${visibleUpToLevel}`}
-          </div>
-        </div>
-
         <div className="relative">
           <button
             onClick={() => setShowAddPanel((s) => !s)}
@@ -632,7 +512,7 @@ export default function MapEditorPage() {
           {showAddPanel && (
             <ManageIndicatorsPanel
               existingIds={existingIds}
-              onAdd={(indId, level) => addIndMutation.mutate({ indicatorId: indId, level })}
+              onAdd={(indId) => addIndMutation.mutate(indId)}
               onCreateNew={() => {
                 setShowAddPanel(false);
                 setIndicatorForm({ open: true, editId: null });
@@ -659,8 +539,8 @@ export default function MapEditorPage() {
       <div className="flex flex-1 gap-4 overflow-hidden">
         <div className="flex-1 rounded-2xl overflow-hidden border border-white/5 bg-[#0d0f17]">
           <ReactFlow
-            nodes={displayNodes}
-            edges={displayEdges}
+            nodes={nodes}
+            edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onEdgesDelete={onEdgesDelete}

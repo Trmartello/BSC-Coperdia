@@ -175,32 +175,19 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
 function ValueCol({ label, value, bold, editable, onEdit }: {
   label: string; value: string; bold?: boolean; editable?: boolean; onEdit?: () => void;
 }) {
-  if (editable) {
-    return (
-      <button
-        onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
-        title="Clique para editar a estimativa"
-        className="nodrag flex flex-col gap-0.5 text-left cursor-pointer"
-      >
-        <p className="text-label">{label}</p>
-        <span className="flex items-center text-base font-bold leading-tight text-white bg-indigo-900/40 border border-indigo-400/50 hover:border-indigo-300/80 hover:bg-indigo-800/50 rounded-md px-2 py-0.5 transition-colors min-w-[56px] shadow-[0_0_8px_rgba(99,102,241,0.25)]">
-          {value}
-        </span>
-      </button>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-label">{label}</p>
-      <span
+      <button
+        onClick={editable ? (e) => { e.stopPropagation(); onEdit?.(); } : undefined}
         className={cn(
-          'text-base font-bold leading-tight',
+          'nodrag text-left text-base font-bold leading-tight',
           bold ? 'text-white' : 'text-white/80',
+          editable ? 'hover:text-purple-300 cursor-pointer' : 'cursor-default',
         )}
       >
         {value}
-      </span>
+      </button>
     </div>
   );
 }
