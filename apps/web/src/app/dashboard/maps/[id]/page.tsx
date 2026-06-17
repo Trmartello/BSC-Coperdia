@@ -640,10 +640,6 @@ export default function MapEditorPage() {
     },
   });
 
-  if (isLoading) return <div className="h-full bg-[#0d0f17] animate-pulse rounded-2xl" />;
-
-  const existingIds = new Set(map?.entries?.map((e) => e.indicatorId) ?? []);
-
   // Map of indicatorId → current level (for the panel level picker)
   const nodeLevels = React.useMemo(
     () => new Map(nodes.map((n) => [n.id, n.data?.level ?? 1])),
@@ -658,6 +654,10 @@ export default function MapEditorPage() {
       ),
     );
   }, [setNodes]);
+
+  if (isLoading) return <div className="h-full bg-[#0d0f17] animate-pulse rounded-2xl" />;
+
+  const existingIds = new Set(map?.entries?.map((e) => e.indicatorId) ?? []);
 
 
   return (
