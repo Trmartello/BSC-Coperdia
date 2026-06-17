@@ -60,11 +60,12 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
         </div>
       </div>
 
-      {/* Expand button — offset further right so it clears the connection handle */}
+      {/* Expand button — bottom-right corner, clear of all edge-center
+          connection handles (right/bottom) so it never blocks a connector */}
       {onExpandLevel && (
         <button
           onClick={(e) => { e.stopPropagation(); onExpandLevel(level); }}
-          className="nodrag absolute -right-8 top-1/2 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/30 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+          className="nodrag absolute -bottom-3 -right-3 z-10 w-6 h-6 rounded-full bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/30 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
           title="Expandir/recolher próximo nível"
         >
           <ChevronsRight size={11} className="text-white" />
