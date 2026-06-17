@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Trash2, Info, ClipboardList, Paperclip, MessageSquare, Pencil } from 'lucide-react';
+import { Trash2, Info, ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
 import { cn, formatValue } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
@@ -89,24 +89,10 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
     }
   }
 
-  // INPUT cards have a distinct accent so users know they can enter data
-  const isInput = indicator.type === 'INPUT';
-
   return (
-    <div className={cn(
-      'card-dark w-[260px] flex flex-col gap-0 overflow-hidden',
-      isInput && 'border-t-[2px] !border-t-emerald-500/50',
-    )}>
-      {/* ── Editable hint bar ── */}
-      {isInput && (
-        <div className="flex items-center gap-1 px-3 pt-1.5 pb-0">
-          <Pencil size={9} className="text-emerald-400/60" />
-          <span className="text-[9px] text-emerald-400/60 font-medium tracking-wide">Entrada manual</span>
-        </div>
-      )}
-
+    <div className="card-dark w-[260px] flex flex-col gap-0 overflow-hidden">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between px-4 pt-1.5 pb-1.5">
+      <div className="flex items-start justify-between px-4 pt-2.5 pb-1.5">
         <div className="flex-1 min-w-0">
           <p className="text-white/80 text-sm font-semibold leading-tight truncate">
             {indicator.name}
@@ -126,7 +112,8 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
       </div>
 
       {/* ── Values grid ── */}
-      <div className={cn('grid px-4 pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
+      <div className={cn('grid pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2',
+        canEdit ? 'pl-4 pr-1' : 'px-4')}>
         <ValueCol label="Realizado" value={formatValue(realized, indicator.unit)} />
         <ValueCol label="Meta" value={formatValue(goal, indicator.unit)} bold />
         {showEstimate && (
@@ -189,19 +176,32 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
 function ValueCol({ label, value, bold, editable, onEdit }: {
   label: string; value: string; bold?: boolean; editable?: boolean; onEdit?: () => void;
 }) {
+  if (editable) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+        title="Clique para editar a estimativa"
+        className="nodrag flex flex-col gap-0.5 rounded-lg border border-emerald-500/40 bg-emerald-500/8 px-2 py-1 mx-0.5 mb-1 hover:border-emerald-400/70 hover:bg-emerald-500/15 transition-colors cursor-pointer text-left"
+      >
+        <p className="text-label text-emerald-400/80">{label}</p>
+        <span className="text-base font-bold leading-tight text-emerald-300">
+          {value}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-0.5">
       <p className="text-label">{label}</p>
-      <button
-        onClick={editable ? (e) => { e.stopPropagation(); onEdit?.(); } : undefined}
+      <span
         className={cn(
-          'nodrag text-left text-base font-bold leading-tight',
+          'text-base font-bold leading-tight',
           bold ? 'text-white' : 'text-white/80',
-          editable ? 'hover:text-purple-300 cursor-pointer' : 'cursor-default',
         )}
       >
         {value}
-      </button>
+      </span>
     </div>
   );
 }
