@@ -53,13 +53,6 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
         <Handle key={hid} id={hid} type="source" position={pos} className="rf-handle" style={HANDLE_STYLE} />
       ))}
 
-      {/* Level badge */}
-      <div className="nodrag absolute -top-2.5 -left-1 z-10">
-        <div className="w-5 h-5 rounded-full bg-[#1a1f2e] border border-white/20 flex items-center justify-center">
-          <span className="text-[9px] font-bold text-white/50">{level}</span>
-        </div>
-      </div>
-
       {/* Expand button — bottom-right corner, clear of all edge-center
           connection handles (right/bottom) so it never blocks a connector */}
       {onExpandLevel && (
