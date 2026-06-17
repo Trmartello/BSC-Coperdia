@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Trash2, Info, ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
+import { Trash2, Info, ClipboardList, Paperclip, MessageSquare, Pencil } from 'lucide-react';
 import { cn, formatValue } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
@@ -89,10 +89,24 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
     }
   }
 
+  // INPUT cards have a distinct accent so users know they can enter data
+  const isInput = indicator.type === 'INPUT';
+
   return (
-    <div className="card-dark w-[260px] flex flex-col gap-0 overflow-hidden">
+    <div className={cn(
+      'card-dark w-[260px] flex flex-col gap-0 overflow-hidden',
+      isInput && 'border-t-[2px] !border-t-emerald-500/50',
+    )}>
+      {/* ── Editable hint bar ── */}
+      {isInput && (
+        <div className="flex items-center gap-1 px-3 pt-1.5 pb-0">
+          <Pencil size={9} className="text-emerald-400/60" />
+          <span className="text-[9px] text-emerald-400/60 font-medium tracking-wide">Entrada manual</span>
+        </div>
+      )}
+
       {/* ── Header ── */}
-      <div className="flex items-start justify-between px-4 pt-2.5 pb-1.5">
+      <div className="flex items-start justify-between px-4 pt-1.5 pb-1.5">
         <div className="flex-1 min-w-0">
           <p className="text-white/80 text-sm font-semibold leading-tight truncate">
             {indicator.name}
