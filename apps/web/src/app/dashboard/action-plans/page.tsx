@@ -50,6 +50,7 @@ function matchAction(action: ActionItem, filters: ActionFilters): boolean {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ActionPlansPage() {
+  const qc = useQueryClient();
   const [showNew, setShowNew] = useState(false);
 
   // All filters are multi-select Sets (empty = "all")
@@ -62,9 +63,30 @@ export default function ActionPlansPage() {
     return new Set(u ? [u.id] : []);
   });
 
+  // Filtros de ação são enviados ao servidor para filtragem no banco de dados.
+  // O queryKey inclui os filtros para re-fetch automático quando mudam.
+  const actionFilterParams = {
+    priorities: statuses.size > 0 || priorities.size > 0 || userIds.size > 0
+      ? (priorities.size > 0 ? [...priorities] : undefined)
+      : undefined,
+    statuses: statuses.size > 0 ? [...statuses] : undefined,
+    ownerOrCreatorIds: userIds.size > 0 ? [...userIds] : undefined,
+  };
+
   const { data: plans = [], refetch } = useQuery<ActionPlan[]>({
-    queryKey: ['action-plans'],
+    queryKey: ['action-plans', actionFilterParams],
+    queryFn: () => actionPlansApi.list({
+      priorities: actionFilterParams.priorities,
+      statuses: actionFilterParams.statuses,
+      ownerOrCreatorIds: actionFilterParams.ownerOrCreatorIds,
+    }).then((r) => r.data),
+  });
+
+  // Total sem filtros (para exibir "X de Y planos")
+  const { data: allPlans = [] } = useQuery<ActionPlan[]>({
+    queryKey: ['action-plans', {}],
     queryFn: () => actionPlansApi.list().then((r) => r.data),
+    staleTime: 30_000,
   });
 
   const { data: dash } = useQuery<PlanDashboard>({
@@ -94,23 +116,15 @@ export default function ActionPlansPage() {
 
   const actionFilters: ActionFilters = { statuses, priorities, userIds };
 
-  // Plans whose origin matches → then at least one action must match filters
+  // Filtros de ação (prioridade, status, usuário) já foram aplicados no servidor.
+  // Aqui só aplicamos filtros de nível de plano: origem e mapa.
   const filtered = plans.filter((p) => {
-    // Origem: vínculo do plano
     if (sources.size > 0) {
       const isStandalone = p.indicatorId === null;
       const ok = (sources.has('STANDALONE') && isStandalone) || (sources.has('CARD') && !isStandalone);
       if (!ok) return false;
     }
-    // Mapa
     if (selectedMapIndicators && (!p.indicatorId || !selectedMapIndicators.has(p.indicatorId))) return false;
-
-    // Action-level filters: plan is visible only if ≥1 action matches
-    const hasActionFilters = statuses.size > 0 || priorities.size > 0 || userIds.size > 0;
-    if (hasActionFilters) {
-      const allActions = p.initiatives?.flatMap((i) => i.actions ?? []) ?? [];
-      return allActions.some((a) => matchAction(a, actionFilters));
-    }
     return true;
   });
 
@@ -133,8 +147,8 @@ export default function ActionPlansPage() {
           <h1 className="text-white font-semibold text-lg">Plano de Ação</h1>
           <p className="text-white/40 text-sm">
             {hasActiveFilters
-              ? `${filtered.length} de ${plans.length} planos`
-              : `${plans.length} planos cadastrados`}
+              ? `${filtered.length} de ${allPlans.length} planos`
+              : `${allPlans.length} planos cadastrados`}
           </p>
         </div>
         <button
@@ -260,7 +274,10 @@ export default function ActionPlansPage() {
       {showNew && (
         <NewActionPlanModal
           onClose={() => setShowNew(false)}
-          onCreated={() => refetch()}
+          onCreated={() => {
+            qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
+            qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
+          }}
         />
       )}
     </div>
@@ -289,7 +306,8 @@ function ExpandablePlanRow({
   const [confirm, setConfirm] = useState<null | { message: string; confirmLabel: string; onConfirm: () => void }>(null);
 
   const invalidateAll = () => {
-    qc.invalidateQueries({ queryKey: ['action-plans'] });
+    // Invalida todas as variantes do cache de planos (com e sem filtros)
+    qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
     qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
     qc.invalidateQueries({ queryKey: ['map'] });
     onUpdated();

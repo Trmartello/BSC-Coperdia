@@ -37,11 +37,16 @@ export class ActionPlansController {
   findAll(
     @Query('indicatorId') indicatorId?: string,
     @Query('standalone') standalone?: string,
-    @Request() req?: any,
+    @Query('priorities') priorities?: string,
+    @Query('statuses') statuses?: string,
+    @Query('ownerOrCreatorIds') ownerOrCreatorIds?: string,
   ) {
     return this.service.findAll({
       indicatorId,
       standalone: standalone === 'true',
+      priorities: priorities ? priorities.split(',').filter(Boolean) : undefined,
+      statuses: statuses ? statuses.split(',').filter(Boolean) : undefined,
+      ownerOrCreatorIds: ownerOrCreatorIds ? ownerOrCreatorIds.split(',').filter(Boolean) : undefined,
     });
   }
 

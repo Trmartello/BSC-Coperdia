@@ -65,14 +65,37 @@ export class ActionPlansService {
 
   // ── Plans ──────────────────────────────────────────────────────────────────
 
-  async findAll(filters: { indicatorId?: string; userId?: string; standalone?: boolean }) {
-    const where: any = {};
-    if (filters.indicatorId) where.indicatorId = filters.indicatorId;
-    if (filters.userId) where.userId = filters.userId;
-    if (filters.standalone) where.indicatorId = null;
+  async findAll(filters: {
+    indicatorId?: string;
+    userId?: string;
+    standalone?: boolean;
+    // Filtros de ação aplicados server-side (evita dependência de versão do build no client)
+    priorities?: string[];
+    statuses?: string[];
+    ownerOrCreatorIds?: string[];
+  }) {
+    const planWhere: any = {};
+    if (filters.indicatorId) planWhere.indicatorId = filters.indicatorId;
+    if (filters.userId) planWhere.userId = filters.userId;
+    if (filters.standalone) planWhere.indicatorId = null;
+
+    // Constrói o filtro de ação: plano só aparece se tiver ≥1 ação compatível
+    const actionFilter: any = {};
+    if (filters.priorities?.length) actionFilter.priority = { in: filters.priorities };
+    if (filters.statuses?.length) actionFilter.status = { in: filters.statuses };
+    if (filters.ownerOrCreatorIds?.length) {
+      actionFilter.OR = [
+        { userId: { in: filters.ownerOrCreatorIds } },
+        { ownerId: { in: filters.ownerOrCreatorIds } },
+      ];
+    }
+
+    if (Object.keys(actionFilter).length > 0) {
+      planWhere.initiatives = { some: { actions: { some: actionFilter } } };
+    }
 
     return this.prisma.actionPlan.findMany({
-      where,
+      where: planWhere,
       include: {
         user: { select: { id: true, name: true } },
         indicator: { select: { id: true, code: true, name: true } },
@@ -80,8 +103,6 @@ export class ActionPlansService {
         initiatives: {
           include: {
             _count: { select: { actions: true } },
-            // Ações completas — a lista usa accordion inline (expande plano →
-            // iniciativas → ações) e abre o modal de edição direto da lista.
             actions: { orderBy: { createdAt: 'asc' } },
           },
           orderBy: { sortOrder: 'asc' },

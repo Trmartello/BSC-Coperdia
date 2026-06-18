@@ -85,8 +85,23 @@ export const scenariosApi = {
 
 // ─── Action Plans ─────────────────────────────────────────────────────────────
 export const actionPlansApi = {
-  list: (params?: { indicatorId?: string; standalone?: boolean }) =>
-    api.get('/action-plans', { params }),
+  list: (params?: {
+    indicatorId?: string;
+    standalone?: boolean;
+    priorities?: string[];
+    statuses?: string[];
+    ownerOrCreatorIds?: string[];
+  }) => {
+    const { priorities, statuses, ownerOrCreatorIds, ...rest } = params ?? {};
+    return api.get('/action-plans', {
+      params: {
+        ...rest,
+        ...(priorities?.length ? { priorities: priorities.join(',') } : {}),
+        ...(statuses?.length ? { statuses: statuses.join(',') } : {}),
+        ...(ownerOrCreatorIds?.length ? { ownerOrCreatorIds: ownerOrCreatorIds.join(',') } : {}),
+      },
+    });
+  },
   get: (id: string) => api.get(`/action-plans/${id}`),
   dashboard: () => api.get('/action-plans/dashboard'),
   create: (data: { problem: string; description?: string; status?: string; indicatorId?: string }) =>
