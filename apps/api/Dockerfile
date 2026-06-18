@@ -32,6 +32,7 @@ COPY --from=builder /app/apps/api/package.json ./
 ENV NODE_ENV=production
 EXPOSE 3001
 
-# Aplica migrações, semeia o banco SE estiver vazio (idempotente; falha no seed
-# não impede o boot da API) e sobe a API.
-CMD ["sh", "-c", "npx prisma migrate deploy && (SEED_ONLY_IF_EMPTY=true node dist-seed/seed.js || echo '⚠️  seed step failed, continuing') && node dist/main.js"]
+# Aplica migrações e semeia o banco SE estiver vazio (ambos idempotentes e
+# NÃO-fatais: uma falha aqui não pode impedir o boot da API, senão o health
+# check falha e o Railway mantém o build ANTIGO no ar).
+CMD ["sh", "-c", "(npx prisma migrate deploy || echo '⚠️  migrate failed, continuing') && (SEED_ONLY_IF_EMPTY=true node dist-seed/seed.js || echo '⚠️  seed step failed, continuing') && node dist/main.js"]
