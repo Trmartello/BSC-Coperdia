@@ -80,7 +80,12 @@ export class ActionPlansService {
         initiatives: {
           include: {
             _count: { select: { actions: true } },
-            actions: { select: { status: true, progress: true } },
+            actions: {
+              select: {
+                status: true, progress: true,
+                priority: true, ownerId: true, ownerName: true,
+              },
+            },
           },
           orderBy: { sortOrder: 'asc' },
         },
