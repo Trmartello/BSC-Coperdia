@@ -59,20 +59,26 @@ export default function ActionPlansPage() {
   }, [mapIds, maps]);
 
   const filtered = plans.filter((p) => {
-    if (statuses.size > 0 && !statuses.has(p.status)) return false;
+    // Origem: vínculo do plano (não da ação)
     if (sources.size > 0) {
       const isStandalone = p.indicatorId === null;
       const ok = (sources.has('STANDALONE') && isStandalone) || (sources.has('CARD') && !isStandalone);
       if (!ok) return false;
     }
+    // Mapa: indicador do plano deve pertencer ao mapa selecionado
     if (selectedMapIndicators && (!p.indicatorId || !selectedMapIndicators.has(p.indicatorId))) return false;
 
     const actions = p.initiatives?.flatMap((i) => i.actions ?? []) ?? [];
+
+    // Status: filtra pelo status das ações (não do plano)
+    if (statuses.size > 0 && !actions.some((a) => statuses.has(a.status))) return false;
+
+    // Prioridade: filtra pela prioridade das ações
     if (priorities.size > 0 && !actions.some((a) => priorities.has(a.priority))) return false;
+
+    // Usuário: filtra pelo responsável da ação (ownerId), não pelo criador do plano
     if (userIds.size > 0) {
-      const involved = [...userIds].some(
-        (uid) => p.userId === uid || actions.some((a) => a.ownerId === uid),
-      );
+      const involved = actions.some((a) => a.ownerId !== null && userIds.has(a.ownerId));
       if (!involved) return false;
     }
     return true;
@@ -160,9 +166,11 @@ export default function ActionPlansPage() {
           onToggle={(v) => setStatuses((p) => toggleSet(p, v))}
           onClear={() => setStatuses(new Set())}
           options={[
-            { value: 'OPEN', label: 'Abertos' },
-            { value: 'IN_PROGRESS', label: 'Em andamento' },
-            { value: 'DONE', label: 'Concluídos' },
+            { value: 'PENDING', label: 'Pendente', dot: 'bg-slate-400', valueClass: 'text-slate-300' },
+            { value: 'IN_PROGRESS', label: 'Em andamento', dot: 'bg-amber-400', valueClass: 'text-amber-300' },
+            { value: 'DONE', label: 'Concluída', dot: 'bg-emerald-400', valueClass: 'text-emerald-300' },
+            { value: 'OVERDUE', label: 'Atrasada', dot: 'bg-red-400', valueClass: 'text-red-300' },
+            { value: 'CANCELLED', label: 'Cancelada', dot: 'bg-slate-600', valueClass: 'text-slate-500' },
           ]}
         />
 
