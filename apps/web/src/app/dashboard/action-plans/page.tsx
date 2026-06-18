@@ -2,8 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, LayoutGrid, TrendingUp, AlertTriangle, CheckCircle2, X, ChevronDown, Search } from 'lucide-react';
-import { actionPlansApi, usersApi } from '../../../lib/api';
+import { Plus, LayoutGrid, TrendingUp, AlertTriangle, CheckCircle2, X, ChevronDown, Search, Check } from 'lucide-react';
+import { actionPlansApi, usersApi, mapsApi } from '../../../lib/api';
 import {
   ActionPlan, PlanDashboard,
   PLAN_STATUS_LABEL, PLAN_STATUS_COLOR,
@@ -23,6 +23,7 @@ export default function ActionPlansPage() {
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [priority, setPriority] = useState<ActionItemPriority | 'ALL'>('ALL');
   const [source, setSource] = useState<SourceFilter>('ALL');
+  const [mapFilter, setMapFilter] = useState<string>('ALL');
 
   // Filtro de usuário — por padrão, já vem filtrado pelo usuário logado
   const [userFilter, setUserFilter] = useState<{ id: string; name: string } | null>(
@@ -42,10 +43,25 @@ export default function ActionPlansPage() {
     queryFn: () => actionPlansApi.dashboard().then((r) => r.data),
   });
 
+  const { data: maps = [] } = useQuery<any[]>({
+    queryKey: ['maps'],
+    queryFn: () => mapsApi.list().then((r) => r.data),
+  });
+
+  // indicatorId -> set de indicadores do mapa selecionado
+  const selectedMapIndicators = React.useMemo(() => {
+    if (mapFilter === 'ALL') return null;
+    const map = maps.find((m) => m.id === mapFilter);
+    return new Set<string>((map?.entries ?? []).map((e: any) => e.indicatorId));
+  }, [mapFilter, maps]);
+
   const filtered = plans.filter((p) => {
     if (filter !== 'ALL' && p.status !== filter) return false;
     if (source === 'STANDALONE' && p.indicatorId !== null) return false;
     if (source === 'CARD' && p.indicatorId === null) return false;
+    if (selectedMapIndicators) {
+      if (!p.indicatorId || !selectedMapIndicators.has(p.indicatorId)) return false;
+    }
 
     const actions = p.initiatives?.flatMap((i) => i.actions ?? []) ?? [];
     if (priority !== 'ALL' && !actions.some((a) => a.priority === priority)) return false;
@@ -57,12 +73,13 @@ export default function ActionPlansPage() {
   });
 
   const hasActiveFilters =
-    filter !== 'ALL' || source !== 'ALL' || priority !== 'ALL' || !!userFilter;
+    filter !== 'ALL' || source !== 'ALL' || priority !== 'ALL' || mapFilter !== 'ALL' || !!userFilter;
 
   function clearFilters() {
     setFilter('ALL');
     setSource('ALL');
     setPriority('ALL');
+    setMapFilter('ALL');
     setUserFilter(null);
   }
 
@@ -128,58 +145,62 @@ export default function ActionPlansPage() {
         </div>
       )}
 
-      {/* ── Filters ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Status */}
-        <div className="flex gap-1 bg-white/5 rounded-xl p-1">
-          {(['ALL', 'OPEN', 'IN_PROGRESS', 'DONE'] as const).map((s) => {
-            const labels = { ALL: 'Todos', OPEN: 'Abertos', IN_PROGRESS: 'Em andamento', DONE: 'Concluídos' };
-            return (
-              <button
-                key={s}
-                onClick={() => setFilter(s)}
-                className={cn(
-                  'px-4 py-1.5 rounded-lg text-sm transition-all',
-                  filter === s ? 'bg-white/10 text-white font-medium' : 'text-white/40 hover:text-white/70',
-                )}
-              >
-                {labels[s]}
-              </button>
-            );
-          })}
-        </div>
+      {/* ── Filters (faixa horizontal compacta) ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterSelect
+          label="Status"
+          value={filter}
+          onChange={(v) => setFilter(v as StatusFilter)}
+          options={[
+            { value: 'ALL', label: 'Todos' },
+            { value: 'OPEN', label: 'Abertos' },
+            { value: 'IN_PROGRESS', label: 'Em andamento' },
+            { value: 'DONE', label: 'Concluídos' },
+          ]}
+        />
 
-        {/* Usuário */}
+        <FilterSelect
+          label="Origem"
+          value={source}
+          onChange={(v) => setSource(v as SourceFilter)}
+          options={[
+            { value: 'ALL', label: 'Todas' },
+            { value: 'STANDALONE', label: 'Planos avulsos' },
+            { value: 'CARD', label: 'Planos de cards' },
+          ]}
+        />
+
+        <FilterSelect
+          label="Prioridade"
+          value={priority}
+          onChange={(v) => setPriority(v as ActionItemPriority | 'ALL')}
+          options={[
+            { value: 'ALL', label: 'Todas' },
+            { value: 'HIGH', label: 'Alta', dot: 'bg-red-400', valueClass: 'text-red-400' },
+            { value: 'MEDIUM', label: 'Média', dot: 'bg-amber-400', valueClass: 'text-amber-400' },
+            { value: 'LOW', label: 'Baixa', dot: 'bg-blue-400', valueClass: 'text-blue-400' },
+          ]}
+        />
+
+        <FilterSelect
+          label="Mapa"
+          value={mapFilter}
+          onChange={setMapFilter}
+          minWidth="min-w-[180px]"
+          options={[
+            { value: 'ALL', label: 'Todos' },
+            ...maps.map((m) => ({ value: m.id, label: m.name })),
+          ]}
+        />
+
         <UserFilter value={userFilter} onChange={setUserFilter} />
-
-        {/* Prioridade */}
-        <PriorityDropdown value={priority} onChange={setPriority} />
-
-        {/* Origem (avulso / card) */}
-        <div className="flex gap-1 bg-white/5 rounded-xl p-1">
-          {(['ALL', 'STANDALONE', 'CARD'] as const).map((s) => {
-            const labels = { ALL: 'Todos', STANDALONE: 'Planos avulsos', CARD: 'Planos de cards' };
-            return (
-              <button
-                key={s}
-                onClick={() => setSource(s)}
-                className={cn(
-                  'px-4 py-1.5 rounded-lg text-sm transition-all',
-                  source === s ? 'bg-white/10 text-white font-medium' : 'text-white/40 hover:text-white/70',
-                )}
-              >
-                {labels[s]}
-              </button>
-            );
-          })}
-        </div>
 
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-white/40 hover:text-white/80 border border-white/10 hover:border-white/20 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/80 border border-white/10 hover:border-white/20 transition-colors"
           >
-            <X size={12} /> Limpar filtros
+            <X size={12} /> Limpar
           </button>
         )}
       </div>
@@ -215,18 +236,25 @@ export default function ActionPlansPage() {
   );
 }
 
-const PRIORITY_COLORS: Record<ActionItemPriority, string> = {
-  HIGH: 'text-red-400',
-  MEDIUM: 'text-amber-400',
-  LOW: 'text-blue-400',
-};
+interface FilterOption {
+  value: string;
+  label: string;
+  dot?: string;        // classe de cor do ponto (ex: bg-red-400)
+  valueClass?: string; // classe de cor do texto selecionado
+}
 
-function PriorityDropdown({
+function FilterSelect({
+  label,
   value,
+  options,
   onChange,
+  minWidth = 'min-w-[150px]',
 }: {
-  value: ActionItemPriority | 'ALL';
-  onChange: (v: ActionItemPriority | 'ALL') => void;
+  label: string;
+  value: string;
+  options: FilterOption[];
+  onChange: (v: string) => void;
+  minWidth?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -239,45 +267,44 @@ function PriorityDropdown({
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const options: (ActionItemPriority | 'ALL')[] = ['ALL', 'HIGH', 'MEDIUM', 'LOW'];
-  const labels: Record<string, string> = { ALL: 'Todas', HIGH: 'Alta', MEDIUM: 'Média', LOW: 'Baixa' };
+  const selected = options.find((o) => o.value === value) ?? options[0];
+  const active = value !== options[0]?.value; // 1ª opção = padrão ("Todos")
 
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
         onClick={() => setOpen((s) => !s)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/8 rounded-xl text-sm transition-colors"
+        className={cn(
+          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors',
+          active
+            ? 'bg-white/10 border-white/15 text-white'
+            : 'bg-white/5 border-transparent text-white/60 hover:text-white/85 hover:bg-white/8',
+        )}
       >
-        <span className="text-white/40 text-xs">Prioridade:</span>
-        <span className={cn('font-medium', value !== 'ALL' ? PRIORITY_COLORS[value as ActionItemPriority] : 'text-white/70')}>
-          {labels[value]}
+        <span className="text-white/35 text-xs">{label}:</span>
+        {selected?.dot && <span className={cn('w-1.5 h-1.5 rounded-full', selected.dot)} />}
+        <span className={cn('font-medium max-w-[150px] truncate', selected?.valueClass)}>
+          {selected?.label}
         </span>
-        <ChevronDown size={13} className="text-white/30" />
+        <ChevronDown size={12} className="text-white/30 flex-shrink-0" />
       </button>
 
       {open && (
-        <div className="absolute z-50 left-0 top-full mt-1 bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[130px]">
-          {options.map((opt) => (
+        <div className={cn('absolute z-50 left-0 top-full mt-1 bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1 max-h-72 overflow-y-auto', minWidth)}>
+          {options.map((o) => (
             <button
-              key={opt}
+              key={o.value}
               type="button"
-              onClick={() => { onChange(opt); setOpen(false); }}
+              onClick={() => { onChange(o.value); setOpen(false); }}
               className={cn(
-                'w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-white/5 transition-colors text-left',
-                opt === value ? 'bg-white/5' : '',
+                'w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-white/5 transition-colors text-left',
+                o.value === value ? 'bg-white/5' : '',
               )}
             >
-              {opt !== 'ALL' && (
-                <span className={cn('w-2 h-2 rounded-full flex-shrink-0', {
-                  'bg-red-400': opt === 'HIGH',
-                  'bg-amber-400': opt === 'MEDIUM',
-                  'bg-blue-400': opt === 'LOW',
-                })} />
-              )}
-              <span className={cn(opt !== 'ALL' ? PRIORITY_COLORS[opt as ActionItemPriority] : 'text-white/70')}>
-                {labels[opt]}
-              </span>
+              {o.dot && <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', o.dot)} />}
+              <span className={cn('truncate', o.valueClass ?? 'text-white/75')}>{o.label}</span>
+              {o.value === value && <Check size={13} className="ml-auto text-purple-400 flex-shrink-0" />}
             </button>
           ))}
         </div>
@@ -314,27 +341,31 @@ function UserFilter({ value, onChange }: {
 
   return (
     <div ref={ref} className="relative">
-      <div className="flex items-center bg-white/5 rounded-xl">
+      <div className={cn(
+        'flex items-center rounded-lg border transition-colors',
+        value ? 'bg-white/10 border-white/15' : 'bg-white/5 border-transparent hover:bg-white/8',
+      )}>
         <button
           type="button"
           onClick={() => { setOpen((s) => !s); setSearch(''); }}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-left"
+          className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 text-sm text-left"
         >
+          <span className="text-white/35 text-xs">Usuário:</span>
           {value ? (
-            <span className="text-white truncate max-w-[140px]">{value.name}</span>
+            <span className="text-white font-medium truncate max-w-[120px]">{value.name}</span>
           ) : (
-            <span className="text-white/40">Selecionar usuário</span>
+            <span className="text-white/60 font-medium">Todos</span>
           )}
-          <ChevronDown size={13} className="text-white/30 flex-shrink-0" />
+          <ChevronDown size={12} className="text-white/30 flex-shrink-0" />
         </button>
         {value && (
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="px-2 py-1.5 text-white/30 hover:text-red-400 transition-colors"
+            className="pr-2.5 py-1.5 text-white/30 hover:text-red-400 transition-colors"
             title="Limpar usuário"
           >
-            <X size={13} />
+            <X size={12} />
           </button>
         )}
       </div>

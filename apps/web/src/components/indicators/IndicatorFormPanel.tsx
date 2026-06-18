@@ -94,7 +94,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         unit: form.unit,
         direction: form.direction,
         periodicity: 'MONTHLY',
-        responsible: responsibleOwner?.name ?? form.responsible || null,
+        responsible: responsibleOwner?.name ?? (form.responsible || null),
         monitoringPoints: form.monitoring
           .split('\n')
           .map((s) => s.trim())

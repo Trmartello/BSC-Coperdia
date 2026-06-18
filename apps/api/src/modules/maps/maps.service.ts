@@ -38,6 +38,8 @@ export class MapsService {
       include: {
         category: true,
         _count: { select: { entries: true } },
+        // IDs dos indicadores do mapa — usado p/ filtrar planos de ação por mapa
+        entries: { select: { indicatorId: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
