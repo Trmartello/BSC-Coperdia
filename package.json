@@ -2,7 +2,10 @@
   "name": "bsc-coperdia",
   "version": "1.0.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
@@ -13,11 +16,18 @@
     "db:seed": "turbo run db:seed"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
+    "prettier": "^3.3.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.4.0",
-    "prettier": "^3.3.0"
+    "typescript": "^5.4.0"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@nestjs-modules/mailer": "^2.3.7",
+    "@nestjs/schedule": "^6.1.3",
+    "handlebars": "^4.7.9",
+    "nodemailer": "^9.0.1"
   }
 }
