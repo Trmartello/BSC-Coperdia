@@ -44,6 +44,7 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
     actionCount, attachmentCount, commentCount,
     onInfo, onRemove, onOpenActionPlan, onUpdated,
     level = 1, onExpandLevel,
+    hasDeepNeighbors = false, nextLevelVisible = false,
   } = data;
 
   return (
@@ -53,15 +54,16 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
         <Handle key={hid} id={hid} type="source" position={pos} className="rf-handle" style={HANDLE_STYLE} />
       ))}
 
-      {/* Expand button — bottom-right corner, clear of all edge-center
-          connection handles (right/bottom) so it never blocks a connector */}
-      {onExpandLevel && (
+      {/* Botão aparece só se o card tiver vizinhos em nível mais profundo */}
+      {onExpandLevel && hasDeepNeighbors && (
         <button
           onClick={(e) => { e.stopPropagation(); onExpandLevel(level); }}
           className="nodrag absolute -bottom-3 -right-3 z-10 w-6 h-6 rounded-full bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/30 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Expandir/recolher próximo nível"
+          title={nextLevelVisible ? 'Recolher próximo nível' : 'Expandir próximo nível'}
         >
-          <ChevronsRight size={11} className="text-white" />
+          {nextLevelVisible
+            ? <ChevronsLeft size={11} className="text-white" />
+            : <ChevronsRight size={11} className="text-white" />}
         </button>
       )}
 
@@ -482,10 +484,33 @@ export default function MapEditorPage() {
     [nodes],
   );
 
-  const displayNodes = React.useMemo(
-    () => nodes.map((n) => ({ ...n, hidden: (n.data?.level ?? 1) > visibleUpToLevel })),
-    [nodes, visibleUpToLevel],
-  );
+  const displayNodes = React.useMemo(() => {
+    const nodeLevel = new Map(nodes.map((n) => [n.id, n.data?.level ?? 1]));
+
+    // Adjacência bidirecional: para cada nó, quais nós estão conectados
+    const adj = new Map<string, string[]>();
+    for (const e of edges) {
+      if (!adj.has(e.source)) adj.set(e.source, []);
+      if (!adj.has(e.target)) adj.set(e.target, []);
+      adj.get(e.source)!.push(e.target);
+      adj.get(e.target)!.push(e.source);
+    }
+
+    return nodes.map((n) => {
+      const level = nodeLevel.get(n.id) ?? 1;
+      const neighbors = adj.get(n.id) ?? [];
+      // Tem vizinhos em nível mais profundo?
+      const hasDeepNeighbors = neighbors.some((nid) => (nodeLevel.get(nid) ?? 1) > level);
+      // O nível seguinte já está visível?
+      const nextLevelVisible = visibleUpToLevel > level;
+
+      return {
+        ...n,
+        hidden: level > visibleUpToLevel,
+        data: { ...n.data, hasDeepNeighbors, nextLevelVisible },
+      };
+    });
+  }, [nodes, edges, visibleUpToLevel]);
 
   const displayEdges = React.useMemo(() => {
     const nodeLevel = new Map(nodes.map((n) => [n.id, n.data?.level ?? 1]));
