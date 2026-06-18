@@ -221,7 +221,12 @@ function buildNodesAndEdges(
 
 // ─── Add Indicator Panel ──────────────────────────────────────────────────────
 
-function LevelPicker({ value, onChange }: { value: number; onChange: (l: number) => void }) {
+// levels: níveis já em uso no mapa (dinâmico). Garante ao menos [1].
+function LevelPicker({ value, onChange, levels = [1, 2, 3, 4, 5] }: {
+  value: number;
+  onChange: (l: number) => void;
+  levels?: number[];
+}) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState('');
   const ref = React.useRef<HTMLDivElement>(null);
@@ -238,6 +243,9 @@ function LevelPicker({ value, onChange }: { value: number; onChange: (l: number)
     if (!Number.isNaN(v) && v >= 1) { onChange(v); setOpen(false); setCustom(''); }
   }
 
+  // Garante que o nível atual sempre apareça nas opções
+  const opts = Array.from(new Set([...levels, value])).sort((a, b) => a - b);
+
   return (
     <div ref={ref} className="relative flex-shrink-0">
       <button
@@ -248,10 +256,10 @@ function LevelPicker({ value, onChange }: { value: number; onChange: (l: number)
         {value}
       </button>
       {open && (
-        <div className="absolute right-0 top-7 z-50 bg-[#1a1f2e] border border-white/15 rounded-xl shadow-2xl p-2 flex flex-col gap-1 min-w-[100px]">
-          <p className="text-[9px] uppercase tracking-widest text-white/30 px-1 pb-0.5">Nível</p>
+        <div className="absolute right-0 top-7 z-50 bg-[#1a1f2e] border border-white/15 rounded-xl shadow-2xl p-2 flex flex-col gap-1 min-w-[110px]">
+          <p className="text-[9px] uppercase tracking-widest text-white/30 px-1 pb-0.5">Nível de abertura</p>
           <div className="flex gap-1 flex-wrap">
-            {[1, 2, 3, 4, 5].map((l) => (
+            {opts.map((l) => (
               <button
                 key={l}
                 onClick={() => commit(l)}
@@ -287,16 +295,17 @@ function LevelPicker({ value, onChange }: { value: number; onChange: (l: number)
   );
 }
 
-function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onLevelChange }: {
+function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onLevelChange, usedLevels }: {
   ind: any;
   onMap?: boolean;
   level?: number;
-  onAdd?: () => void;
+  onAdd?: (level: number) => void;
   onEdit: () => void;
   onLevelChange?: (l: number) => void;
+  usedLevels?: number[];
 }) {
-  const [pendingLevel, setPendingLevel] = useState(1);
   const [showAddLevel, setShowAddLevel] = useState(false);
+  const presets = usedLevels && usedLevels.length > 0 ? usedLevels : [1, 2, 3, 4];
 
   if (!onMap && onAdd) {
     // Card disponível: botão + abre mini-picker de nível antes de adicionar
@@ -309,14 +318,11 @@ function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onLevelChange }: {
         </button>
         {showAddLevel ? (
           <div className="flex items-center gap-1 flex-shrink-0">
-            {[1, 2, 3, 4].map((l) => (
+            {presets.map((l) => (
               <button
                 key={l}
-                onClick={() => { setPendingLevel(l); onAdd(); setShowAddLevel(false); }}
-                className={cn(
-                  'w-6 h-6 rounded text-[10px] font-bold transition-colors',
-                  pendingLevel === l ? 'bg-indigo-600 text-white' : 'bg-white/8 text-white/50 hover:bg-white/15',
-                )}
+                onClick={() => { onAdd(l); setShowAddLevel(false); }}
+                className="w-6 h-6 rounded bg-white/8 text-white/60 hover:bg-indigo-600 hover:text-white text-[10px] font-bold transition-colors"
               >
                 {l}
               </button>
@@ -372,6 +378,10 @@ function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, 
   const onMapList = list.filter((i) => existingIds.has(i.id) && match(i));
   const available = list.filter((i) => !existingIds.has(i.id) && match(i));
 
+  // Níveis já em uso no mapa (para oferecer as mesmas opções no picker)
+  const usedLevels = Array.from(new Set(nodeLevels.values())).sort((a, b) => a - b);
+  const pickerLevels = usedLevels.length > 0 ? usedLevels : [1, 2, 3, 4, 5];
+
   return (
     <div className="absolute top-14 right-4 z-10 w-80 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
       <div className="p-3 border-b border-white/5 flex items-center justify-between">
@@ -407,6 +417,7 @@ function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, 
                 level={nodeLevels.get(ind.id) ?? 1}
                 onEdit={() => onEdit(ind.id)}
                 onLevelChange={(l) => onLevelChange(ind.id, l)}
+                usedLevels={pickerLevels}
               />
             ))}
           </>
@@ -418,8 +429,9 @@ function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, 
           <IndicatorRow
             key={ind.id}
             ind={ind}
-            onAdd={() => onAdd(ind.id, 1)}
+            onAdd={(l) => onAdd(ind.id, l)}
             onEdit={() => onEdit(ind.id)}
+            usedLevels={pickerLevels}
           />
         ))}
         {available.length === 0 && onMapList.length === 0 && (
@@ -824,7 +836,10 @@ export default function MapEditorPage() {
           mapId={id}
           editIndicatorId={indicatorForm.editId}
           onClose={() => setIndicatorForm({ open: false, editId: null })}
-          onSaved={() => {
+          onSaved={(savedId, level) => {
+            if (savedId && level && !indicatorForm.editId) {
+              pendingLevelsRef.current.set(savedId, level);
+            }
             setIndicatorForm({ open: false, editId: null });
             qc.invalidateQueries({ queryKey: ['map', id] });
           }}

@@ -19,7 +19,7 @@ interface Props {
   mapId?: string; // se vier, adiciona o indicador ao mapa ao criar
   editIndicatorId?: string | null; // se vier, modo edição
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (savedId?: string, level?: number) => void;
 }
 
 export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }: Props) {
@@ -47,6 +47,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
     expression: '',
     vars: [] as string[],
     monitoring: '',
+    mapLevel: 1,
   });
 
   const { data: editData } = useQuery({
@@ -123,11 +124,11 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
       }
       return indicatorId;
     },
-    onSuccess: () => {
+    onSuccess: (savedId) => {
       toast.success(isEdit ? 'Indicador atualizado' : 'Indicador criado');
       qc.invalidateQueries({ queryKey: ['indicators'] });
       if (mapId) qc.invalidateQueries({ queryKey: ['map', mapId] });
-      onSaved();
+      onSaved(savedId, form.mapLevel);
     },
     onError: (e: any) =>
       toast.error(e?.response?.data?.message || 'Erro ao salvar (verifique sua permissão)'),
@@ -305,6 +306,42 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
               placeholder="Ex: Controladoria"
             />
           </Field>
+
+          {!isEdit && mapId && (
+            <Field label="Nível de abertura no mapa">
+              <div className="flex gap-2 flex-wrap">
+                {[1, 2, 3, 4, 5].map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => setForm({ ...form, mapLevel: l })}
+                    className={cn(
+                      'w-9 h-9 rounded-xl text-sm font-bold border transition-colors',
+                      form.mapLevel === l
+                        ? 'bg-indigo-600 border-indigo-600 text-white'
+                        : 'border-white/10 text-white/50 hover:text-white hover:border-white/30',
+                    )}
+                  >
+                    {l}
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  min={1}
+                  value={form.mapLevel > 5 ? form.mapLevel : ''}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value);
+                    if (!Number.isNaN(v) && v >= 1) setForm({ ...form, mapLevel: v });
+                  }}
+                  placeholder="outro"
+                  className="input-dark w-20 text-sm"
+                />
+              </div>
+              <p className="text-[10px] text-white/30 mt-1">
+                Define em qual nível de expansão do mapa este indicador estará visível.
+              </p>
+            </Field>
+          )}
 
           <Field label="Pontos de monitoria (uma frente de trabalho por linha)">
             <textarea
