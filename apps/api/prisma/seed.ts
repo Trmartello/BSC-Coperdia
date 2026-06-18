@@ -6,6 +6,17 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
+  // Produção: só semeia quando o banco está vazio, para nunca sobrescrever
+  // dados reais em deploys subsequentes. (Local roda sem a flag → comportamento normal.)
+  if (process.env.SEED_ONLY_IF_EMPTY === 'true') {
+    const existingUsers = await prisma.user.count();
+    if (existingUsers > 0) {
+      console.log('⏭️  Banco já populado — seed ignorado (SEED_ONLY_IF_EMPTY).');
+      return;
+    }
+    console.log('📦 Banco vazio — aplicando seed inicial em produção...');
+  }
+
   // ── Users ──────────────────────────────────────────────────────────────────
   const adminHash = await bcrypt.hash('admin123', 12);
   const admin = await prisma.user.upsert({
