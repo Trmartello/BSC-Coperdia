@@ -33,4 +33,7 @@
   .input-dark {
     @apply w-full bg-white/5 border border-white/10 focus:border-purple-500 rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none transition-colors;
   }
+  .input-dark option {
+    @apply bg-[#1a1f2e] text-white;
+  }
 }
