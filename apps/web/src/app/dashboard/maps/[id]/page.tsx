@@ -54,11 +54,16 @@ function MapIndicatorNode({ data, selected }: NodeProps) {
         <Handle key={hid} id={hid} type="source" position={pos} className="rf-handle" style={HANDLE_STYLE} />
       ))}
 
-      {/* Botão aparece só se o card tiver vizinhos em nível mais profundo */}
+      {/* Botão aparece só se o card tiver vizinhos em nível mais profundo.
+          Recolhido → sempre visível (chama atenção p/ expandir).
+          Expandido → só ao passar o mouse sobre o card. */}
       {onExpandLevel && hasDeepNeighbors && (
         <button
           onClick={(e) => { e.stopPropagation(); onExpandLevel(level); }}
-          className="nodrag absolute -bottom-3 -right-3 z-10 w-6 h-6 rounded-full bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/30 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+          className={cn(
+            'nodrag absolute -bottom-3 -right-3 z-10 w-6 h-6 rounded-full bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/30 flex items-center justify-center shadow-lg transition-opacity',
+            nextLevelVisible ? 'opacity-0 group-hover:opacity-100' : 'opacity-100',
+          )}
           title={nextLevelVisible ? 'Recolher próximo nível' : 'Expandir próximo nível'}
         >
           {nextLevelVisible
