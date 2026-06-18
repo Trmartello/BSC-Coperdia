@@ -90,11 +90,12 @@ export class ActionPlansService {
       ];
     }
 
-    if (Object.keys(actionFilter).length > 0) {
+    const hasActionFilter = Object.keys(actionFilter).length > 0;
+    if (hasActionFilter) {
       planWhere.initiatives = { some: { actions: { some: actionFilter } } };
     }
 
-    return this.prisma.actionPlan.findMany({
+    const plans = await this.prisma.actionPlan.findMany({
       where: planWhere,
       include: {
         user: { select: { id: true, name: true } },
@@ -103,13 +104,29 @@ export class ActionPlansService {
         initiatives: {
           include: {
             _count: { select: { actions: true } },
-            actions: { orderBy: { createdAt: 'asc' } },
+            // Quando há filtro de ação, retorna SOMENTE as ações compatíveis —
+            // o servidor é a fonte única da verdade da hierarquia exibida.
+            actions: {
+              where: hasActionFilter ? actionFilter : undefined,
+              orderBy: { createdAt: 'asc' },
+            },
           },
           orderBy: { sortOrder: 'asc' },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Com filtro ativo: descarta iniciativas sem nenhuma ação compatível.
+    // (Planos sem iniciativa compatível já foram excluídos pelo `where` acima.)
+    if (hasActionFilter) {
+      return plans.map((p) => ({
+        ...p,
+        initiatives: p.initiatives.filter((i) => i.actions.length > 0),
+      }));
+    }
+
+    return plans;
   }
 
   async findOne(id: string) {
