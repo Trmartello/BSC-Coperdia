@@ -310,15 +310,16 @@ function MultiFilter({
     : options;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex items-center">
       <button
         type="button"
         onClick={() => { setOpen((s) => !s); setSearch(''); }}
         className={cn(
-          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors',
+          'flex items-center gap-1.5 px-3 py-1.5 text-sm border transition-colors',
           active
             ? 'bg-white/10 border-white/15 text-white'
             : 'bg-white/5 border-transparent text-white/60 hover:text-white/85 hover:bg-white/8',
+          active ? 'rounded-l-lg rounded-r-none border-r-0' : 'rounded-lg',
         )}
       >
         <span className="text-white/35 text-xs">{label}:</span>
@@ -334,6 +335,15 @@ function MultiFilter({
         {selected.size > 1 && <span className="font-medium text-white">{selected.size} selecionados</span>}
         <ChevronDown size={12} className="text-white/30 flex-shrink-0" />
       </button>
+      {active && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClear(); setOpen(false); }}
+          className="flex items-center justify-center h-full px-1.5 py-1.5 bg-white/10 border border-white/15 rounded-r-lg text-white/40 hover:text-white hover:bg-white/15 transition-colors"
+        >
+          <X size={11} />
+        </button>
+      )}
 
       {open && (
         <div className={cn('absolute z-50 left-0 top-full mt-1 bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col', minWidth)}>
