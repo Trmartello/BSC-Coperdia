@@ -7,31 +7,26 @@ import { actionPlansApi, usersApi, mapsApi } from '../../../lib/api';
 import {
   ActionPlan, PlanDashboard,
   PLAN_STATUS_LABEL, PLAN_STATUS_COLOR,
-  ActionItemPriority,
 } from '../../../types/action-plan';
 import { cn } from '../../../lib/utils';
 import { useAuthStore } from '../../../store/auth.store';
 import { NewActionPlanModal } from '../../../components/action-plans/NewActionPlanModal';
 import { ActionPlanDetail } from '../../../components/action-plans/ActionPlanDetail';
 
-type StatusFilter = 'ALL' | 'OPEN' | 'IN_PROGRESS' | 'DONE';
-type SourceFilter = 'ALL' | 'STANDALONE' | 'CARD';
-
 export default function ActionPlansPage() {
   const [showNew, setShowNew] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<StatusFilter>('ALL');
-  const [priority, setPriority] = useState<ActionItemPriority | 'ALL'>('ALL');
-  const [source, setSource] = useState<SourceFilter>('ALL');
-  const [mapFilter, setMapFilter] = useState<string>('ALL');
+  // Todos os filtros são multi-seleção (Set vazio = "todos").
+  const [statuses, setStatuses] = useState<Set<string>>(new Set());
+  const [sources, setSources] = useState<Set<string>>(new Set());
+  const [priorities, setPriorities] = useState<Set<string>>(new Set());
+  const [mapIds, setMapIds] = useState<Set<string>>(new Set());
 
   // Filtro de usuário — por padrão, já vem filtrado pelo usuário logado
-  const [userFilter, setUserFilter] = useState<{ id: string; name: string } | null>(
-    () => {
-      const u = useAuthStore.getState().user;
-      return u ? { id: u.id, name: u.name } : null;
-    },
-  );
+  const [userIds, setUserIds] = useState<Set<string>>(() => {
+    const u = useAuthStore.getState().user;
+    return new Set(u ? [u.id] : []);
+  });
 
   const { data: plans = [], refetch } = useQuery<ActionPlan[]>({
     queryKey: ['action-plans'],
@@ -48,39 +43,50 @@ export default function ActionPlansPage() {
     queryFn: () => mapsApi.list().then((r) => r.data),
   });
 
-  // indicatorId -> set de indicadores do mapa selecionado
+  const { data: users = [] } = useQuery<any[]>({
+    queryKey: ['users'],
+    queryFn: () => usersApi.list().then((r) => r.data),
+  });
+
+  // União dos indicadores de todos os mapas selecionados
   const selectedMapIndicators = React.useMemo(() => {
-    if (mapFilter === 'ALL') return null;
-    const map = maps.find((m) => m.id === mapFilter);
-    return new Set<string>((map?.entries ?? []).map((e: any) => e.indicatorId));
-  }, [mapFilter, maps]);
+    if (mapIds.size === 0) return null;
+    const set = new Set<string>();
+    for (const m of maps) {
+      if (mapIds.has(m.id)) for (const e of m.entries ?? []) set.add(e.indicatorId);
+    }
+    return set;
+  }, [mapIds, maps]);
 
   const filtered = plans.filter((p) => {
-    if (filter !== 'ALL' && p.status !== filter) return false;
-    if (source === 'STANDALONE' && p.indicatorId !== null) return false;
-    if (source === 'CARD' && p.indicatorId === null) return false;
-    if (selectedMapIndicators) {
-      if (!p.indicatorId || !selectedMapIndicators.has(p.indicatorId)) return false;
+    if (statuses.size > 0 && !statuses.has(p.status)) return false;
+    if (sources.size > 0) {
+      const isStandalone = p.indicatorId === null;
+      const ok = (sources.has('STANDALONE') && isStandalone) || (sources.has('CARD') && !isStandalone);
+      if (!ok) return false;
     }
+    if (selectedMapIndicators && (!p.indicatorId || !selectedMapIndicators.has(p.indicatorId))) return false;
 
     const actions = p.initiatives?.flatMap((i) => i.actions ?? []) ?? [];
-    if (priority !== 'ALL' && !actions.some((a) => a.priority === priority)) return false;
-    if (userFilter) {
-      const involved = p.userId === userFilter.id || actions.some((a) => a.ownerId === userFilter.id);
+    if (priorities.size > 0 && !actions.some((a) => priorities.has(a.priority))) return false;
+    if (userIds.size > 0) {
+      const involved = [...userIds].some(
+        (uid) => p.userId === uid || actions.some((a) => a.ownerId === uid),
+      );
       if (!involved) return false;
     }
     return true;
   });
 
   const hasActiveFilters =
-    filter !== 'ALL' || source !== 'ALL' || priority !== 'ALL' || mapFilter !== 'ALL' || !!userFilter;
+    statuses.size > 0 || sources.size > 0 || priorities.size > 0 || mapIds.size > 0 || userIds.size > 0;
 
   function clearFilters() {
-    setFilter('ALL');
-    setSource('ALL');
-    setPriority('ALL');
-    setMapFilter('ALL');
-    setUserFilter(null);
+    setStatuses(new Set());
+    setSources(new Set());
+    setPriorities(new Set());
+    setMapIds(new Set());
+    setUserIds(new Set());
   }
 
   if (selectedPlanId) {
@@ -145,62 +151,74 @@ export default function ActionPlansPage() {
         </div>
       )}
 
-      {/* ── Filters (faixa horizontal compacta) ── */}
+      {/* ── Filters (faixa horizontal compacta, multi-seleção) ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <FilterSelect
+        <MultiFilter
           label="Status"
-          value={filter}
-          onChange={(v) => setFilter(v as StatusFilter)}
+          allLabel="Todos"
+          selected={statuses}
+          onToggle={(v) => setStatuses((p) => toggleSet(p, v))}
+          onClear={() => setStatuses(new Set())}
           options={[
-            { value: 'ALL', label: 'Todos' },
             { value: 'OPEN', label: 'Abertos' },
             { value: 'IN_PROGRESS', label: 'Em andamento' },
             { value: 'DONE', label: 'Concluídos' },
           ]}
         />
 
-        <FilterSelect
+        <MultiFilter
           label="Origem"
-          value={source}
-          onChange={(v) => setSource(v as SourceFilter)}
+          allLabel="Todas"
+          selected={sources}
+          onToggle={(v) => setSources((p) => toggleSet(p, v))}
+          onClear={() => setSources(new Set())}
           options={[
-            { value: 'ALL', label: 'Todas' },
             { value: 'STANDALONE', label: 'Planos avulsos' },
             { value: 'CARD', label: 'Planos de cards' },
           ]}
         />
 
-        <FilterSelect
+        <MultiFilter
           label="Prioridade"
-          value={priority}
-          onChange={(v) => setPriority(v as ActionItemPriority | 'ALL')}
+          allLabel="Todas"
+          selected={priorities}
+          onToggle={(v) => setPriorities((p) => toggleSet(p, v))}
+          onClear={() => setPriorities(new Set())}
           options={[
-            { value: 'ALL', label: 'Todas' },
             { value: 'HIGH', label: 'Alta', dot: 'bg-red-400', valueClass: 'text-red-400' },
             { value: 'MEDIUM', label: 'Média', dot: 'bg-amber-400', valueClass: 'text-amber-400' },
             { value: 'LOW', label: 'Baixa', dot: 'bg-blue-400', valueClass: 'text-blue-400' },
           ]}
         />
 
-        <FilterSelect
+        <MultiFilter
           label="Mapa"
-          value={mapFilter}
-          onChange={setMapFilter}
-          minWidth="min-w-[180px]"
-          options={[
-            { value: 'ALL', label: 'Todos' },
-            ...maps.map((m) => ({ value: m.id, label: m.name })),
-          ]}
+          allLabel="Todos"
+          searchable
+          minWidth="min-w-[200px]"
+          selected={mapIds}
+          onToggle={(v) => setMapIds((p) => toggleSet(p, v))}
+          onClear={() => setMapIds(new Set())}
+          options={maps.map((m) => ({ value: m.id, label: m.name }))}
         />
 
-        <UserFilter value={userFilter} onChange={setUserFilter} />
+        <MultiFilter
+          label="Usuário"
+          allLabel="Todos"
+          searchable
+          minWidth="min-w-[220px]"
+          selected={userIds}
+          onToggle={(v) => setUserIds((p) => toggleSet(p, v))}
+          onClear={() => setUserIds(new Set())}
+          options={users.map((u) => ({ value: u.id, label: u.name, sublabel: u.email }))}
+        />
 
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/80 border border-white/10 hover:border-white/20 transition-colors"
           >
-            <X size={12} /> Limpar
+            <X size={12} /> Limpar tudo
           </button>
         )}
       </div>
@@ -236,27 +254,41 @@ export default function ActionPlansPage() {
   );
 }
 
-interface FilterOption {
+function toggleSet(prev: Set<string>, v: string): Set<string> {
+  const next = new Set(prev);
+  if (next.has(v)) next.delete(v); else next.add(v);
+  return next;
+}
+
+interface MultiOption {
   value: string;
   label: string;
+  sublabel?: string;   // texto auxiliar (ex: e-mail)
   dot?: string;        // classe de cor do ponto (ex: bg-red-400)
   valueClass?: string; // classe de cor do texto selecionado
 }
 
-function FilterSelect({
+function MultiFilter({
   label,
-  value,
   options,
-  onChange,
-  minWidth = 'min-w-[150px]',
+  selected,
+  onToggle,
+  onClear,
+  searchable = false,
+  minWidth = 'min-w-[170px]',
+  allLabel = 'Todas',
 }: {
   label: string;
-  value: string;
-  options: FilterOption[];
-  onChange: (v: string) => void;
+  options: MultiOption[];
+  selected: Set<string>;
+  onToggle: (v: string) => void;
+  onClear: () => void;
+  searchable?: boolean;
   minWidth?: string;
+  allLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -267,14 +299,21 @@ function FilterSelect({
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const selected = options.find((o) => o.value === value) ?? options[0];
-  const active = value !== options[0]?.value; // 1ª opção = padrão ("Todos")
+  const active = selected.size > 0;
+  const selectedOpts = options.filter((o) => selected.has(o.value));
+  const visible = searchable
+    ? options.filter(
+        (o) =>
+          o.label.toLowerCase().includes(search.toLowerCase()) ||
+          (o.sublabel ?? '').toLowerCase().includes(search.toLowerCase()),
+      )
+    : options;
 
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((s) => !s)}
+        onClick={() => { setOpen((s) => !s); setSearch(''); }}
         className={cn(
           'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors',
           active
@@ -283,126 +322,68 @@ function FilterSelect({
         )}
       >
         <span className="text-white/35 text-xs">{label}:</span>
-        {selected?.dot && <span className={cn('w-1.5 h-1.5 rounded-full', selected.dot)} />}
-        <span className={cn('font-medium max-w-[150px] truncate', selected?.valueClass)}>
-          {selected?.label}
-        </span>
+        {selected.size === 0 && <span className="font-medium text-white/60">{allLabel}</span>}
+        {selected.size === 1 && (
+          <span className="flex items-center gap-1.5 font-medium max-w-[160px] truncate">
+            {selectedOpts[0]?.dot && (
+              <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', selectedOpts[0].dot)} />
+            )}
+            <span className={cn('truncate', selectedOpts[0]?.valueClass)}>{selectedOpts[0]?.label}</span>
+          </span>
+        )}
+        {selected.size > 1 && <span className="font-medium text-white">{selected.size} selecionados</span>}
         <ChevronDown size={12} className="text-white/30 flex-shrink-0" />
       </button>
 
       {open && (
-        <div className={cn('absolute z-50 left-0 top-full mt-1 bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1 max-h-72 overflow-y-auto', minWidth)}>
-          {options.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => { onChange(o.value); setOpen(false); }}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-white/5 transition-colors text-left',
-                o.value === value ? 'bg-white/5' : '',
-              )}
-            >
-              {o.dot && <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', o.dot)} />}
-              <span className={cn('truncate', o.valueClass ?? 'text-white/75')}>{o.label}</span>
-              {o.value === value && <Check size={13} className="ml-auto text-purple-400 flex-shrink-0" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function UserFilter({ value, onChange }: {
-  value: { id: string; name: string } | null;
-  onChange: (u: { id: string; name: string } | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const ref = useRef<HTMLDivElement>(null);
-
-  const { data: users = [] } = useQuery<any[]>({
-    queryKey: ['users'],
-    queryFn: () => usersApi.list().then((r) => r.data),
-  });
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const filtered = users.filter((u) =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  return (
-    <div ref={ref} className="relative">
-      <div className={cn(
-        'flex items-center rounded-lg border transition-colors',
-        value ? 'bg-white/10 border-white/15' : 'bg-white/5 border-transparent hover:bg-white/8',
-      )}>
-        <button
-          type="button"
-          onClick={() => { setOpen((s) => !s); setSearch(''); }}
-          className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 text-sm text-left"
-        >
-          <span className="text-white/35 text-xs">Usuário:</span>
-          {value ? (
-            <span className="text-white font-medium truncate max-w-[120px]">{value.name}</span>
-          ) : (
-            <span className="text-white/60 font-medium">Todos</span>
+        <div className={cn('absolute z-50 left-0 top-full mt-1 bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col', minWidth)}>
+          {searchable && (
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 flex-shrink-0">
+              <Search size={13} className="text-white/30 flex-shrink-0" />
+              <input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Pesquisar..."
+                className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none"
+              />
+            </div>
           )}
-          <ChevronDown size={12} className="text-white/30 flex-shrink-0" />
-        </button>
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className="pr-2.5 py-1.5 text-white/30 hover:text-red-400 transition-colors"
-            title="Limpar usuário"
-          >
-            <X size={12} />
-          </button>
-        )}
-      </div>
-
-      {open && (
-        <div className="absolute z-50 left-0 top-full mt-1 w-64 bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
-            <Search size={13} className="text-white/30 flex-shrink-0" />
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Pesquisar..."
-              className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none"
-            />
+          <div className="max-h-60 overflow-y-auto py-1">
+            {visible.length === 0 && <p className="px-4 py-3 text-xs text-white/30">Nenhuma opção.</p>}
+            {visible.map((o) => {
+              const checked = selected.has(o.value);
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => onToggle(o.value)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-white/5 transition-colors text-left"
+                >
+                  <span className={cn(
+                    'w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors',
+                    checked ? 'bg-purple-600 border-purple-600' : 'border-white/20',
+                  )}>
+                    {checked && <Check size={11} className="text-white" />}
+                  </span>
+                  {o.dot && <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', o.dot)} />}
+                  <span className="flex-1 min-w-0">
+                    <span className={cn('block truncate', o.valueClass ?? 'text-white/80')}>{o.label}</span>
+                    {o.sublabel && <span className="block text-[10px] text-white/30 truncate">{o.sublabel}</span>}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <div className="max-h-56 overflow-y-auto py-1">
-            {filtered.length === 0 && (
-              <p className="px-4 py-3 text-xs text-white/30">Nenhum usuário encontrado.</p>
-            )}
-            {filtered.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => { onChange({ id: u.id, name: u.name }); setOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-2 hover:bg-white/5 transition-colors text-left"
-              >
-                <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-                  {u.name[0]?.toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white/85 truncate">{u.name}</p>
-                </div>
-                {value?.id === u.id && <span className="text-purple-400 text-xs">✓</span>}
-              </button>
-            ))}
-          </div>
+          {active && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-white/40 hover:text-white/80 border-t border-white/5 flex-shrink-0"
+            >
+              <X size={11} /> Limpar
+            </button>
+          )}
         </div>
       )}
     </div>
