@@ -80,12 +80,9 @@ export class ActionPlansService {
         initiatives: {
           include: {
             _count: { select: { actions: true } },
-            actions: {
-              select: {
-                status: true, progress: true,
-                priority: true, ownerId: true, ownerName: true,
-              },
-            },
+            // Ações completas — a lista usa accordion inline (expande plano →
+            // iniciativas → ações) e abre o modal de edição direto da lista.
+            actions: { orderBy: { createdAt: 'asc' } },
           },
           orderBy: { sortOrder: 'asc' },
         },

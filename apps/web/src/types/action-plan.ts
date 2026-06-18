@@ -41,7 +41,8 @@ export interface ActionItem {
   status: ActionItemStatus;
   dueDate: string | null;
   ownerName: string | null;
-  ownerId: string | null;
+  ownerId: string | null;      // responsável pela execução
+  userId?: string;             // criador da ação
   progress: number;
   observations: string | null;
   completedAt: string | null;

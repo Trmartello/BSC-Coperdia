@@ -3,7 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Paperclip, Download, Trash2, Send, CalendarDays } from 'lucide-react';
 import { UserSelector } from '../ui/UserSelector';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { actionPlansApi, fileUrl } from '../../lib/api';
 import {
   ActionItem, ActionPlan, PlanComment,
@@ -61,7 +61,14 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
     onError: () => toast.error('Erro ao excluir ação'),
   });
 
-  const comments: PlanComment[] = (plan.comments ?? []).filter(Boolean);
+  // O modal pode ser aberto a partir da lista (que não traz comentários) ou do
+  // detalhe. Buscamos o plano completo para garantir comentários sempre presentes.
+  const { data: fullPlan } = useQuery<ActionPlan>({
+    queryKey: ['action-plan', plan.id],
+    queryFn: () => actionPlansApi.get(plan.id).then((r) => r.data),
+    initialData: plan.comments ? plan : undefined,
+  });
+  const comments: PlanComment[] = ((fullPlan ?? plan).comments ?? []).filter(Boolean);
 
   // ── Update action ──────────────────────────────────────────────────────────
   const updateMutation = useMutation({

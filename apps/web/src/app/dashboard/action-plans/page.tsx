@@ -37,7 +37,13 @@ interface ActionFilters {
 function matchAction(action: ActionItem, filters: ActionFilters): boolean {
   if (filters.statuses.size > 0 && !filters.statuses.has(action.status)) return false;
   if (filters.priorities.size > 0 && !filters.priorities.has(action.priority)) return false;
-  if (filters.userIds.size > 0 && (!action.ownerId || !filters.userIds.has(action.ownerId))) return false;
+  if (filters.userIds.size > 0) {
+    // Usuário envolvido = responsável (ownerId) OU criador (userId) da ação
+    const matchesUser =
+      (action.ownerId != null && filters.userIds.has(action.ownerId)) ||
+      (action.userId != null && filters.userIds.has(action.userId));
+    if (!matchesUser) return false;
+  }
   return true;
 }
 
