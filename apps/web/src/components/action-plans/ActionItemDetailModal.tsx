@@ -4,9 +4,9 @@ import React, { useState, useRef } from 'react';
 import { X, Paperclip, Download, Trash2, Send, CalendarDays } from 'lucide-react';
 import { UserSelector } from '../ui/UserSelector';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { actionPlansApi } from '../../lib/api';
+import { actionPlansApi, fileUrl } from '../../lib/api';
 import {
-  ActionItem, ActionPlan, PlanComment, PlanAttachment,
+  ActionItem, ActionPlan, PlanComment,
   ACTION_STATUS_LABEL, ACTION_STATUS_COLOR,
   ActionItemPriority, ActionItemStatus,
   PRIORITY_LABEL, PLAN_STATUS_LABEL,
@@ -17,7 +17,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
-type Tab = 'edit' | 'comments' | 'attachments';
+type Tab = 'edit' | 'comments';
 
 interface Props {
   plan: ActionPlan;
@@ -39,8 +39,7 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
   const [tab, setTab] = useState<Tab>('edit');
   const [action, setAction] = useState(initialAction);
   const [comment, setComment] = useState('');
-  const [commentProgress, setCommentProgress] = useState(action.progress);
-  const [uploading, setUploading] = useState(false);
+  const [commentFile, setCommentFile] = useState<File | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
@@ -63,7 +62,6 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
   });
 
   const comments: PlanComment[] = (plan.comments ?? []).filter(Boolean);
-  const attachments: PlanAttachment[] = (plan.attachments ?? []).filter(Boolean);
 
   // ── Update action ──────────────────────────────────────────────────────────
   const updateMutation = useMutation({
@@ -79,38 +77,28 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
     onError: () => toast.error('Erro ao salvar'),
   });
 
-  // ── Add comment ────────────────────────────────────────────────────────────
+  // ── Add comment (com anexo opcional) ─────────────────────────────────────────
   const commentMutation = useMutation({
     mutationFn: () =>
-      actionPlansApi.addComment(plan.id, { content: comment, progress: commentProgress }).then((r) => r.data),
+      actionPlansApi.addComment(plan.id, { content: comment.trim(), file: commentFile }).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['action-plan', plan.id] });
+      qc.invalidateQueries({ queryKey: ['action-plans'] });
+      qc.invalidateQueries({ queryKey: ['map'] });
       setComment('');
+      setCommentFile(null);
+      if (fileRef.current) fileRef.current.value = '';
       toast.success('Comentário adicionado');
     },
+    onError: () => toast.error('Erro ao adicionar comentário'),
   });
 
-  // ── Upload attachment ──────────────────────────────────────────────────────
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { toast.error('Arquivo maior que 10MB'); return; }
-    setUploading(true);
-    try {
-      await actionPlansApi.uploadAttachment(plan.id, file);
-      qc.invalidateQueries({ queryKey: ['action-plan', plan.id] });
-      toast.success('Arquivo enviado');
-    } catch {
-      toast.error('Erro no upload');
-    } finally {
-      setUploading(false);
-    }
+    setCommentFile(file);
   }
-
-  const deleteAttachment = useMutation({
-    mutationFn: (aid: string) => actionPlansApi.deleteAttachment(plan.id, aid),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['action-plan', plan.id] }),
-  });
 
   function formatBytes(bytes: number) {
     if (bytes < 1024) return `${bytes} B`;
@@ -145,11 +133,10 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
 
         {/* ── Tabs ── */}
         <div className="flex border-b border-white/5 px-5 flex-shrink-0">
-          {(['edit', 'comments', 'attachments'] as Tab[]).map((t) => {
+          {(['edit', 'comments'] as Tab[]).map((t) => {
             const labels: Record<Tab, string> = {
               edit: 'Editar',
               comments: `Comentários${comments.length ? ` ${comments.length}` : ''}`,
-              attachments: `Anexos${attachments.length ? ` ${attachments.length}` : ''}`,
             };
             return (
               <button
@@ -279,7 +266,7 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
           {/* ABA: COMENTÁRIOS */}
           {tab === 'comments' && (
             <div className="px-5 py-4 space-y-4">
-              {/* New comment */}
+              {/* New comment (texto e/ou anexo) */}
               <div className="rounded-xl border border-white/8 bg-white/3 p-3 space-y-3">
                 <p className="text-[10px] text-white/40 uppercase tracking-wider">NOVO COMENTÁRIO</p>
                 <textarea
@@ -289,21 +276,43 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
                   rows={3}
                   className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-purple-500 resize-none"
                 />
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-white/30">{commentProgress}%</span>
-                  <input
-                    type="range" min={0} max={100} step={5}
-                    value={commentProgress}
-                    onChange={(e) => setCommentProgress(Number(e.target.value))}
-                    className="flex-1 accent-purple-500"
-                  />
+
+                {/* Anexo selecionado (antes de enviar) */}
+                {commentFile && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                    <Paperclip size={13} className="text-purple-400 flex-shrink-0" />
+                    <span className="text-xs text-white/70 truncate flex-1">{commentFile.name}</span>
+                    <span className="text-[10px] text-white/30 flex-shrink-0">{formatBytes(commentFile.size)}</span>
+                    <button
+                      onClick={() => { setCommentFile(null); if (fileRef.current) fileRef.current.value = ''; }}
+                      className="text-white/30 hover:text-red-400 transition-colors flex-shrink-0"
+                      title="Remover anexo"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
+
+                <input ref={fileRef} type="file" className="hidden" onChange={pickFile}
+                  accept=".pdf,.xlsx,.docx,.pptx,.png,.jpg,.jpeg,.csv,.xls" />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fileRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-white/60 hover:text-white/80 transition-colors"
+                    title="Anexar arquivo (máx. 10 MB)"
+                  >
+                    <Paperclip size={13} />
+                    Anexar
+                  </button>
+                  <div className="flex-1" />
                   <button
                     onClick={() => commentMutation.mutate()}
-                    disabled={!comment.trim() || commentMutation.isPending}
+                    disabled={(!comment.trim() && !commentFile) || commentMutation.isPending}
                     className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-50 transition-colors"
                   >
                     <Send size={12} />
-                    Enviar
+                    {commentMutation.isPending ? 'Enviando...' : 'Enviar'}
                   </button>
                 </div>
               </div>
@@ -325,64 +334,39 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
                           {format(new Date(c.createdAt), "dd 'de' MMM. 'de' yyyy", { locale: ptBR })}
                         </span>
                       </div>
-                      <p className="text-sm text-white/65">{c.content}</p>
+                      {c.content && <p className="text-sm text-white/65 whitespace-pre-wrap">{c.content}</p>}
+
+                      {/* Anexo do comentário */}
+                      {c.attachmentUrl && (
+                        <a
+                          href={fileUrl(c.attachmentUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={c.attachmentName ?? undefined}
+                          className={cn(
+                            'flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:border-purple-500/40 hover:bg-white/8 transition-colors group',
+                            c.content ? 'mt-2' : '',
+                          )}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] text-blue-400 font-bold">
+                              {(c.attachmentName ?? c.attachmentUrl).split('.').pop()?.toUpperCase().slice(0, 3)}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white/80 truncate">{c.attachmentName ?? 'arquivo'}</p>
+                            {c.attachmentSize != null && (
+                              <p className="text-[10px] text-white/30">{formatBytes(c.attachmentSize)}</p>
+                            )}
+                          </div>
+                          <Download size={14} className="text-white/30 group-hover:text-white/70 transition-colors flex-shrink-0" />
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
                 {comments.length === 0 && (
                   <p className="text-center text-sm text-white/25 py-6">Nenhum comentário ainda.</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ABA: ANEXOS */}
-          {tab === 'attachments' && (
-            <div className="px-5 py-4 space-y-4">
-              {/* Drop zone */}
-              <div
-                onClick={() => fileRef.current?.click()}
-                className="border-2 border-dashed border-white/15 hover:border-purple-500/50 rounded-2xl p-8 text-center cursor-pointer transition-colors"
-              >
-                <Paperclip size={28} className="mx-auto text-white/20 mb-2" />
-                <p className="text-sm text-white/50">Arraste ou selecione um arquivo</p>
-                <p className="text-xs text-white/25 mt-0.5">PDF, Imagens, Excel, Word · Máx. 10 MB</p>
-                <button className="mt-3 flex items-center gap-2 mx-auto px-4 py-2 rounded-xl bg-white/8 hover:bg-white/12 border border-white/10 text-sm text-white/60 transition-colors">
-                  <Paperclip size={13} />
-                  {uploading ? 'Enviando...' : 'Selecionar arquivo'}
-                </button>
-              </div>
-              <input ref={fileRef} type="file" className="hidden" onChange={handleUpload}
-                accept=".pdf,.xlsx,.docx,.pptx,.png,.jpg,.jpeg,.csv,.xls" />
-
-              {/* File list */}
-              <div className="space-y-2">
-                {attachments.map((att) => (
-                  <div key={att.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-[10px] text-blue-400 font-bold">
-                        {att.filename.split('.').pop()?.toUpperCase().slice(0, 3)}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white/80 truncate">{att.filename}</p>
-                      <p className="text-[10px] text-white/30">
-                        {formatBytes(att.size)} · {att.user?.name} · {format(new Date(att.createdAt), "dd 'de' MMM. 'de' yyyy", { locale: ptBR })}
-                      </p>
-                    </div>
-                    <a href={att.url} download className="text-white/30 hover:text-white/70 transition-colors p-1">
-                      <Download size={14} />
-                    </a>
-                    <button
-                      onClick={() => deleteAttachment.mutate(att.id)}
-                      className="text-white/30 hover:text-red-400 transition-colors p-1"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-                {attachments.length === 0 && (
-                  <p className="text-center text-sm text-white/25 py-2">Nenhum anexo.</p>
                 )}
               </div>
             </div>

@@ -55,6 +55,11 @@ export interface PlanComment {
   progress: number | null;
   createdAt: string;
   user?: { id: string; name: string };
+  // Anexo opcional vinculado ao comentário
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentSize?: number | null;
+  attachmentMime?: string | null;
 }
 
 export interface PlanAttachment {

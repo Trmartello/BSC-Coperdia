@@ -105,11 +105,35 @@ export class ActionPlansController {
     return this.service.deleteActionItem(id, req.user.id);
   }
 
-  // ── Comments ───────────────────────────────────────────────────────────────
+  // ── Comments (com anexo opcional via multipart) ──────────────────────────────
 
   @Post(':id/comments')
-  addComment(@Param('id') id: string, @Body() dto: CreateCommentDto, @Request() req: any) {
-    return this.service.addComment(id, dto, req.user.id);
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (_, file, cb) => {
+          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+          cb(null, `${unique}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+    }),
+  )
+  addComment(
+    @Param('id') id: string,
+    @Body() dto: CreateCommentDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Request() req: any,
+  ) {
+    const payload: CreateCommentDto = { content: dto.content ?? '' };
+    if (file) {
+      payload.attachmentUrl = `/uploads/${file.filename}`;
+      payload.attachmentName = file.originalname;
+      payload.attachmentSize = file.size;
+      payload.attachmentMime = file.mimetype;
+    }
+    return this.service.addComment(id, payload, req.user.id);
   }
 
   @Delete(':id/comments/:commentId')

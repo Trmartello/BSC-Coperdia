@@ -5,6 +5,14 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Monta a URL pública de um arquivo enviado (servido em <host>/uploads, fora do /api/v1)
+export function fileUrl(path?: string | null): string {
+  if (!path) return '';
+  if (/^https?:\/\//.test(path)) return path;
+  const base = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1').replace(/\/api\/v1\/?$/, '');
+  return `${base}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('accessToken');
@@ -98,8 +106,15 @@ export const actionPlansApi = {
   updateAction: (id: string, data: any) => api.patch(`/action-plans/actions/${id}`, data),
   deleteAction: (id: string) => api.delete(`/action-plans/actions/${id}`),
 
-  addComment: (planId: string, data: { content: string; progress?: number }) =>
-    api.post(`/action-plans/${planId}/comments`, data),
+  // Comentário com anexo opcional — sempre enviado como multipart
+  addComment: (planId: string, data: { content?: string; file?: File | null }) => {
+    const form = new FormData();
+    form.append('content', data.content ?? '');
+    if (data.file) form.append('file', data.file);
+    return api.post(`/action-plans/${planId}/comments`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   deleteComment: (planId: string, commentId: string) =>
     api.delete(`/action-plans/${planId}/comments/${commentId}`),
 

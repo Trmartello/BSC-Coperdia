@@ -63,10 +63,11 @@ export class MapsService {
                 realizedValues: { where: upto, orderBy: { period: 'desc' }, take: 1 },
                 forecastValues: { where: { scenarioId: null, ...upto }, orderBy: { period: 'desc' }, take: 1 },
                 goals: { where: upto, orderBy: { period: 'desc' }, take: 1 },
-                // Contadores para o rodapé do card (ações/anexos/comentários)
+                // Contadores para o rodapé do card (ações/anexos/comentários).
+                // Anexos agora vivem dentro dos comentários (attachmentUrl).
                 actionPlans: {
                   select: {
-                    _count: { select: { comments: true, attachments: true } },
+                    comments: { select: { content: true, attachmentUrl: true } },
                     initiatives: { select: { _count: { select: { actions: true } } } },
                   },
                 },

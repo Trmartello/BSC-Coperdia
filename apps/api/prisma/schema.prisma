@@ -230,10 +230,16 @@ model ActionItem {
 model PlanComment {
   id           String   @id @default(cuid())
   actionPlanId String
-  content      String
-  progress     Int?     // progresso reportado junto ao comentário
+  content      String   @default("") // pode ser vazio quando o comentário é apenas um anexo
+  progress     Int?     // progresso reportado junto ao comentário (legado)
   createdAt    DateTime @default(now())
   userId       String
+
+  // Anexo opcional vinculado ao comentário (substitui o model PlanAttachment no fluxo novo)
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentSize Int?
+  attachmentMime String?
 
   actionPlan ActionPlan @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
   user       User       @relation(fields: [userId], references: [id])

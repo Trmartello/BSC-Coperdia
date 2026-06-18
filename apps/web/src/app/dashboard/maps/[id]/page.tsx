@@ -168,8 +168,10 @@ function buildNodesAndEdges(
       (s, p) => s + (p.initiatives?.reduce((t: number, i: any) => t + (i._count?.actions ?? 0), 0) ?? 0),
       0,
     );
-    const attachmentCount = plans.reduce((s, p) => s + (p._count?.attachments ?? 0), 0);
-    const commentCount = plans.reduce((s, p) => s + (p._count?.comments ?? 0), 0);
+    // Anexos vivem dentro dos comentários; conta comentários com arquivo e comentários com texto.
+    const allComments: any[] = plans.flatMap((p) => p.comments ?? []);
+    const attachmentCount = allComments.filter((c) => c.attachmentUrl).length;
+    const commentCount = allComments.filter((c) => c.content && String(c.content).trim()).length;
     const level = savedNode?.data?.level ?? pendingLevels?.get(entry.indicatorId) ?? 1;
 
     return {

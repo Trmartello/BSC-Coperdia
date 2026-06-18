@@ -42,8 +42,12 @@ export interface CreateActionItemDto {
 export interface UpdateActionItemDto extends Partial<CreateActionItemDto> {}
 
 export interface CreateCommentDto {
-  content: string;
+  content?: string;
   progress?: number;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentSize?: number;
+  attachmentMime?: string;
 }
 
 export interface CreateAttachmentDto {
@@ -335,10 +339,22 @@ export class ActionPlansService {
 
   async addComment(planId: string, dto: CreateCommentDto, userId: string) {
     const comment = await this.prisma.planComment.create({
-      data: { actionPlanId: planId, content: dto.content, progress: dto.progress, userId },
+      data: {
+        actionPlanId: planId,
+        content: dto.content ?? '',
+        progress: dto.progress,
+        attachmentUrl: dto.attachmentUrl ?? null,
+        attachmentName: dto.attachmentName ?? null,
+        attachmentSize: dto.attachmentSize != null ? Number(dto.attachmentSize) : null,
+        attachmentMime: dto.attachmentMime ?? null,
+        userId,
+      },
       include: { user: { select: { id: true, name: true } } },
     });
-    await this.audit(planId, userId, 'COMMENT', undefined, undefined, { content: dto.content });
+    await this.audit(planId, userId, dto.attachmentUrl ? 'ATTACHMENT' : 'COMMENT', undefined, undefined, {
+      content: dto.content,
+      attachment: dto.attachmentName,
+    });
     return comment;
   }
 

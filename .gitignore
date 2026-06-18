@@ -8,3 +8,6 @@ dist
 prisma/migrations/*.sql
 coverage
 .DS_Store
+
+# Arquivos enviados pelos usuários (anexos de comentários) — não versionar
+apps/api/uploads/
