@@ -7,7 +7,7 @@ import { actionPlansApi, usersApi } from '../../../lib/api';
 import {
   ActionPlan, PlanDashboard,
   PLAN_STATUS_LABEL, PLAN_STATUS_COLOR,
-  ActionItemPriority, PRIORITY_LABEL,
+  ActionItemPriority,
 } from '../../../types/action-plan';
 import { cn } from '../../../lib/utils';
 import { useAuthStore } from '../../../store/auth.store';
@@ -21,7 +21,7 @@ export default function ActionPlansPage() {
   const [showNew, setShowNew] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('ALL');
-  const [priorities, setPriorities] = useState<Set<ActionItemPriority>>(new Set());
+  const [priority, setPriority] = useState<ActionItemPriority | 'ALL'>('ALL');
   const [source, setSource] = useState<SourceFilter>('ALL');
 
   // Filtro de usuário — por padrão, já vem filtrado pelo usuário logado
@@ -42,23 +42,14 @@ export default function ActionPlansPage() {
     queryFn: () => actionPlansApi.dashboard().then((r) => r.data),
   });
 
-  function togglePriority(p: ActionItemPriority) {
-    setPriorities((prev) => {
-      const next = new Set(prev);
-      if (next.has(p)) next.delete(p); else next.add(p);
-      return next;
-    });
-  }
-
   const filtered = plans.filter((p) => {
     if (filter !== 'ALL' && p.status !== filter) return false;
     if (source === 'STANDALONE' && p.indicatorId !== null) return false;
     if (source === 'CARD' && p.indicatorId === null) return false;
 
     const actions = p.initiatives?.flatMap((i) => i.actions ?? []) ?? [];
-    if (priorities.size > 0 && !actions.some((a) => priorities.has(a.priority))) return false;
+    if (priority !== 'ALL' && !actions.some((a) => a.priority === priority)) return false;
     if (userFilter) {
-      // "Envolve o usuário": criou o plano OU é responsável por alguma ação
       const involved = p.userId === userFilter.id || actions.some((a) => a.ownerId === userFilter.id);
       if (!involved) return false;
     }
@@ -66,12 +57,12 @@ export default function ActionPlansPage() {
   });
 
   const hasActiveFilters =
-    filter !== 'ALL' || source !== 'ALL' || priorities.size > 0 || !!userFilter;
+    filter !== 'ALL' || source !== 'ALL' || priority !== 'ALL' || !!userFilter;
 
   function clearFilters() {
     setFilter('ALL');
     setSource('ALL');
-    setPriorities(new Set());
+    setPriority('ALL');
     setUserFilter(null);
   }
 
@@ -161,30 +152,8 @@ export default function ActionPlansPage() {
         {/* Usuário */}
         <UserFilter value={userFilter} onChange={setUserFilter} />
 
-        {/* Prioridade (multi-seleção) */}
-        <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
-          <span className="text-[10px] uppercase tracking-wider text-white/30 px-2">Prioridade</span>
-          {(['HIGH', 'MEDIUM', 'LOW'] as ActionItemPriority[]).map((p) => {
-            const active = priorities.has(p);
-            const activeStyle: Record<ActionItemPriority, string> = {
-              HIGH: 'bg-red-600 text-white',
-              MEDIUM: 'bg-amber-500 text-white',
-              LOW: 'bg-blue-600 text-white',
-            };
-            return (
-              <button
-                key={p}
-                onClick={() => togglePriority(p)}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
-                  active ? activeStyle[p] : 'text-white/40 hover:text-white/70',
-                )}
-              >
-                {PRIORITY_LABEL[p].toUpperCase()}
-              </button>
-            );
-          })}
-        </div>
+        {/* Prioridade */}
+        <PriorityDropdown value={priority} onChange={setPriority} />
 
         {/* Origem (avulso / card) */}
         <div className="flex gap-1 bg-white/5 rounded-xl p-1">
@@ -241,6 +210,77 @@ export default function ActionPlansPage() {
           onClose={() => setShowNew(false)}
           onCreated={(id) => { refetch(); setSelectedPlanId(id); }}
         />
+      )}
+    </div>
+  );
+}
+
+const PRIORITY_COLORS: Record<ActionItemPriority, string> = {
+  HIGH: 'text-red-400',
+  MEDIUM: 'text-amber-400',
+  LOW: 'text-blue-400',
+};
+
+function PriorityDropdown({
+  value,
+  onChange,
+}: {
+  value: ActionItemPriority | 'ALL';
+  onChange: (v: ActionItemPriority | 'ALL') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const options: (ActionItemPriority | 'ALL')[] = ['ALL', 'HIGH', 'MEDIUM', 'LOW'];
+  const labels: Record<string, string> = { ALL: 'Todas', HIGH: 'Alta', MEDIUM: 'Média', LOW: 'Baixa' };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/8 rounded-xl text-sm transition-colors"
+      >
+        <span className="text-white/40 text-xs">Prioridade:</span>
+        <span className={cn('font-medium', value !== 'ALL' ? PRIORITY_COLORS[value as ActionItemPriority] : 'text-white/70')}>
+          {labels[value]}
+        </span>
+        <ChevronDown size={13} className="text-white/30" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 left-0 top-full mt-1 bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[130px]">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => { onChange(opt); setOpen(false); }}
+              className={cn(
+                'w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-white/5 transition-colors text-left',
+                opt === value ? 'bg-white/5' : '',
+              )}
+            >
+              {opt !== 'ALL' && (
+                <span className={cn('w-2 h-2 rounded-full flex-shrink-0', {
+                  'bg-red-400': opt === 'HIGH',
+                  'bg-amber-400': opt === 'MEDIUM',
+                  'bg-blue-400': opt === 'LOW',
+                })} />
+              )}
+              <span className={cn(opt !== 'ALL' ? PRIORITY_COLORS[opt as ActionItemPriority] : 'text-white/70')}>
+                {labels[opt]}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
