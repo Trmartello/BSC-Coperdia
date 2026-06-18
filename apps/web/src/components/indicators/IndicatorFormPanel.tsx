@@ -6,6 +6,7 @@ import { settingsApi, formulasApi, indicatorsApi, mapsApi } from '../../lib/api'
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import { X, Trash2 } from 'lucide-react';
+import { UserSelector } from '../ui/UserSelector';
 
 const UNITS = [
   { v: 'CURRENCY', l: 'Reais (R$)' },
@@ -49,6 +50,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
     monitoring: '',
     mapLevel: 1,
   });
+  const [responsibleOwner, setResponsibleOwner] = useState<{ id: string; name: string } | null>(null);
 
   const { data: editData } = useQuery({
     queryKey: ['indicator', editIndicatorId],
@@ -92,7 +94,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         unit: form.unit,
         direction: form.direction,
         periodicity: 'MONTHLY',
-        responsible: form.responsible || null,
+        responsible: responsibleOwner?.name ?? form.responsible || null,
         monitoringPoints: form.monitoring
           .split('\n')
           .map((s) => s.trim())
@@ -299,11 +301,10 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
           </div>
 
           <Field label="Responsável">
-            <input
-              className="input-dark w-full"
-              value={form.responsible}
-              onChange={(e) => setForm({ ...form, responsible: e.target.value })}
-              placeholder="Ex: Controladoria"
+            <UserSelector
+              value={responsibleOwner}
+              onChange={setResponsibleOwner}
+              placeholder={form.responsible || 'Selecionar responsável'}
             />
           </Field>
 
