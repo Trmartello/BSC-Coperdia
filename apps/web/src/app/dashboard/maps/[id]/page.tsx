@@ -12,7 +12,7 @@ import ReactFlow, {
   getSmoothStepPath, reconnectEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, Pencil, X, ChevronsRight, ChevronsLeft } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Pencil, Trash2, X, ChevronsRight, ChevronsLeft } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
@@ -304,12 +304,13 @@ function LevelPicker({ value, onChange, levels = [1, 2, 3, 4, 5] }: {
   );
 }
 
-function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onLevelChange, usedLevels }: {
+function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onRemove, onLevelChange, usedLevels }: {
   ind: any;
   onMap?: boolean;
   level?: number;
   onAdd?: (level: number) => void;
   onEdit: () => void;
+  onRemove?: () => void;
   onLevelChange?: (l: number) => void;
   usedLevels?: number[];
 }) {
@@ -350,11 +351,16 @@ function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onLevelChange, usedLev
     );
   }
 
-  // Card no mapa: mostra badge de nível clicável
+  // Card no mapa: mostra badge de nível clicável + botão de remover do mapa
   return (
     <div className="flex items-center gap-2 px-3 py-2 hover:bg-white/5">
       <span className="text-[10px] font-mono text-white/30 w-14 flex-shrink-0">{ind.code}</span>
       <span className="text-sm text-white/70 truncate flex-1">{ind.name}</span>
+      {onRemove && (
+        <button onClick={onRemove} title="Remover do mapa" className="text-white/30 hover:text-red-400 flex-shrink-0">
+          <Trash2 size={12} />
+        </button>
+      )}
       <button onClick={onEdit} title="Editar cadastro" className="text-white/30 hover:text-white/80 flex-shrink-0">
         <Pencil size={12} />
       </button>
@@ -365,13 +371,14 @@ function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onLevelChange, usedLev
   );
 }
 
-function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, onCreateNew, onEdit, onClose }: {
+function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, onCreateNew, onEdit, onRemove, onClose }: {
   existingIds: Set<string>;
   nodeLevels: Map<string, number>;
   onAdd: (id: string, level: number) => void;
   onLevelChange: (id: string, level: number) => void;
   onCreateNew: () => void;
   onEdit: (id: string) => void;
+  onRemove: (id: string, name: string) => void;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
@@ -425,6 +432,7 @@ function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, 
                 onMap
                 level={nodeLevels.get(ind.id) ?? 1}
                 onEdit={() => onEdit(ind.id)}
+                onRemove={() => onRemove(ind.id, ind.name)}
                 onLevelChange={(l) => onLevelChange(ind.id, l)}
                 usedLevels={pickerLevels}
               />
@@ -788,6 +796,7 @@ export default function MapEditorPage() {
                 setShowAddPanel(false);
                 setIndicatorForm({ open: true, editId: indId });
               }}
+              onRemove={handleRemoveIndicator}
               onClose={() => setShowAddPanel(false)}
             />
           )}

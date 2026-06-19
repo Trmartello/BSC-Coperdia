@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Trash2, Info, ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
+import { Info, ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
 import { cn, formatNumber } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
@@ -108,9 +108,6 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
           </span>
           <button onClick={(e) => { e.stopPropagation(); onOpenInfo?.(); }} className="nodrag text-white/30 hover:text-white/70 transition-colors" title="Informações">
             <Info size={13} />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete?.(); }} className="nodrag text-white/30 hover:text-red-400 transition-colors" title="Remover">
-            <Trash2 size={13} />
           </button>
         </div>
       </div>
