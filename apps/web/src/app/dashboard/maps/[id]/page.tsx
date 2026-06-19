@@ -13,7 +13,7 @@ import ReactFlow, {
 } from 'reactflow';
 import { getHelperLines, HelperLines } from '../../../../components/maps/helperLines';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, Pencil, Trash2, X, ChevronsRight, ChevronsLeft, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, X, ChevronsRight, ChevronsLeft, ArrowUp, ArrowDown } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
@@ -317,8 +317,11 @@ function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onRemove, onLevelChang
   onLevelChange?: (l: number) => void;
   usedLevels?: number[];
 }) {
+  const maxUsed = usedLevels && usedLevels.length > 0 ? Math.max(...usedLevels) : 0;
+  const defaultLevel = maxUsed + 1;
+  const [selectedLevel, setSelectedLevel] = useState(defaultLevel);
   const [showAddLevel, setShowAddLevel] = useState(false);
-  const presets = usedLevels && usedLevels.length > 0 ? usedLevels : [1, 2, 3, 4];
+  const presets = usedLevels && usedLevels.length > 0 ? [...usedLevels, defaultLevel] : [1];
 
   if (!onMap && onAdd) {
     // Card disponível: botão + abre mini-picker de nível antes de adicionar
@@ -331,15 +334,24 @@ function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onRemove, onLevelChang
         </button>
         {showAddLevel ? (
           <div className="flex items-center gap-1 flex-shrink-0">
-            {presets.map((l) => (
+            {Array.from(new Set(presets)).sort((a, b) => a - b).map((l) => (
               <button
                 key={l}
-                onClick={() => { onAdd(l); setShowAddLevel(false); }}
-                className="w-6 h-6 rounded bg-white/8 text-white/60 hover:bg-indigo-600 hover:text-white text-[10px] font-bold transition-colors"
+                onClick={() => setSelectedLevel(l)}
+                className={cn(
+                  'w-6 h-6 rounded text-[10px] font-bold transition-colors',
+                  selectedLevel === l ? 'bg-indigo-600 text-white' : 'bg-white/8 text-white/60 hover:bg-indigo-600/60 hover:text-white',
+                )}
               >
                 {l}
               </button>
             ))}
+            <button
+              onClick={() => { onAdd(selectedLevel); setShowAddLevel(false); }}
+              className="px-2 h-6 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] text-white font-medium transition-colors"
+            >
+              OK
+            </button>
           </div>
         ) : (
           <button
@@ -780,11 +792,6 @@ export default function MapEditorPage() {
     setSelectedIndicatorId(null);
   }, []);
 
-  const saveMutation = useMutation({
-    mutationFn: () => mapsApi.saveLayout(id, { nodes, edges }).then((r) => r.data),
-    onSuccess: () => toast.success('Layout salvo'),
-  });
-
   // ── Auto-save: persiste a configuração assim que o usuário faz um ajuste
   // manual (mover card ou redefinir rota). Debounce p/ agrupar o arraste; só
   // salva quando há alteração manual pendente (dirtyRef), de modo que a
@@ -918,14 +925,6 @@ export default function MapEditorPage() {
             />
           )}
         </div>
-        <button
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-          className="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-sm text-white font-medium disabled:opacity-50 transition-colors"
-        >
-          <Save size={13} />
-          {saveMutation.isPending ? 'Salvando...' : 'Salvar'}
-        </button>
       </div>
 
       {/* ── Canvas + Detail Panel ── */}
