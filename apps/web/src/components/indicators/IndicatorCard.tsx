@@ -93,7 +93,11 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
     <div className="card-dark w-[260px] flex flex-col gap-0 overflow-hidden">
       {/* ── Header ── */}
       <div className="flex items-start justify-between px-4 pt-2.5 pb-1.5">
-        <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className={cn(
+            'flex-shrink-0 w-2.5 h-2.5 rounded-full',
+            indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-green-500',
+          )} />
           <p className="text-white/80 text-sm font-semibold leading-tight truncate">
             {indicator.name}
           </p>
@@ -147,17 +151,6 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
       <div className="px-4 pb-2 flex items-start justify-between gap-2">
         <DeviationRow {...devGoalInfo} />
         {showEstimate && <DeviationRow {...devEstInfo} />}
-      </div>
-
-      {/* ── Direction indicator ── */}
-      <div className="px-4 pb-1.5 flex items-center gap-1.5">
-        <div className={cn(
-          'w-3 h-3 rounded-sm flex-shrink-0',
-          indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-green-500',
-        )} />
-        <span className="text-[10px] text-white/50">
-          {indicator.direction === 'LOWER_IS_BETTER' ? 'Quanto Menor Melhor' : 'Quanto Maior Melhor'}
-        </span>
       </div>
 
       {/* ── Footer: actions / attachments / comments ── */}

@@ -722,9 +722,17 @@ export default function MapEditorPage() {
             {map.category.name}
           </span>
         )}
-        <span className="text-[10px] text-white/30 italic hidden lg:inline">
-          · arraste as alças (4 lados) para conectar · clique na linha para selecionar e remover (✕) · arraste a ponta para reconectar
-        </span>
+        <div className="hidden lg:flex items-center gap-3 text-[10px] text-white/50">
+          <span className="font-medium text-white/30">Legenda:</span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+            Quanto Menor Melhor
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0" />
+            Quanto Maior Melhor
+          </span>
+        </div>
         <div className="flex-1" />
 
         {/* Level expand / collapse controls */}

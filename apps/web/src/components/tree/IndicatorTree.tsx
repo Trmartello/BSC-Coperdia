@@ -36,8 +36,11 @@ function IndicatorNode({ data }: NodeProps) {
       <Handle type="target" position={Position.Left} style={{ background: '#6366f1', border: 'none' }} />
 
       <div className="px-4 pt-3 pb-2">
-        <p className="text-white/80 text-sm font-semibold leading-snug">{indicator.name}</p>
-        <p className="text-white/30 text-[10px] font-mono">{indicator.code}</p>
+        <div className="flex items-center gap-2">
+          <span className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-green-500'}`} />
+          <p className="text-white/80 text-sm font-semibold leading-snug">{indicator.name}</p>
+        </div>
+        <p className="text-white/30 text-[10px] font-mono pl-4">{indicator.code}</p>
       </div>
 
       <div className="grid grid-cols-3 px-4 pb-2 gap-1">
@@ -60,13 +63,6 @@ function IndicatorNode({ data }: NodeProps) {
           </span>
         </div>
       )}
-
-      <div className="border-t border-white/5 px-4 py-1.5 flex items-center gap-1.5">
-        <div className={`w-2.5 h-2.5 rounded-sm ${indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-green-500'}`} />
-        <span className="text-[9px] text-white/35">
-          {indicator.direction === 'LOWER_IS_BETTER' ? 'Quanto Menor Melhor' : 'Quanto Maior Melhor'}
-        </span>
-      </div>
 
       <Handle type="source" position={Position.Right} style={{ background: '#6366f1', border: 'none' }} />
     </div>
