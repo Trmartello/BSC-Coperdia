@@ -23,15 +23,17 @@ export function formatValue(value: number | null, unit: MeasureUnit): string {
   }
 }
 
-/** Same as formatValue but without the unit label — use inside cards where the unit badge is already shown. */
+/** Same as formatValue but without the unit symbol — use inside cards where the unit badge is already shown. */
 export function formatNumber(value: number | null, unit: MeasureUnit): string {
   if (value === null || value === undefined) return '—';
 
   switch (unit) {
     case 'CURRENCY':
-      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(value);
+      // Sem "R$" — o badge no canto superior direito já indica a unidade.
+      return new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(value);
     case 'PERCENTAGE':
-      return `${value.toFixed(2)}%`;
+      // Sem "%" — idem.
+      return value.toFixed(2);
     case 'DAYS':
       return value.toFixed(0);
     case 'INDEX':
