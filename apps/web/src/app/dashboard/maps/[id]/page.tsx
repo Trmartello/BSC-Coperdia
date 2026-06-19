@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactFlow, {
-  Node, Edge, Background, Controls, MiniMap,
+  Node, Edge, Background, BackgroundVariant, Controls, MiniMap,
   useNodesState, useEdgesState,
   addEdge, Connection, MarkerType, Position,
   NodeProps, Handle, Panel, NodeChange, applyNodeChanges,
@@ -906,7 +906,12 @@ export default function MapEditorPage() {
             proOptions={{ hideAttribution: true }}
             deleteKeyCode="Delete"
           >
-            <Background color="#1a1f2e" gap={24} size={1} />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={20}
+              size={1.5}
+              color="rgba(255,255,255,0.14)"
+            />
             <HelperLines horizontal={helperLineH} vertical={helperLineV} />
             <Controls
               style={{ background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
