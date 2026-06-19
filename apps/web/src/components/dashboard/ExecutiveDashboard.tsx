@@ -14,6 +14,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  LabelList,
 } from 'recharts';
 
 const STATUS_META: Record<string, { label: string; bar: string; chip: string }> = {
@@ -69,9 +70,15 @@ export function ExecutiveDashboard() {
                 cursor={{ fill: 'rgba(255,255,255,0.04)' }}
               />
               <Legend wrapperStyle={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }} />
-              <Bar dataKey="Realizado" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Meta" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Previsto" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Realizado" fill="#6366f1" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="Realizado" position="top" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.55)' }} formatter={(v: number) => v != null ? v.toLocaleString('pt-BR', { notation: 'compact' }) : ''} />
+              </Bar>
+              <Bar dataKey="Meta" fill="#94a3b8" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="Meta" position="top" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.55)' }} formatter={(v: number) => v != null ? v.toLocaleString('pt-BR', { notation: 'compact' }) : ''} />
+              </Bar>
+              <Bar dataKey="Previsto" fill="#10b981" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="Previsto" position="top" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.55)' }} formatter={(v: number) => v != null ? v.toLocaleString('pt-BR', { notation: 'compact' }) : ''} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
