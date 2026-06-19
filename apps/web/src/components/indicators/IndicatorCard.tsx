@@ -61,11 +61,14 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
   // Quando a estimativa está desabilitada nas configurações, o desvio é medido
   // sobre o valor realizado (não há "previsto" a considerar).
   const effective = showEstimate ? effectiveEstimate(realized, estimate) : realized;
-  const devVsGoal = deviation(effective, goal);
-  const devRealized = deviation(effective, realized);
+  // Cada coluna compara seu próprio valor contra a META:
+  //   • esquerda  → Realizado vs Meta
+  //   • direita   → Estimativa vs Meta
+  const devRealizedVsGoal = deviation(realized, goal);
+  const devEstimateVsGoal = deviation(effective, goal);
 
-  const devGoalInfo = deviationLabel(devVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
-  const devEstInfo = deviationLabel(devRealized, indicator.direction ?? 'HIGHER_IS_BETTER');
+  const devGoalInfo = deviationLabel(devRealizedVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
+  const devEstInfo = deviationLabel(devEstimateVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
 
   // Estimativa de insumos é editável; calculados derivam da fórmula.
   const canEdit = showEstimate && indicator.type === 'INPUT';
