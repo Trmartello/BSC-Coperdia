@@ -28,7 +28,7 @@ function fmtMonthCompact(d: Date) {
 function fmtBar(v: number | null | undefined, unit: string): string {
   if (v == null) return '';
   if (unit === 'PERCENTAGE') return `${v % 1 === 0 ? v : v.toFixed(1)}%`;
-  if (unit === 'DAYS') return `${Math.round(v)}d`;
+  if (unit === 'DAYS') return `${Math.round(v)}`;
   if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
   if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
   return `${v % 1 === 0 ? v : v.toFixed(1)}`;
