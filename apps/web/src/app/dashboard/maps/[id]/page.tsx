@@ -713,9 +713,9 @@ export default function MapEditorPage() {
 
 
   return (
-    <div className="flex flex-col h-[calc(100vh-56px-48px)]">
+    <div className="flex flex-col h-[calc(100vh-48px-24px)]">
       {/* ── Topbar ── */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-2">
         <button
           onClick={() => router.push('/dashboard/maps')}
           className="flex items-center gap-1.5 text-sm text-white/50 hover:text-white/80 transition-colors"

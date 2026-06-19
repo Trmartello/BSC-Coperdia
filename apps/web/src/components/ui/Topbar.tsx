@@ -53,7 +53,7 @@ export function Topbar() {
     : 'DR';
 
   return (
-    <header className="h-14 border-b border-white/5 bg-[#0d0f17] flex items-center px-6 gap-4">
+    <header className="h-12 border-b border-white/5 bg-[#0d0f17] flex items-center px-6 gap-3">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1 text-xs text-white/40">
         <span>Copérdia</span>
