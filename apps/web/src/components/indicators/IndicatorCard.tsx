@@ -103,7 +103,7 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
           </p>
         </div>
         <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-          <span className="text-[10px] text-white/50 font-medium border border-white/15 rounded px-1.5 py-0.5">
+          <span className="text-xs font-bold text-purple-200 bg-purple-600/30 border border-purple-400/40 rounded-md px-2 py-1 leading-none uppercase tracking-wide">
             {unitLabel(indicator.unit)}
           </span>
         </div>
