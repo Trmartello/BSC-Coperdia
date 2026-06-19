@@ -9,12 +9,14 @@ import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { notificationsApi, AppNotification } from '../../lib/api';
 import { useAuthStore } from '../../store/auth.store';
+import { useActionPlanIntent } from '../../store/action-plan-intent.store';
 import { cn } from '../../lib/utils';
 
 export function NotificationsBell() {
   const router = useRouter();
   const qc = useQueryClient();
   const { user } = useAuthStore();
+  const { requestPlanForIndicator, requestEditAction } = useActionPlanIntent();
   const canScan = user?.role === 'ADMIN' || user?.role === 'CONTROLADORIA';
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -58,25 +60,27 @@ export function NotificationsBell() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  // Destino de navegação conforme o tipo do alerta
-  const targetOf = (n: AppNotification): string => {
-    // Ação em atraso → abre o formulário de edição da ação estruturada
-    if (n.type === 'OVERDUE_ACTION')
-      return n.actionItemId
-        ? `/dashboard/action-plans?actionItem=${n.actionItemId}`
-        : '/dashboard/action-plans';
-    // Fora da meta → criar/abrir plano de ação vinculado ao indicador
-    if (n.type === 'OFF_TRACK')
-      return n.indicatorId
-        ? `/dashboard/action-plans?newPlanIndicator=${n.indicatorId}`
-        : '/dashboard/action-plans';
-    return '/dashboard/indicators';
-  };
-
   const handleClick = (n: AppNotification) => {
     if (!n.readAt) markRead.mutate(n.id);
     setOpen(false);
-    router.push(targetOf(n));
+    // Ação em atraso → abre o formulário de edição da ação estruturada
+    if (n.type === 'OVERDUE_ACTION' && n.actionItemId) {
+      requestEditAction(n.actionItemId);
+      router.push('/dashboard/action-plans');
+      return;
+    }
+    // Fora da meta → abre o plano de ação do indicador (existente p/ edição ou
+    // um plano em branco recém-criado para preencher)
+    if (n.type === 'OFF_TRACK' && n.indicatorId) {
+      requestPlanForIndicator(n.indicatorId);
+      router.push('/dashboard/action-plans');
+      return;
+    }
+    if (n.type === 'OVERDUE_ACTION' || n.type === 'OFF_TRACK') {
+      router.push('/dashboard/action-plans');
+      return;
+    }
+    router.push('/dashboard/indicators');
   };
 
   return (

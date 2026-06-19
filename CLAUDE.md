@@ -97,7 +97,7 @@ Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
 - `OFF_TRACK` é **manual**: `scanOffTrack()` (varredura) restrita a ADMIN/CONTROLADORIA, ancorada no período mais recente COM metas; severidade CRITICAL (fora da meta) / WARNING (em risco); idempotente; vincula `actionPlanId` se já houver plano.
 - Visibilidade: ADMIN/CONTROLADORIA/DIRETORIA veem tudo; demais veem `userId null` ou próprios.
 - Endpoints: `GET /notifications`, `PATCH /notifications/:id/read`, `POST /notifications/read-all`, `POST /notifications/scan-off-track` (Roles), `POST /notifications/trigger-overdue`.
-- Sino: badge de não lidos, dropdown, botão "Varrer metas" (ADMIN/CONTROLADORIA). Clique navega e marca lido — OVERDUE→`?actionItem=<id>` (abre form de edição da ação), OFF_TRACK→`?newPlanIndicator=<id>` (abre criação de plano), INCONSISTENCY→`/dashboard/indicators`. Deep-links tratados na page de action-plans via `window.location.search`.
+- Sino: badge de não lidos, dropdown, botão "Varrer metas" (ADMIN/CONTROLADORIA). Clique marca lido e abre o alvo via **store reativo** `store/action-plan-intent.store.ts` (funciona mesmo já estando na página — `router.push` não remonta): OVERDUE→`requestEditAction` abre `ActionItemDetailModal` (form de edição), OFF_TRACK→`requestPlanForIndicator` chama `actionPlansApi.ensureForIndicator` (pega/cria plano) e abre `ActionPlanDetail` em drawer, INCONSISTENCY→`/dashboard/indicators`. A page de action-plans consome o intent em `useEffect`.
 
 ### Padrões do IndicatorCard (`components/indicators/IndicatorCard.tsx`)
 - Largura fixa `w-[260px]`. Sem botões Info/lixeira/delete no card (removidos).

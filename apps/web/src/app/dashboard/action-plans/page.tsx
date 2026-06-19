@@ -17,10 +17,12 @@ import {
 } from '../../../types/action-plan';
 import { cn } from '../../../lib/utils';
 import { useAuthStore } from '../../../store/auth.store';
+import { useActionPlanIntent } from '../../../store/action-plan-intent.store';
 import { NewActionPlanModal } from '../../../components/action-plans/NewActionPlanModal';
 import { NewInitiativeModal } from '../../../components/action-plans/NewInitiativeModal';
 import { NewActionItemModal } from '../../../components/action-plans/NewActionItemModal';
 import { ActionItemDetailModal } from '../../../components/action-plans/ActionItemDetailModal';
+import { ActionPlanDetail } from '../../../components/action-plans/ActionPlanDetail';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -52,10 +54,10 @@ function matchAction(action: ActionItem, filters: ActionFilters): boolean {
 export default function ActionPlansPage() {
   const qc = useQueryClient();
   const [showNew, setShowNew] = useState(false);
-  // Deep-links vindos dos alertas do sino
-  const [newPlanIndicator, setNewPlanIndicator] = useState<string | undefined>(undefined);
+  // Alvos abertos a partir dos alertas do sino (via store reativo)
+  const { offTrackIndicatorId, editActionItemId, clear: clearIntent } = useActionPlanIntent();
+  const [editPlanId, setEditPlanId] = useState<string | null>(null);
   const [deepAction, setDeepAction] = useState<{ plan: ActionPlan; action: ActionItem } | null>(null);
-  const deepLinkDone = useRef(false);
 
   // All filters are multi-select Sets (empty = "all")
   const [statuses, setStatuses] = useState<Set<string>>(new Set());
@@ -93,38 +95,41 @@ export default function ActionPlansPage() {
     staleTime: 30_000,
   });
 
-  // Deep-links do sino: ?newPlanIndicator=<id> abre criação de plano vinculado;
-  // ?actionItem=<id> abre o formulário de edição da ação (em atraso).
+  // OFF_TRACK (sino): garante o plano do indicador (existente ou um em branco)
+  // e abre o editor do plano.
+  const ensurePlan = useMutation({
+    mutationFn: (indicatorId: string) => actionPlansApi.ensureForIndicator(indicatorId).then((r) => r.data),
+    onSuccess: (plan: any) => {
+      setEditPlanId(plan.id);
+      qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
+    },
+    onError: () => toast.error('Não foi possível abrir o plano de ação'),
+  });
+
   useEffect(() => {
-    if (deepLinkDone.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const newInd = params.get('newPlanIndicator');
-    const actionItemId = params.get('actionItem');
-    if (!newInd && !actionItemId) return;
+    if (!offTrackIndicatorId) return;
+    const id = offTrackIndicatorId;
+    clearIntent();
+    ensurePlan.mutate(id);
+  }, [offTrackIndicatorId]);
 
-    const clearUrl = () => window.history.replaceState(null, '', '/dashboard/action-plans');
-
-    if (newInd) {
-      setNewPlanIndicator(newInd);
-      setShowNew(true);
-      deepLinkDone.current = true;
-      clearUrl();
-      return;
-    }
-    // Localiza a ação (e o plano pai) nos dados já carregados
-    if (allPlans.length === 0) return; // aguarda o carregamento
+  // OVERDUE (sino): abre o formulário de edição da ação localizando-a nos dados.
+  useEffect(() => {
+    if (!editActionItemId) return;
+    if (allPlans.length === 0) return; // aguarda o carregamento dos planos
+    const wanted = editActionItemId;
     for (const p of allPlans) {
       for (const init of p.initiatives ?? []) {
-        const act = (init.actions ?? []).find((a) => a.id === actionItemId);
+        const act = (init.actions ?? []).find((a) => a.id === wanted);
         if (act) {
           setDeepAction({ plan: p, action: act });
-          deepLinkDone.current = true;
-          clearUrl();
+          clearIntent();
           return;
         }
       }
     }
-  }, [allPlans]);
+    clearIntent(); // ação não encontrada (ex.: filtro) — evita loop
+  }, [editActionItemId, allPlans]);
 
   const { data: dash } = useQuery<PlanDashboard>({
     queryKey: ['action-plans-dashboard'],
@@ -310,13 +315,30 @@ export default function ActionPlansPage() {
 
       {showNew && (
         <NewActionPlanModal
-          indicatorId={newPlanIndicator}
-          onClose={() => { setShowNew(false); setNewPlanIndicator(undefined); }}
+          onClose={() => setShowNew(false)}
           onCreated={() => {
             qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
             qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
           }}
         />
+      )}
+
+      {/* Editor de plano aberto a partir de um alerta "Fora da meta" */}
+      {editPlanId && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-black/50 backdrop-blur-sm" onClick={() => setEditPlanId(null)} />
+          <div className="w-[480px] max-w-full bg-[#1a1f2e] border-l border-white/10 shadow-2xl overflow-y-auto">
+            <ActionPlanDetail
+              planId={editPlanId}
+              asPanel
+              onClose={() => {
+                setEditPlanId(null);
+                qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
+                qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {deepAction && (
