@@ -190,13 +190,15 @@ function buildNodesAndEdges(
     };
   });
 
-  // Mapa das alças salvas por par origem→destino (preserva o lado escolhido)
-  const savedHandles = new Map<string, { sourceHandle?: string; targetHandle?: string }>();
+  // Mapa das alças salvas por par origem→destino. `manual` indica que o
+  // usuário fixou manualmente a rota dessa conexão (tem prioridade máxima).
+  const savedHandles = new Map<string, { sourceHandle?: string; targetHandle?: string; manual: boolean }>();
   for (const se of savedFlow?.edges ?? []) {
     if (se.source && se.target) {
       savedHandles.set(`${se.source}->${se.target}`, {
         sourceHandle: se.sourceHandle ?? undefined,
         targetHandle: se.targetHandle ?? undefined,
+        manual: se.data?.manualRoute ?? false,
       });
     }
   }
@@ -220,7 +222,7 @@ function buildNodesAndEdges(
           animated: false,
           style: { stroke: '#6366f1', strokeWidth: 1.5, strokeDasharray: '5 3' },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
-          data: { parentId: target, childId: source, onRemoveEdge: handlers?.onRemoveEdge },
+          data: { parentId: target, childId: source, manualRoute: saved?.manual ?? false, onRemoveEdge: handlers?.onRemoveEdge },
         });
       }
     }
@@ -501,6 +503,11 @@ export default function MapEditorPage() {
   const [helperLineH, setHelperLineH] = useState<number | undefined>();
   const [helperLineV, setHelperLineV] = useState<number | undefined>();
 
+  // Marca que houve um ajuste manual (mover card / reconectar) pendente de
+  // persistência. O auto-save só dispara quando esta flag estiver ligada,
+  // evitando salvar a montagem inicial vinda do servidor.
+  const dirtyRef = useRef(false);
+
   // Intercepta o arraste: calcula o alinhamento mais próximo, "gruda" o card
   // nele e desenha as linhas-guia. Demais mudanças seguem o fluxo padrão.
   const handleNodesChange = useCallback(
@@ -521,6 +528,9 @@ export default function MapEditorPage() {
         setHelperLineH(lines.horizontal);
         setHelperLineV(lines.vertical);
       }
+
+      // Reposicionar um card é um ajuste manual → marca para auto-save
+      if (changes.some((c) => c.type === 'position')) dirtyRef.current = true;
 
       setNodes((nds) => applyNodeChanges(changes, nds));
     },
@@ -598,7 +608,10 @@ export default function MapEditorPage() {
     };
 
     return edges.map((e) => {
-      const handles = pickHandles(e.source, e.target);
+      // Rota manual fixada pelo usuário tem prioridade máxima: mantém as alças
+      // salvas e NÃO sofre roteamento automático. Demais conexões "flutuam".
+      const manual = (e.data as any)?.manualRoute;
+      const handles = manual ? undefined : pickHandles(e.source, e.target);
       return {
         ...e,
         ...(handles ?? {}),
@@ -686,16 +699,35 @@ export default function MapEditorPage() {
       const newParent = newConnection.target;
       const newChild = newConnection.source;
 
-      // sem alteração efetiva
-      if (oldParent === newParent && oldChild === newChild) return;
+      // Mesmo par de nós: o usuário apenas mudou o LADO (handle) da conexão.
+      // Isso é uma rota manual → fixa as alças escolhidas e marca como manual
+      // (prioridade máxima, deixa de sofrer roteamento automático). Sem chamada
+      // à API, pois a relação entre indicadores não mudou.
+      if (oldParent === newParent && oldChild === newChild) {
+        setEdges((els) =>
+          els.map((e) =>
+            e.id === oldEdge.id
+              ? {
+                  ...e,
+                  sourceHandle: newConnection.sourceHandle ?? e.sourceHandle,
+                  targetHandle: newConnection.targetHandle ?? e.targetHandle,
+                  data: { ...(e.data as any), manualRoute: true },
+                }
+              : e,
+          ),
+        );
+        dirtyRef.current = true;
+        return;
+      }
 
       setEdges((els) =>
         reconnectEdge(oldEdge, newConnection, els).map((e) =>
           e.id === oldEdge.id || (e.source === newChild && e.target === newParent)
-            ? { ...e, data: { ...(e.data as any), parentId: newParent, childId: newChild } }
+            ? { ...e, data: { ...(e.data as any), parentId: newParent, childId: newChild, manualRoute: true } }
             : e,
         ),
       );
+      dirtyRef.current = true;
       try {
         await indicatorsApi.removeRelation(oldParent, oldChild);
         await indicatorsApi.addRelation(newParent, newChild);
@@ -752,6 +784,19 @@ export default function MapEditorPage() {
     mutationFn: () => mapsApi.saveLayout(id, { nodes, edges }).then((r) => r.data),
     onSuccess: () => toast.success('Layout salvo'),
   });
+
+  // ── Auto-save: persiste a configuração assim que o usuário faz um ajuste
+  // manual (mover card ou redefinir rota). Debounce p/ agrupar o arraste; só
+  // salva quando há alteração manual pendente (dirtyRef), de modo que a
+  // montagem inicial vinda do servidor nunca dispara escrita.
+  useEffect(() => {
+    if (!dirtyRef.current || nodes.length === 0) return;
+    const t = setTimeout(() => {
+      dirtyRef.current = false;
+      mapsApi.saveLayout(id, { nodes, edges }).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [nodes, edges, id]);
 
   const addIndMutation = useMutation({
     mutationFn: ({ indicatorId }: { indicatorId: string; level: number }) =>
