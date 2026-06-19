@@ -355,8 +355,8 @@ function IndicatorRow({ ind, onMap, level, onAdd, onEdit, onRemove, onLevelChang
           </div>
         ) : (
           <button
-            onClick={() => setShowAddLevel(true)}
-            title="Adicionar ao mapa"
+            onClick={() => { setSelectedLevel(defaultLevel); setShowAddLevel(true); }}
+            title={`Adicionar ao mapa (nível sugerido ${defaultLevel})`}
             className="text-white/30 hover:text-emerald-400 flex-shrink-0"
           >
             <Plus size={14} />
