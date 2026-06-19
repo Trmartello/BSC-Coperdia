@@ -566,11 +566,46 @@ export default function MapEditorPage() {
 
   const displayEdges = React.useMemo(() => {
     const nodeLevel = new Map(nodes.map((n) => [n.id, n.data?.level ?? 1]));
-    return edges.map((e) => ({
-      ...e,
-      hidden: (nodeLevel.get(e.source) ?? 1) > visibleUpToLevel
-             || (nodeLevel.get(e.target) ?? 1) > visibleUpToLevel,
-    }));
+
+    // Geometria atual de cada nó (centro + dimensões) para roteamento flutuante
+    const geom = new Map<string, { cx: number; cy: number; w: number; h: number; x: number; y: number }>();
+    for (const n of nodes) {
+      const w = n.width ?? 260;
+      const h = n.height ?? 150;
+      geom.set(n.id, { cx: n.position.x + w / 2, cy: n.position.y + h / 2, w, h, x: n.position.x, y: n.position.y });
+    }
+
+    // Escolhe os lados (handles) que se "enfrentam", minimizando o comprimento
+    // da linha: o lado de saída aponta para o nó de destino e vice-versa.
+    const pickHandles = (sourceId: string, targetId: string) => {
+      const s = geom.get(sourceId);
+      const t = geom.get(targetId);
+      if (!s || !t) return undefined;
+      const dx = t.cx - s.cx;
+      const dy = t.cy - s.cy;
+      // Normaliza a diferença pelo tamanho do nó para que o eixo dominante
+      // considere a forma do card (cards largos preferem ligações laterais).
+      const ax = Math.abs(dx) / ((s.w + t.w) / 2);
+      const ay = Math.abs(dy) / ((s.h + t.h) / 2);
+      if (ax >= ay) {
+        return dx >= 0
+          ? { sourceHandle: 'right', targetHandle: 'left' }
+          : { sourceHandle: 'left', targetHandle: 'right' };
+      }
+      return dy >= 0
+        ? { sourceHandle: 'bottom', targetHandle: 'top' }
+        : { sourceHandle: 'top', targetHandle: 'bottom' };
+    };
+
+    return edges.map((e) => {
+      const handles = pickHandles(e.source, e.target);
+      return {
+        ...e,
+        ...(handles ?? {}),
+        hidden: (nodeLevel.get(e.source) ?? 1) > visibleUpToLevel
+               || (nodeLevel.get(e.target) ?? 1) > visibleUpToLevel,
+      };
+    });
   }, [edges, nodes, visibleUpToLevel]);
 
   const handleRemoveIndicator = useCallback(async (indId: string, name: string) => {
