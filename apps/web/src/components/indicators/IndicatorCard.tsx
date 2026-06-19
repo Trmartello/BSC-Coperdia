@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
+import { ClipboardList, Paperclip, MessageSquare, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn, formatNumber } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
@@ -97,10 +97,9 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
       {/* ── Header ── */}
       <div className="flex items-start justify-between px-4 pt-2.5 pb-1.5">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className={cn(
-            'flex-shrink-0 w-2.5 h-2.5 rounded-full',
-            indicator.direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-green-500',
-          )} />
+          {indicator.direction === 'LOWER_IS_BETTER'
+            ? <ArrowDown size={15} strokeWidth={3} className="flex-shrink-0 text-blue-500" />
+            : <ArrowUp size={15} strokeWidth={3} className="flex-shrink-0 text-green-500" />}
           <p className="text-white/80 text-sm font-semibold leading-tight truncate">
             {indicator.name}
           </p>

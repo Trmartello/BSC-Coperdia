@@ -12,7 +12,7 @@ import ReactFlow, {
   getSmoothStepPath, reconnectEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Save, Plus, Pencil, Trash2, X, ChevronsRight, ChevronsLeft } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Pencil, Trash2, X, ChevronsRight, ChevronsLeft, ArrowUp, ArrowDown } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
@@ -739,11 +739,11 @@ export default function MapEditorPage() {
         <div className="hidden lg:flex items-center gap-3 text-[10px] text-white/50">
           <span className="font-medium text-white/30">Legenda:</span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+            <ArrowDown size={13} strokeWidth={3} className="text-blue-500 flex-shrink-0" />
             Quanto Menor Melhor
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0" />
+            <ArrowUp size={13} strokeWidth={3} className="text-green-500 flex-shrink-0" />
             Quanto Maior Melhor
           </span>
         </div>
