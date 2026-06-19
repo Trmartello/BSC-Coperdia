@@ -176,6 +176,80 @@ export class NotificationsService {
     });
   }
 
+  // ── Varredura Meta vs Realizado (manual: ADMIN/CONTROLADORIA após cargas) ─────
+  // Lista os indicadores que precisam de tratativa (em risco / fora da meta) no
+  // período mais recente e gera um alerta por indicador, com link para criar/abrir
+  // o plano de ação. Idempotente: re-executar resolve os que voltaram à meta.
+
+  async scanOffTrack(): Promise<{ flagged: number }> {
+    // Off-track só faz sentido onde há meta; ancora no período mais recente COM metas.
+    const latest = await this.prisma.goal.findFirst({
+      orderBy: { period: 'desc' },
+      select: { period: true },
+    });
+    if (!latest) return { flagged: 0 };
+    const period = latest.period;
+    const periodISO = period.toISOString();
+    const periodLabel = format(period, 'MM/yyyy');
+
+    const [indicators, realized, goals, plans] = await Promise.all([
+      this.prisma.indicator.findMany({ where: { active: true } }),
+      this.prisma.realizedValue.findMany({ where: { period }, select: { indicatorId: true, value: true } }),
+      this.prisma.goal.findMany({ where: { period }, select: { indicatorId: true, value: true } }),
+      this.prisma.actionPlan.findMany({
+        where: { indicatorId: { not: null } },
+        select: { id: true, indicatorId: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    const realMap = new Map(realized.map((r) => [r.indicatorId, Number(r.value)]));
+    const goalMap = new Map(goals.map((g) => [g.indicatorId, Number(g.value)]));
+    const planMap = new Map<string, string>(); // indicatorId → plano mais recente
+    for (const p of plans) if (p.indicatorId && !planMap.has(p.indicatorId)) planMap.set(p.indicatorId, p.id);
+
+    const detected: string[] = [];
+    for (const ind of indicators) {
+      const real = realMap.get(ind.id);
+      const goal = goalMap.get(ind.id);
+      if (real == null || goal == null) continue; // sem dado completo → vira inconsistência, não off-track
+
+      // Desvio "favorável" conforme a direção (menor-é-melhor inverte o sinal)
+      const raw = goal === 0 ? real - goal : (real - goal) / Math.abs(goal);
+      const favorableDev = ind.direction === 'LOWER_IS_BETTER' ? -raw : raw;
+
+      let status: 'ON_TRACK' | 'AT_RISK' | 'OFF_TRACK';
+      if (favorableDev >= -0.001) status = 'ON_TRACK';
+      else if (favorableDev >= -0.1) status = 'AT_RISK';
+      else status = 'OFF_TRACK';
+      if (status === 'ON_TRACK') continue;
+
+      const dedupeKey = `OFFTRACK:${ind.id}:${periodISO}`;
+      detected.push(dedupeKey);
+      await this.upsert(dedupeKey, {
+        type: 'OFF_TRACK',
+        severity: status === 'OFF_TRACK' ? 'CRITICAL' : 'WARNING',
+        title: `${status === 'OFF_TRACK' ? 'Fora da meta' : 'Em risco'}: ${ind.code}`,
+        message: `${ind.name}: realizado ${this.fmtNum(real)} vs meta ${this.fmtNum(goal)} em ${periodLabel}. Requer plano de ação.`,
+        indicatorId: ind.id,
+        actionPlanId: planMap.get(ind.id) ?? null,
+        period,
+        userId: null,
+      });
+    }
+
+    // Resolve alertas do período que voltaram à meta (não detectados nesta varredura)
+    await this.prisma.notification.updateMany({
+      where: { type: 'OFF_TRACK', resolvedAt: null, period, dedupeKey: { notIn: detected } },
+      data: { resolvedAt: new Date() },
+    });
+
+    return { flagged: detected.length };
+  }
+
+  private fmtNum(v: number): string {
+    return v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  }
+
   private async upsert(dedupeKey: string, payload: UpsertPayload): Promise<void> {
     await this.prisma.notification.upsert({
       where: { dedupeKey },

@@ -502,6 +502,7 @@ model AuditLog {
 enum NotificationType {
   INCONSISTENCY  // dado de insumo faltante p/ um indicador calculado
   OVERDUE_ACTION // ação do plano em atraso
+  OFF_TRACK      // indicador fora da meta (Meta vs Realizado) → precisa de tratativa
 }
 
 enum NotificationSeverity {

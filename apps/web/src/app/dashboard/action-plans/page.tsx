@@ -52,6 +52,10 @@ function matchAction(action: ActionItem, filters: ActionFilters): boolean {
 export default function ActionPlansPage() {
   const qc = useQueryClient();
   const [showNew, setShowNew] = useState(false);
+  // Deep-links vindos dos alertas do sino
+  const [newPlanIndicator, setNewPlanIndicator] = useState<string | undefined>(undefined);
+  const [deepAction, setDeepAction] = useState<{ plan: ActionPlan; action: ActionItem } | null>(null);
+  const deepLinkDone = useRef(false);
 
   // All filters are multi-select Sets (empty = "all")
   const [statuses, setStatuses] = useState<Set<string>>(new Set());
@@ -88,6 +92,39 @@ export default function ActionPlansPage() {
     queryFn: () => actionPlansApi.list().then((r) => r.data),
     staleTime: 30_000,
   });
+
+  // Deep-links do sino: ?newPlanIndicator=<id> abre criação de plano vinculado;
+  // ?actionItem=<id> abre o formulário de edição da ação (em atraso).
+  useEffect(() => {
+    if (deepLinkDone.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const newInd = params.get('newPlanIndicator');
+    const actionItemId = params.get('actionItem');
+    if (!newInd && !actionItemId) return;
+
+    const clearUrl = () => window.history.replaceState(null, '', '/dashboard/action-plans');
+
+    if (newInd) {
+      setNewPlanIndicator(newInd);
+      setShowNew(true);
+      deepLinkDone.current = true;
+      clearUrl();
+      return;
+    }
+    // Localiza a ação (e o plano pai) nos dados já carregados
+    if (allPlans.length === 0) return; // aguarda o carregamento
+    for (const p of allPlans) {
+      for (const init of p.initiatives ?? []) {
+        const act = (init.actions ?? []).find((a) => a.id === actionItemId);
+        if (act) {
+          setDeepAction({ plan: p, action: act });
+          deepLinkDone.current = true;
+          clearUrl();
+          return;
+        }
+      }
+    }
+  }, [allPlans]);
 
   const { data: dash } = useQuery<PlanDashboard>({
     queryKey: ['action-plans-dashboard'],
@@ -273,8 +310,21 @@ export default function ActionPlansPage() {
 
       {showNew && (
         <NewActionPlanModal
-          onClose={() => setShowNew(false)}
+          indicatorId={newPlanIndicator}
+          onClose={() => { setShowNew(false); setNewPlanIndicator(undefined); }}
           onCreated={() => {
+            qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
+            qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
+          }}
+        />
+      )}
+
+      {deepAction && (
+        <ActionItemDetailModal
+          plan={deepAction.plan}
+          action={deepAction.action}
+          onClose={() => {
+            setDeepAction(null);
             qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
             qc.invalidateQueries({ queryKey: ['action-plans-dashboard'] });
           }}

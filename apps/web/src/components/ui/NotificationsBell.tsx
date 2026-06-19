@@ -3,15 +3,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Bell, AlertTriangle, CalendarClock, Mail, CheckCheck } from 'lucide-react';
+import { Bell, AlertTriangle, CalendarClock, Target, Mail, CheckCheck, RadarIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 import { notificationsApi, AppNotification } from '../../lib/api';
+import { useAuthStore } from '../../store/auth.store';
 import { cn } from '../../lib/utils';
 
 export function NotificationsBell() {
   const router = useRouter();
   const qc = useQueryClient();
+  const { user } = useAuthStore();
+  const canScan = user?.role === 'ADMIN' || user?.role === 'CONTROLADORIA';
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -31,6 +35,18 @@ export function NotificationsBell() {
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
+  const scan = useMutation({
+    mutationFn: () => notificationsApi.scanOffTrack().then((r) => r.data),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success(
+        res.flagged > 0
+          ? `${res.flagged} indicador(es) precisam de tratativa (Meta vs Realizado)`
+          : 'Nenhum indicador fora da meta no período mais recente',
+      );
+    },
+    onError: () => toast.error('Falha ao executar a varredura'),
+  });
 
   // Fecha ao clicar fora
   useEffect(() => {
@@ -44,7 +60,16 @@ export function NotificationsBell() {
 
   // Destino de navegação conforme o tipo do alerta
   const targetOf = (n: AppNotification): string => {
-    if (n.type === 'OVERDUE_ACTION') return '/dashboard/action-plans';
+    // Ação em atraso → abre o formulário de edição da ação estruturada
+    if (n.type === 'OVERDUE_ACTION')
+      return n.actionItemId
+        ? `/dashboard/action-plans?actionItem=${n.actionItemId}`
+        : '/dashboard/action-plans';
+    // Fora da meta → criar/abrir plano de ação vinculado ao indicador
+    if (n.type === 'OFF_TRACK')
+      return n.indicatorId
+        ? `/dashboard/action-plans?newPlanIndicator=${n.indicatorId}`
+        : '/dashboard/action-plans';
     return '/dashboard/indicators';
   };
 
@@ -72,17 +97,30 @@ export function NotificationsBell() {
       {open && (
         <div className="absolute right-0 top-10 z-50 w-[360px] max-h-[460px] flex flex-col bg-[#1a1f2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10">
-            <span className="text-sm font-semibold text-white/80">
-              Alertas{unread > 0 && <span className="text-white/40 font-normal"> · {unread} não lidos</span>}
-            </span>
-            {unread > 0 && (
+          <div className="px-4 py-2.5 border-b border-white/10">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-white/80">
+                Alertas{unread > 0 && <span className="text-white/40 font-normal"> · {unread} não lidos</span>}
+              </span>
+              {unread > 0 && (
+                <button
+                  onClick={() => markAll.mutate()}
+                  disabled={markAll.isPending}
+                  className="flex items-center gap-1 text-[11px] text-purple-300 hover:text-purple-200 disabled:opacity-50"
+                >
+                  <CheckCheck size={13} /> Marcar todas
+                </button>
+              )}
+            </div>
+            {canScan && (
               <button
-                onClick={() => markAll.mutate()}
-                disabled={markAll.isPending}
-                className="flex items-center gap-1 text-[11px] text-purple-300 hover:text-purple-200 disabled:opacity-50"
+                onClick={() => scan.mutate()}
+                disabled={scan.isPending}
+                className="mt-2 w-full flex items-center justify-center gap-1.5 text-[11px] text-purple-200 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
+                title="Varrer indicadores fora da meta (Meta vs Realizado) no período mais recente"
               >
-                <CheckCheck size={13} /> Marcar todas
+                <RadarIcon size={13} />
+                {scan.isPending ? 'Varrendo...' : 'Varrer metas (Meta vs Realizado)'}
               </button>
             )}
           </div>
@@ -131,8 +169,8 @@ export function NotificationsBell() {
 }
 
 function NotifIcon({ notif }: { notif: AppNotification }) {
-  const isOverdue = notif.type === 'OVERDUE_ACTION';
-  const Icon = isOverdue ? CalendarClock : AlertTriangle;
+  const Icon =
+    notif.type === 'OVERDUE_ACTION' ? CalendarClock : notif.type === 'OFF_TRACK' ? Target : AlertTriangle;
   const color = notif.severity === 'CRITICAL' ? 'text-red-400 bg-red-500/10' : 'text-amber-400 bg-amber-500/10';
   return (
     <span className={cn('flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center', color)}>

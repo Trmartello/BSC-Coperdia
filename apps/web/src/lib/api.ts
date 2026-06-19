@@ -198,7 +198,7 @@ export const dashboardApi = {
 // ─── Notifications (alertas do sino) ──────────────────────────────────────────
 export interface AppNotification {
   id: string;
-  type: 'INCONSISTENCY' | 'OVERDUE_ACTION';
+  type: 'INCONSISTENCY' | 'OVERDUE_ACTION' | 'OFF_TRACK';
   severity: 'INFO' | 'WARNING' | 'CRITICAL';
   title: string;
   message: string;
@@ -215,4 +215,5 @@ export const notificationsApi = {
   list: () => api.get<{ items: AppNotification[]; unreadCount: number }>('/notifications'),
   markRead: (id: string) => api.patch(`/notifications/${id}/read`),
   markAllRead: () => api.post('/notifications/read-all'),
+  scanOffTrack: () => api.post<{ flagged: number }>('/notifications/scan-off-track'),
 };
