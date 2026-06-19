@@ -2,6 +2,10 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Evita "JavaScript heap out of memory" durante o nest build em builders
+# com pouca RAM (causa comum de falha de build no Railway).
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 # Dependências (node_modules é hoisted para a raiz no monorepo)
 COPY package*.json ./
 COPY apps/api/package.json ./apps/api/
