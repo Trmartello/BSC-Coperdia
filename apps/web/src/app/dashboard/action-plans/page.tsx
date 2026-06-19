@@ -95,22 +95,32 @@ export default function ActionPlansPage() {
     staleTime: 30_000,
   });
 
-  // OFF_TRACK (sino): garante o plano do indicador (existente ou um em branco)
-  // e abre o editor do plano.
-  const ensurePlan = useMutation({
-    mutationFn: (indicatorId: string) => actionPlansApi.ensureForIndicator(indicatorId).then((r) => r.data),
-    onSuccess: (plan: any) => {
-      setEditPlanId(plan.id);
-      qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
-    },
-    onError: () => toast.error('Não foi possível abrir o plano de ação'),
-  });
-
+  // OFF_TRACK (sino): garante o plano do indicador e decide o que abrir:
+  //  • já existe uma ação estruturada → abre o formulário de edição da ação
+  //  • ainda não há ação → abre o editor do plano para iniciar uma iniciativa
   useEffect(() => {
     if (!offTrackIndicatorId) return;
-    const id = offTrackIndicatorId;
+    const indicatorId = offTrackIndicatorId;
     clearIntent();
-    ensurePlan.mutate(id);
+    (async () => {
+      try {
+        const plan = await actionPlansApi.ensureForIndicator(indicatorId).then((r) => r.data);
+        const full = await actionPlansApi.get(plan.id).then((r) => r.data);
+        const actions: ActionItem[] = (full.initiatives ?? []).flatMap((i: any) => i.actions ?? []);
+        if (actions.length > 0) {
+          // prioriza ação em aberto; entre elas, a mais recente
+          const open = actions.filter((a) => a.status !== 'DONE' && a.status !== 'CANCELLED');
+          const pool = open.length > 0 ? open : actions;
+          const action = [...pool].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+          setDeepAction({ plan: full, action });
+        } else {
+          setEditPlanId(plan.id);
+        }
+        qc.invalidateQueries({ queryKey: ['action-plans'], exact: false });
+      } catch {
+        toast.error('Não foi possível abrir o plano de ação');
+      }
+    })();
   }, [offTrackIndicatorId]);
 
   // OVERDUE (sino): abre o formulário de edição da ação localizando-a nos dados.
