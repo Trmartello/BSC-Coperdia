@@ -131,7 +131,8 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
           const midX = (lx1 + lx2) / 2;
           const color = pair.good ? 'rgba(52,211,153,0.7)' : 'rgba(248,113,113,0.7)';
           const labelColor = pair.good ? '#34d399' : '#f87171';
-          const label = `${pair.pct > 0 ? '+' : ''}${pair.pct.toFixed(1)}% YoY`;
+          const monthName = MESES[pts[pair.recentIdx].period.getUTCMonth()];
+          const label = `${monthName} ${pair.pct > 0 ? '+' : ''}${pair.pct.toFixed(1)}% YoY`;
           const labelW = label.length * 6.2 + 10;
           return (
             <g key={`yoy-${pi}`}>
