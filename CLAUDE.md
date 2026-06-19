@@ -78,11 +78,43 @@ apps/
 - Plano de ação: `indicatorId = null` → avulso; `indicatorId = id` → vinculado
 - Cálculo: CalcEngineService faz sort topológico antes de avaliar fórmulas
 - `formula.variables` = JSON `{NOME_VAR: indicatorId}` para substituição em mathjs
+- Cenários foram **removidos** da UI. `scenario.store.ts` mantém apenas `activePeriod`.
+
+### Editor de Mapas (`app/dashboard/maps/[id]/page.tsx`)
+Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
+- **Persistência**: auto-save (debounce 800ms via `useEffect` + `dirtyRef`). **Não há botão "Salvar"** — `dirtyRef.current = true` em qualquer mudança de posição/edge dispara o save. `dirtyRef` evita save espúrio no mount inicial.
+- **Smart guides**: `components/maps/helperLines.tsx` — `getHelperLines()` calcula snap (6px) + `<HelperLines>` desenha as linhas-guia roxas via canvas overlay lendo o transform do store ReactFlow.
+- **Floating edges**: memo `displayEdges` recalcula `sourceHandle`/`targetHandle` pela posição relativa dos cards (`pickHandles`). Respeita `manualRoute`: edge com `data.manualRoute === true` nunca é re-roteada automaticamente. `onReconnect` na mesma dupla origem/destino marca `manualRoute = true`.
+- **`manualRoute`** é persistido no `flowData` JSON e restaurado em `buildNodesAndEdges`.
+- **Background**: `BackgroundVariant.Dots`, gap 20, size 1.5, cor `rgba(255,255,255,0.14)`.
+- **MiniMap**: 120×80, opacity 0.85, pannable/zoomable. Dimensões vão no `style`, não como props.
+- **Níveis**: ao adicionar card pelo painel "Gerenciar Indicadores", o nível sugerido pré-selecionado é `max(níveis em uso) + 1` (componente `IndicatorRow`).
+- **Gerenciar Indicadores**: drawer lateral direito fixo (`fixed top-12 right-0 bottom-0 w-[380px]`) com backdrop.
+
+### Padrões do IndicatorCard (`components/indicators/IndicatorCard.tsx`)
+- Largura fixa `w-[260px]`. Sem botões Info/lixeira/delete no card (removidos).
+- Direção: `ArrowUp` verde (HIGHER_IS_BETTER) / `ArrowDown` azul (LOWER_IS_BETTER), antes do nome.
+- Unidade: badge roxo destacado no canto superior direito (`unitLabel()`).
+- Valores numéricos via `formatNumber()` (sem símbolo de unidade — o badge já mostra).
+- Desvio: esquerda = Realizado vs Meta; direita = Estimativa vs Meta. Base sempre a Meta.
+- Footer (ações/anexos/comentários) só renderiza se ao menos um count > 0.
 
 ## Banco de Dados
 - **URL**: `postgresql://postgres:postgres@localhost:5432/bsc_coperdia`
-- **Seed**: 2 usuários, 4 indicadores (PMR/PME/PMP/NCG), 5 mapas, 1 plano de ação
+- **Seed**: usuários + indicadores (PMR/PME/PMP/NCG e derivados) + mapas + planos
 - **Credenciais seed**: `admin@coperdia.com.br / admin123`
+
+## Deploy (Railway / Docker)
+- `apps/api/Dockerfile` e `apps/web/Dockerfile`. **Builds falham silenciosamente** —
+  SEMPRE validar antes de push: `cd apps/api && npx tsc --noEmit` e `cd apps/web && npx next build` (ambos devem sair 0).
+- `next build` deve rodar de dentro de `apps/web`, nunca da raiz.
+- Deploy parado/antigo no Railway = build novo falhou silenciosamente. Conferir deps no `package.json` do app afetado.
+
+## Fluxo Eficiente (economia de tokens)
+- Sempre fazer push para **`main` E `claude/fervent-shannon-lmub77`**.
+- Usar `/push` (commit+push nos dois branches) e `/build-check` em vez de fazer manualmente.
+- Não re-verificar serviços/arquivos que não mudaram; confiar no estado já estabelecido.
+- Edits cirúrgicos (Edit) em vez de reescrever arquivos inteiros.
 
 ## Portas
 - API: `http://localhost:3001/api/v1`
