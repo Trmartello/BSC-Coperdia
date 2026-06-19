@@ -7,8 +7,9 @@ import { useScenarioStore } from '../../store/scenario.store';
 import { cn, formatValue } from '../../lib/utils';
 import {
   ResponsiveContainer,
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -56,7 +57,7 @@ export function ExecutiveDashboard() {
         <div className="card-dark p-5">
           <h3 className="text-sm font-semibold text-white/80 mb-4">Realizado vs Meta vs Previsto</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={kpis.map((k: any) => ({
+            <ComposedChart data={kpis.map((k: any) => ({
               name: k.code,
               Realizado: k.realized,
               Meta: k.goal,
@@ -73,13 +74,13 @@ export function ExecutiveDashboard() {
               <Bar dataKey="Realizado" fill="#6366f1" radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="Realizado" position="top" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.55)' }} formatter={(v: number) => v != null ? v.toLocaleString('pt-BR', { notation: 'compact' }) : ''} />
               </Bar>
-              <Bar dataKey="Meta" fill="#94a3b8" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="Meta" position="top" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.55)' }} formatter={(v: number) => v != null ? v.toLocaleString('pt-BR', { notation: 'compact' }) : ''} />
-              </Bar>
               <Bar dataKey="Previsto" fill="#10b981" radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="Previsto" position="top" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.55)' }} formatter={(v: number) => v != null ? v.toLocaleString('pt-BR', { notation: 'compact' }) : ''} />
               </Bar>
-            </BarChart>
+              <Line dataKey="Meta" type="monotone" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 4" dot={{ r: 3, fill: '#94a3b8', strokeWidth: 0 }}>
+                <LabelList dataKey="Meta" position="top" style={{ fontSize: 9, fill: 'rgba(255,255,255,0.55)' }} formatter={(v: number) => v != null ? v.toLocaleString('pt-BR', { notation: 'compact' }) : ''} />
+              </Line>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}
