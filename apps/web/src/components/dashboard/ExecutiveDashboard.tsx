@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '../../lib/api';
 import { useScenarioStore } from '../../store/scenario.store';
 import { cn, formatValue } from '../../lib/utils';
-import { IndicatorStatus } from '../../types';
 import {
   ResponsiveContainer,
   BarChart,
@@ -53,37 +52,28 @@ export function ExecutiveDashboard() {
 
       {/* Charts */}
       {kpis.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="card-dark p-5">
-            <h3 className="text-sm font-semibold text-white/80 mb-4">Realizado vs Meta vs Previsto</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={kpis.map((k: any) => ({
-                name: k.code,
-                Realizado: k.realized,
-                Meta: k.goal,
-                Previsto: k.forecast,
-              }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.5)' }} />
-                <YAxis tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.5)' }} />
-                <Tooltip
-                  contentStyle={{ background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }}
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }} />
-                <Bar dataKey="Realizado" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Meta" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Previsto" fill="#10b981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="card-dark p-5">
-            <h3 className="text-sm font-semibold text-white/80 mb-4">Status dos Indicadores</h3>
-            <div className="flex flex-col gap-3">
-              {kpis.map((kpi: any) => <StatusBar key={kpi.id} kpi={kpi} />)}
-            </div>
-          </div>
+        <div className="card-dark p-5">
+          <h3 className="text-sm font-semibold text-white/80 mb-4">Realizado vs Meta vs Previsto</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={kpis.map((k: any) => ({
+              name: k.code,
+              Realizado: k.realized,
+              Meta: k.goal,
+              Previsto: k.forecast,
+            }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.5)' }} />
+              <YAxis tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.5)' }} />
+              <Tooltip
+                contentStyle={{ background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff' }}
+                cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }} />
+              <Bar dataKey="Realizado" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Meta" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Previsto" fill="#10b981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
     </div>
@@ -91,7 +81,7 @@ export function ExecutiveDashboard() {
 }
 
 function KpiCard({ kpi }: { kpi: any }) {
-  const meta = STATUS_META[kpi.status as IndicatorStatus] ?? STATUS_META.NO_DATA;
+  const meta = STATUS_META[kpi.status as string] ?? STATUS_META.NO_DATA;
   const positive = kpi.deviationGoal != null && kpi.deviationGoal >= 0;
   return (
     <div className="card-dark p-4">
@@ -113,22 +103,6 @@ function KpiCard({ kpi }: { kpi: any }) {
   );
 }
 
-function StatusBar({ kpi }: { kpi: any }) {
-  const pct = kpi.goal && kpi.effective ? Math.min(100, Math.abs((kpi.effective / kpi.goal) * 100)) : 0;
-  const meta = STATUS_META[kpi.status as IndicatorStatus] ?? STATUS_META.NO_DATA;
-
-  return (
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span className="text-white/60">{kpi.name}</span>
-        <span className="text-white/40">{pct.toFixed(0)}%</span>
-      </div>
-      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-        <div className={cn('h-full rounded-full transition-all', meta.bar)} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
 
 function DashboardSkeleton() {
   return (

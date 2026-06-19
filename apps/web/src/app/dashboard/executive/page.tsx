@@ -8,7 +8,7 @@ export default function ExecutivePage() {
   const { activePeriod } = useScenarioStore();
   const periodLabel = (() => {
     try {
-      return new Date(activePeriod).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      return new Date(activePeriod + 'T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
     } catch {
       return activePeriod;
     }
