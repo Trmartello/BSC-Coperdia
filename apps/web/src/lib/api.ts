@@ -70,19 +70,6 @@ export const indicatorsApi = {
     api.delete('/indicators/relations', { data: { parentId, childId } }),
 };
 
-// ─── Scenarios ────────────────────────────────────────────────────────────────
-export const scenariosApi = {
-  list: () => api.get('/scenarios'),
-  get: (id: string) => api.get(`/scenarios/${id}`),
-  create: (data: { name: string; description?: string; period: string }) =>
-    api.post('/scenarios', data),
-  recalculate: (id: string) => api.post(`/scenarios/${id}/recalculate`),
-  compare: (base: string, compare: string) =>
-    api.get('/scenarios/compare', { params: { base, compare } }),
-  impactMap: (id: string) => api.get(`/scenarios/${id}/impact-map`),
-  archive: (id: string) => api.patch(`/scenarios/${id}/archive`),
-};
-
 // ─── Action Plans ─────────────────────────────────────────────────────────────
 export const actionPlansApi = {
   list: (params?: {

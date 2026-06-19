@@ -25,11 +25,11 @@ const STATUS_META: Record<string, { label: string; bar: string; chip: string }> 
 };
 
 export function ExecutiveDashboard() {
-  const { activeScenario, activePeriod } = useScenarioStore();
+  const { activePeriod } = useScenarioStore();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard-executive', activePeriod, activeScenario?.id],
-    queryFn: () => dashboardApi.executive(activePeriod, activeScenario?.id).then((r) => r.data),
+    queryKey: ['dashboard-executive', activePeriod],
+    queryFn: () => dashboardApi.executive(activePeriod).then((r) => r.data),
     refetchInterval: 30_000,
   });
 

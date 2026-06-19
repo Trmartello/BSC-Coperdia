@@ -147,12 +147,20 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
         {showEstimate && <DeviationRow {...devEstInfo} />}
       </div>
 
-      {/* ── Footer: actions / attachments / comments ── */}
-      <div className="border-t border-white/5 px-4 py-1.5 flex items-center gap-3">
-        <FooterAction icon={<ClipboardList size={11} />} count={actionCount} label="ações" onClick={onOpenActionPlan} />
-        <FooterAction icon={<Paperclip size={11} />} count={attachmentCount} label="Anexos" />
-        <FooterAction icon={<MessageSquare size={11} />} count={commentCount} label="Comentários" />
-      </div>
+      {/* ── Footer: só aparece quando há ações, anexos ou comentários ── */}
+      {(actionCount > 0 || attachmentCount > 0 || commentCount > 0) && (
+        <div className="border-t border-white/5 px-4 py-1.5 flex items-center gap-3">
+          {actionCount > 0 && (
+            <FooterAction icon={<ClipboardList size={11} />} count={actionCount} label="ações" onClick={onOpenActionPlan} />
+          )}
+          {attachmentCount > 0 && (
+            <FooterAction icon={<Paperclip size={11} />} count={attachmentCount} label="Anexos" />
+          )}
+          {commentCount > 0 && (
+            <FooterAction icon={<MessageSquare size={11} />} count={commentCount} label="Comentários" />
+          )}
+        </div>
+      )}
     </div>
   );
 }

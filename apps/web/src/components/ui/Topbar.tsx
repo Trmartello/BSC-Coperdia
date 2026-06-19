@@ -4,25 +4,16 @@ import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/auth.store';
 import { useScenarioStore } from '../../store/scenario.store';
-import { scenariosApi, indicatorsApi, settingsApi } from '../../lib/api';
-import { Scenario } from '../../types';
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, Layers, Plus, FileSpreadsheet } from 'lucide-react';
+import { indicatorsApi, settingsApi } from '../../lib/api';
+import { Bell, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { NewScenarioModal } from '../scenarios/NewScenarioModal';
 import { ImportDataModal } from '../indicators/ImportDataModal';
 
 export function Topbar() {
   const { user } = useAuthStore();
-  const { activeScenario, setActiveScenario, activePeriod, setActivePeriod } = useScenarioStore();
-  const [open, setOpen] = useState(false);
-  const [showNewScenario, setShowNewScenario] = useState(false);
+  const { activePeriod, setActivePeriod } = useScenarioStore();
   const [showImport, setShowImport] = useState(false);
   const qc = useQueryClient();
-
-  const { data: scenarios = [] } = useQuery({
-    queryKey: ['scenarios'],
-    queryFn: () => scenariosApi.list().then((r) => r.data as Scenario[]),
-  });
 
   const { data: periods = [] } = useQuery({
     queryKey: ['indicator-periods'],
@@ -39,14 +30,6 @@ export function Topbar() {
     mutationFn: () => settingsApi.setFlag('showEstimate', !showEstimate),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings-flags'] }),
   });
-
-  // Auto-seleciona o cenário baseline (ou o primeiro) quando nenhum está ativo
-  useEffect(() => {
-    if (!activeScenario && scenarios.length > 0) {
-      const baseline = scenarios.find((s) => s.isBaseline) ?? scenarios[0];
-      setActiveScenario(baseline);
-    }
-  }, [scenarios, activeScenario, setActiveScenario]);
 
   // Auto-seleciona o período mais recente se o período ativo não existir nos dados
   useEffect(() => {
@@ -111,66 +94,7 @@ export function Topbar() {
         <button onClick={nextPeriod} disabled={periodIdx >= periods.length - 1} className="text-white/40 hover:text-white/80 disabled:opacity-20 px-0.5"><ChevronRight size={13} /></button>
       </div>
 
-      {/* Scenario selector */}
-      <div className="relative">
-        <button
-          onClick={() => setOpen((s) => !s)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white/70 transition-colors"
-        >
-          <Layers size={13} className="text-purple-400" />
-          <span className="max-w-[160px] truncate">{activeScenario?.name ?? 'Selecionar cenário'}</span>
-          {activeScenario?.isBaseline && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25">base</span>
-          )}
-          <ChevronDown size={12} className="text-white/30" />
-        </button>
-
-        {open && (
-          <>
-            <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-10 z-30 w-60 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-              <div className="px-3 py-2 flex items-center justify-between border-b border-white/5">
-                <p className="text-[10px] uppercase tracking-widest text-white/30">Cenários</p>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setOpen(false); setShowNewScenario(true); }}
-                  className="flex items-center gap-1 text-[10px] text-purple-300 hover:text-purple-200 bg-purple-600/20 border border-purple-500/30 px-2 py-0.5 rounded-lg transition-colors"
-                >
-                  <Plus size={11} />
-                  Novo Cenário
-                </button>
-              </div>
-              <div className="max-h-64 overflow-y-auto py-1">
-                {scenarios.length === 0 && (
-                  <p className="px-3 py-3 text-xs text-white/30">Nenhum cenário disponível.</p>
-                )}
-                {scenarios.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => { setActiveScenario(s); setOpen(false); }}
-                    className={cn(
-                      'w-full flex items-center justify-between px-3 py-2 text-left text-xs hover:bg-white/5 transition-colors',
-                      activeScenario?.id === s.id ? 'text-purple-300' : 'text-white/70',
-                    )}
-                  >
-                    <span className="truncate">{s.name}</span>
-                    {s.isBaseline && <span className="text-[9px] text-white/30">base</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
       {showImport && <ImportDataModal onClose={() => setShowImport(false)} />}
-
-      {showNewScenario && (
-        <NewScenarioModal
-          period={activePeriod}
-          onClose={() => setShowNewScenario(false)}
-          onCreated={(s) => { setActiveScenario(s as Scenario); setShowNewScenario(false); }}
-        />
-      )}
 
       {/* Right: notification + user */}
       <button className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white/80 transition-colors">
