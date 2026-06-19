@@ -399,12 +399,17 @@ function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, 
   const pickerLevels = usedLevels.length > 0 ? usedLevels : [1, 2, 3, 4, 5];
 
   return (
-    <div className="absolute top-14 right-4 z-10 w-80 bg-[#1a1f2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-      <div className="p-3 border-b border-white/5 flex items-center justify-between">
-        <p className="text-sm font-semibold text-white">Gerenciar Indicadores</p>
-        <button onClick={onClose} className="text-white/30 hover:text-white/70 text-xs">✕</button>
-      </div>
-      <div className="p-3 border-b border-white/5">
+    <>
+      {/* Backdrop — clique fora fecha a gaveta */}
+      <div className="fixed inset-0 top-12 z-30 bg-black/30" onClick={onClose} />
+
+      {/* Gaveta lateral direita — altura total abaixo da topbar */}
+      <div className="fixed top-12 right-0 bottom-0 z-40 w-[380px] bg-[#1a1f2e] border-l border-white/10 shadow-2xl flex flex-col">
+        <div className="p-4 border-b border-white/5 flex items-center justify-between">
+          <p className="text-sm font-semibold text-white">Gerenciar Indicadores</p>
+          <button onClick={onClose} className="text-white/30 hover:text-white/70 text-base leading-none">✕</button>
+        </div>
+        <div className="p-4 border-b border-white/5">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -419,7 +424,7 @@ function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, 
           <Plus size={13} /> Criar novo indicador
         </button>
       </div>
-      <div className="max-h-72 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         {onMapList.length > 0 && (
           <>
             <p className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-widest text-white/30">
@@ -454,8 +459,9 @@ function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, 
         {available.length === 0 && onMapList.length === 0 && (
           <p className="text-center text-xs text-white/30 py-6">Nenhum indicador encontrado.</p>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
