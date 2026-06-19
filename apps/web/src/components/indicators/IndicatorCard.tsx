@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Info, ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
+import { ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
 import { cn, formatNumber } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
@@ -50,7 +50,7 @@ function deviationLabel(pct: number | null, direction: 'HIGHER_IS_BETTER' | 'LOW
   return { label: `${sign}${pct.toFixed(1)}% vs meta`, positive: isGood };
 }
 
-export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo, onOpenDetail, onOpenActionPlan, onUpdated }: Props) {
+export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onUpdated }: Props) {
   const { indicator, realized, goal, estimate, period, actionCount = 0, attachmentCount = 0, commentCount = 0 } = data;
   const { activePeriod } = useScenarioStore();
 
@@ -106,9 +106,6 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
           <span className="text-[10px] text-white/50 font-medium border border-white/15 rounded px-1.5 py-0.5">
             {unitLabel(indicator.unit)}
           </span>
-          <button onClick={(e) => { e.stopPropagation(); onOpenInfo?.(); }} className="nodrag text-white/30 hover:text-white/70 transition-colors" title="Informações">
-            <Info size={13} />
-          </button>
         </div>
       </div>
 
