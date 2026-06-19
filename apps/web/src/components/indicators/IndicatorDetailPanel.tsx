@@ -179,7 +179,7 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
             labelColor = 'rgba(248,113,113,0.95)';
           }
 
-          const showLabel = isRecent || isPrevYear;
+          const isComparison = isRecent || isPrevYear;
           return (
             <g key={`b-${i}`}
               onMouseEnter={() => setTooltip({ i, x: x(i), y: y(p.value) })}
@@ -189,8 +189,15 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
               {/* área de hover maior que a barra */}
               <rect x={x(i) - barW / 2 - 4} width={barW + 8} y={topPad} height={baseY - topPad} rx={0} fill="transparent" />
               <rect x={x(i) - barW / 2} width={barW} y={y(p.value)} height={baseY - y(p.value)} rx={3} fill={barColor} />
-              {showLabel && (
-                <text x={x(i)} y={y(p.value) - 5} textAnchor="middle" fontSize="10" fontWeight="700" fill={labelColor}>
+              {p.value != null && (
+                <text
+                  x={x(i)}
+                  y={y(p.value) - (isComparison ? 6 : 4)}
+                  textAnchor="middle"
+                  fontSize={isComparison ? 10 : 8}
+                  fontWeight={isComparison ? 700 : 500}
+                  fill={isComparison ? labelColor : 'rgba(255,255,255,0.35)'}
+                >
                   {fmtBar(p.value, unit)}
                 </text>
               )}
