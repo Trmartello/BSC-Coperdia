@@ -5,9 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/auth.store';
 import { useScenarioStore } from '../../store/scenario.store';
 import { indicatorsApi, settingsApi } from '../../lib/api';
-import { Bell, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ImportDataModal } from '../indicators/ImportDataModal';
+import { NotificationsBell } from './NotificationsBell';
 
 export function Topbar() {
   const { user } = useAuthStore();
@@ -97,9 +98,7 @@ export function Topbar() {
       {showImport && <ImportDataModal onClose={() => setShowImport(false)} />}
 
       {/* Right: notification + user */}
-      <button className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white/80 transition-colors">
-        <Bell size={15} />
-      </button>
+      <NotificationsBell />
 
       <div className="flex items-center gap-2">
         <div className="text-right">

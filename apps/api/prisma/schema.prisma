@@ -491,3 +491,44 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// ─── Notifications (alertas do sininho) ──────────────────────────────────────
+// Centraliza os alertas exibidos no sino: inconsistências de dados (insumo
+// faltante para indicadores calculados) e ações em atraso (cujo e-mail foi/era
+// para ser enviado). Persistido para manter histórico do que foi sinalizado e
+// o estado de lido/resolvido. IDs de alvo (actionPlan/actionItem/indicator)
+// são guardados soltos (sem FK) para simplificar o ciclo de vida.
+
+enum NotificationType {
+  INCONSISTENCY  // dado de insumo faltante p/ um indicador calculado
+  OVERDUE_ACTION // ação do plano em atraso
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Notification {
+  id           String               @id @default(cuid())
+  type         NotificationType
+  severity     NotificationSeverity @default(WARNING)
+  title        String
+  message      String
+  actionPlanId String?
+  actionItemId String?
+  indicatorId  String?
+  period       DateTime?
+  dedupeKey    String               @unique // chave estável p/ upsert e auto-resolução
+  emailSent    Boolean              @default(false)
+  readAt       DateTime?
+  resolvedAt   DateTime?
+  userId       String? // destinatário; null = visível a gestores/admin
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([resolvedAt, readAt])
+  @@index([type])
+  @@map("notifications")
+}

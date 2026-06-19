@@ -194,3 +194,25 @@ export const dashboardApi = {
   auditLog: (limit?: number) =>
     api.get('/dashboard/audit-log', { params: { limit } }),
 };
+
+// ─── Notifications (alertas do sino) ──────────────────────────────────────────
+export interface AppNotification {
+  id: string;
+  type: 'INCONSISTENCY' | 'OVERDUE_ACTION';
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  title: string;
+  message: string;
+  actionPlanId: string | null;
+  actionItemId: string | null;
+  indicatorId: string | null;
+  period: string | null;
+  emailSent: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => api.get<{ items: AppNotification[]; unreadCount: number }>('/notifications'),
+  markRead: (id: string) => api.patch(`/notifications/${id}/read`),
+  markAllRead: () => api.post('/notifications/read-all'),
+};

@@ -91,6 +91,13 @@ Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
 - **Níveis**: ao adicionar card pelo painel "Gerenciar Indicadores", o nível sugerido pré-selecionado é `max(níveis em uso) + 1` (componente `IndicatorRow`).
 - **Gerenciar Indicadores**: drawer lateral direito fixo (`fixed top-12 right-0 bottom-0 w-[380px]`) com backdrop.
 
+### Alertas / Sino (`components/ui/NotificationsBell.tsx` + módulo `notifications`)
+- Modelo Prisma `Notification` (dedupeKey único p/ upsert + auto-resolução). Tipos: `INCONSISTENCY` (insumo INPUT sem realizado no período mais recente → calculado comprometido) e `OVERDUE_ACTION` (ação do plano em atraso).
+- `NotificationsService.getForUser` faz refresh throttled (30s) ao ser lido; detecta/resolve sozinho. Alerta in-app é **independente do SMTP**; e-mail apenas marca `emailSent=true`.
+- Visibilidade: ADMIN/CONTROLADORIA/DIRETORIA veem tudo; demais veem `userId null` ou próprios.
+- Endpoints: `GET /notifications`, `PATCH /notifications/:id/read`, `POST /notifications/read-all`, `POST /notifications/trigger-overdue`.
+- Sino: badge de não lidos, dropdown, clique navega (OVERDUE→`/dashboard/action-plans`, INCONSISTENCY→`/dashboard/indicators`) e marca como lido.
+
 ### Padrões do IndicatorCard (`components/indicators/IndicatorCard.tsx`)
 - Largura fixa `w-[260px]`. Sem botões Info/lixeira/delete no card (removidos).
 - Direção: `ArrowUp` verde (HIGHER_IS_BETTER) / `ArrowDown` azul (LOWER_IS_BETTER), antes do nome.
