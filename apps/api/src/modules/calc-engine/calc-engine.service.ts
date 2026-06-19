@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { evaluate } from 'mathjs';
@@ -27,13 +27,24 @@ export interface ComputedResult {
 }
 
 @Injectable()
-export class CalcEngineService {
+export class CalcEngineService implements OnModuleInit {
   private readonly logger = new Logger(CalcEngineService.name);
 
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
   ) {}
+
+  // Backfill no boot: garante que indicadores calculados tenham META (e valores)
+  // coerentes em TODOS os períodos já existentes, mesmo os lançados antes desta
+  // funcionalidade. Idempotente (pula gravações idênticas); não bloqueia o boot.
+  async onModuleInit() {
+    setTimeout(() => {
+      this.recalculateGoals().catch((e) =>
+        this.logger.error('Backfill recalculateGoals falhou', e as Error),
+      );
+    }, 3000);
+  }
 
   // ── Build in-memory graph ────────────────────────────────────────────────────
 
