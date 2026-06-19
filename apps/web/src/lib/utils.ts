@@ -23,6 +23,24 @@ export function formatValue(value: number | null, unit: MeasureUnit): string {
   }
 }
 
+/** Same as formatValue but without the unit label — use inside cards where the unit badge is already shown. */
+export function formatNumber(value: number | null, unit: MeasureUnit): string {
+  if (value === null || value === undefined) return '—';
+
+  switch (unit) {
+    case 'CURRENCY':
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(value);
+    case 'PERCENTAGE':
+      return `${value.toFixed(2)}%`;
+    case 'DAYS':
+      return value.toFixed(0);
+    case 'INDEX':
+      return value.toFixed(2);
+    default:
+      return new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(value);
+  }
+}
+
 export function statusColor(status: IndicatorStatus): string {
   const map: Record<IndicatorStatus, string> = {
     ON_TRACK: 'text-emerald-500',

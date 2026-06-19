@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Trash2, Info, ClipboardList, Paperclip, MessageSquare } from 'lucide-react';
-import { cn, formatValue } from '../../lib/utils';
+import { cn, formatNumber } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
 import { useScenarioStore } from '../../store/scenario.store';
@@ -113,12 +113,12 @@ export function IndicatorCard({ data, showEstimate = true, onDelete, onOpenInfo,
 
       {/* ── Values grid ── */}
       <div className={cn('grid px-4 pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
-        <ValueCol label="Realizado" value={formatValue(realized, indicator.unit)} />
-        <ValueCol label="Meta" value={formatValue(goal, indicator.unit)} bold />
+        <ValueCol label="Realizado" value={formatNumber(realized, indicator.unit)} />
+        <ValueCol label="Meta" value={formatNumber(goal, indicator.unit)} bold />
         {showEstimate && (
           <ValueCol
             label="Estimativa"
-            value={formatValue(effective, indicator.unit)}
+            value={formatNumber(effective, indicator.unit)}
             editable={canEdit}
             onEdit={() => { setInputValue(String(estimate ?? realized ?? '')); setEditing(true); }}
           />
