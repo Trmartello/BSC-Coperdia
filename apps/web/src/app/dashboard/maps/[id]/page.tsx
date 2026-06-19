@@ -7,10 +7,11 @@ import ReactFlow, {
   Node, Edge, Background, Controls, MiniMap,
   useNodesState, useEdgesState,
   addEdge, Connection, MarkerType, Position,
-  NodeProps, Handle, Panel,
+  NodeProps, Handle, Panel, NodeChange, applyNodeChanges,
   ConnectionMode, EdgeProps, BaseEdge, EdgeLabelRenderer,
   getSmoothStepPath, reconnectEdge,
 } from 'reactflow';
+import { getHelperLines, HelperLines } from '../../../../components/maps/helperLines';
 import 'reactflow/dist/style.css';
 import { ArrowLeft, Save, Plus, Pencil, Trash2, X, ChevronsRight, ChevronsLeft, ArrowUp, ArrowDown } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
@@ -491,10 +492,40 @@ export default function MapEditorPage() {
   });
   const showEstimate = flags?.showEstimate ?? true;
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [nodes, setNodes] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [visibleUpToLevel, setVisibleUpToLevel] = useState(99);
   const pendingLevelsRef = React.useRef<Map<string, number>>(new Map());
+
+  // Linhas-guia de alinhamento exibidas durante o arraste de um card
+  const [helperLineH, setHelperLineH] = useState<number | undefined>();
+  const [helperLineV, setHelperLineV] = useState<number | undefined>();
+
+  // Intercepta o arraste: calcula o alinhamento mais próximo, "gruda" o card
+  // nele e desenha as linhas-guia. Demais mudanças seguem o fluxo padrão.
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setHelperLineH(undefined);
+      setHelperLineV(undefined);
+
+      const drag = changes[0];
+      if (
+        changes.length === 1 &&
+        drag.type === 'position' &&
+        drag.dragging &&
+        drag.position
+      ) {
+        const lines = getHelperLines(drag, nodes);
+        drag.position.x = lines.snapPosition.x ?? drag.position.x;
+        drag.position.y = lines.snapPosition.y ?? drag.position.y;
+        setHelperLineH(lines.horizontal);
+        setHelperLineV(lines.vertical);
+      }
+
+      setNodes((nds) => applyNodeChanges(changes, nds));
+    },
+    [nodes, setNodes],
+  );
 
   const handleExpandLevel = useCallback((level: number) => {
     setVisibleUpToLevel((prev) => (prev > level ? level : level + 1));
@@ -823,7 +854,7 @@ export default function MapEditorPage() {
           <ReactFlow
             nodes={displayNodes}
             edges={displayEdges}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChange}
             onEdgesDelete={onEdgesDelete}
             onConnect={onConnect}
@@ -841,6 +872,7 @@ export default function MapEditorPage() {
             deleteKeyCode="Delete"
           >
             <Background color="#1a1f2e" gap={24} size={1} />
+            <HelperLines horizontal={helperLineH} vertical={helperLineV} />
             <Controls
               style={{ background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10 }}
               showInteractive={false}
