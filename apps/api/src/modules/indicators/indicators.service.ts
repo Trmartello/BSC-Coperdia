@@ -180,6 +180,8 @@ export class IndicatorsService {
       before: before ? { value: Number(before.value), period } : undefined,
       after: { value, period },
     });
+    // recalcula a META dos indicadores calculados que dependem deste insumo
+    await this.calcEngine.recalculateGoals();
     return goal;
   }
 

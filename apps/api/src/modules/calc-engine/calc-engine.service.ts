@@ -304,6 +304,59 @@ export class CalcEngineService {
     if (upserts.length) this.logger.log(`recalculateRealized: upserted ${upserts.length} computed realized values`);
   }
 
+  // ── Recalculate META (goal) for CALCULATED indicators ───────────────────────
+  // A meta de um indicador calculado deriva da fórmula aplicada às metas dos
+  // insumos. Roda somente nos períodos que já têm alguma meta lançada; se algum
+  // insumo não tiver meta, o calculado fica sem meta (propaga NO_DATA).
+
+  async recalculateGoals(): Promise<void> {
+    const graph = await this.buildGraph();
+    // dependências (filhos) computadas antes dos dependentes (pais)
+    const evalOrder = [...this.topologicalSort(graph)].reverse();
+
+    const allGoals = await this.prisma.goal.findMany({
+      select: { indicatorId: true, period: true, value: true },
+      orderBy: { period: 'asc' },
+    });
+
+    // Agrupa metas por período
+    const periodMap = new Map<string, { period: Date; values: Map<string, Decimal> }>();
+    const stored = new Map<string, Decimal>(); // `${indId}|${periodISO}` -> meta atual
+    for (const g of allGoals) {
+      const key = g.period.toISOString();
+      if (!periodMap.has(key)) periodMap.set(key, { period: g.period, values: new Map() });
+      const dec = new Decimal(g.value.toString());
+      periodMap.get(key)!.values.set(g.indicatorId, dec);
+      stored.set(`${g.indicatorId}|${key}`, dec);
+    }
+
+    const upserts: ReturnType<typeof this.prisma.goal.upsert>[] = [];
+
+    for (const { period, values } of periodMap.values()) {
+      const periodKey = period.toISOString();
+      for (const id of evalOrder) {
+        const node = graph.get(id);
+        if (!node || node.type !== 'CALCULATED' || !node.formulaExpression || !node.formulaVariables) continue;
+        const computed = this.evaluateFormula(node.formulaExpression, node.formulaVariables, values);
+        if (computed === null) continue;
+        values.set(id, computed); // disponível para calculados acima na cadeia
+        const computedStr = computed.toFixed(6);
+        const prev = stored.get(`${id}|${periodKey}`);
+        if (prev && prev.toFixed(6) === computedStr) continue;
+        upserts.push(
+          this.prisma.goal.upsert({
+            where: { indicatorId_period: { indicatorId: id, period } },
+            create: { indicatorId: id, period, value: computedStr },
+            update: { value: computedStr },
+          }),
+        );
+      }
+    }
+
+    if (upserts.length) await this.prisma.$transaction(upserts);
+    if (upserts.length) this.logger.log(`recalculateGoals: upserted ${upserts.length} computed goal values`);
+  }
+
   // ── Recalculate baseline ESTIMATE (forecast w/ scenarioId=null) ──────────────
   // A estimativa de um indicador calculado é derivada da fórmula aplicada às
   // estimativas dos insumos (regra "estimate ?? realized" por insumo). Roda

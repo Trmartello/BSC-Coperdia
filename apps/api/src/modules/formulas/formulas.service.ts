@@ -39,6 +39,7 @@ export class FormulasService {
     });
     // Recompute all CALCULATED realized values so cards reflect the new formula immediately
     await this.calcEngine.recalculateRealized();
+    await this.calcEngine.recalculateGoals();
     return result;
   }
 
@@ -59,6 +60,7 @@ export class FormulasService {
       before,
     });
     await this.calcEngine.recalculateRealized();
+    await this.calcEngine.recalculateGoals();
     return result;
   }
 
