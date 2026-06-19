@@ -963,7 +963,9 @@ export default function MapEditorPage() {
               showInteractive={false}
             />
             <MiniMap
-              style={{ background: '#0d0f17', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8 }}
+              pannable
+              zoomable
+              style={{ width: 120, height: 80, background: '#0d0f17', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, opacity: 0.85 }}
               nodeColor="#1e2538"
               maskColor="rgba(13,15,23,0.7)"
             />
