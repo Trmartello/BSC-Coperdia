@@ -220,5 +220,5 @@ function unitLabel(unit: string, scale?: string): string {
     INDEX: 'Índice',
   };
   const base = map[unit] ?? unit;
-  return scale ? `${base} ${scale}` : base;
+  return scale ? `${base} / ${scale.charAt(0).toUpperCase() + scale.slice(1)}` : base;
 }
