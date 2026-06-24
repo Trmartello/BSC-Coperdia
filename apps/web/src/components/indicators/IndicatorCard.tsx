@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ClipboardList, Paperclip, MessageSquare, ArrowUp, ArrowDown } from 'lucide-react';
-import { cn, formatToScale, pickScale } from '../../lib/utils';
+import { cn, formatNumber, formatNumberParts } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
 import { useScenarioStore } from '../../store/scenario.store';
@@ -74,9 +74,6 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
   const devGoalInfo = deviationLabel(devRealizedVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
   const devEstInfo = deviationLabel(devEstimateVsRealized, indicator.direction ?? 'HIGHER_IS_BETTER', 'Vs Real.');
 
-  // Escala única do card: o maior valor define a unidade (mil/mi/bi) das 3 colunas
-  // e do badge. Quando nenhum valor é abreviado, o badge mostra só "R$".
-  const { div: scaleDiv, scale: cardScale } = pickScale([realized, goal, effective], indicator.unit);
 
   // Estimativa de insumos é editável; calculados derivam da fórmula.
   const canEdit = showEstimate && indicator.type === 'INPUT';
@@ -114,19 +111,19 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
         </div>
         <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
           <span className="text-xs font-bold text-purple-200 bg-purple-600/30 border border-purple-400/40 rounded-md px-2 py-1 leading-none uppercase tracking-wide">
-            {unitLabel(indicator.unit, cardScale)}
+            {unitLabel(indicator.unit)}
           </span>
         </div>
       </div>
 
       {/* ── Values grid ── */}
       <div className={cn('grid px-4 pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
-        <ValueCol label="Realizado" value={formatToScale(realized, indicator.unit, scaleDiv)} />
-        <ValueCol label="Meta" value={formatToScale(goal, indicator.unit, scaleDiv)} bold />
+        <ValueCol label="Realizado" value={formatNumber(realized, indicator.unit)} />
+        <ValueCol label="Meta" value={formatNumber(goal, indicator.unit)} bold />
         {showEstimate && (
           <ValueCol
             label="Estimativa"
-            value={formatToScale(effective, indicator.unit, scaleDiv)}
+            value={formatNumber(effective, indicator.unit)}
             editable={canEdit}
             onEdit={() => { setInputValue(String(estimate ?? realized ?? '')); setEditing(true); }}
           />

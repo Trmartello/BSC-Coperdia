@@ -23,9 +23,10 @@ export function formatValue(value: number | null, unit: MeasureUnit): string {
   }
 }
 
-/** Same as formatValue but without the unit symbol — use inside cards where the unit badge is already shown. */
+/** Formata o número para exibição em cards. Inclui a escala (mil/mi/bi) mas omite o símbolo da unidade — o badge no header já indica R$, Dias, etc. */
 export function formatNumber(value: number | null, unit: MeasureUnit): string {
-  return formatNumberParts(value, unit).num;
+  const { num, scale } = formatNumberParts(value, unit);
+  return scale ? `${num} ${scale}` : num;
 }
 
 /**
