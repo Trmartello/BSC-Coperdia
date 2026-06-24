@@ -56,6 +56,43 @@ export function formatNumberParts(value: number | null, unit: MeasureUnit): { nu
   }
 }
 
+// Escalas de abreviação (apenas para CURRENCY/NUMBER).
+const SCALE_STEPS: { limit: number; div: number; label: string }[] = [
+  { limit: 1e9, div: 1e9, label: 'bi' },
+  { limit: 1e6, div: 1e6, label: 'mi' },
+  { limit: 1e3, div: 1e3, label: 'mil' },
+];
+
+/**
+ * Escolhe UMA escala comum para o card, baseada no maior valor absoluto entre
+ * as colunas (Realizado/Meta/Estimativa). Mantém as três colunas na mesma
+ * unidade — facilita a leitura e garante que o badge reflita a escala exibida.
+ * Unidades não-monetárias (%, dias, índice) nunca abreviam → escala vazia.
+ */
+export function pickScale(values: (number | null | undefined)[], unit: MeasureUnit): { div: number; scale: string } {
+  if (unit === 'PERCENTAGE' || unit === 'DAYS' || unit === 'INDEX') return { div: 1, scale: '' };
+  const nums = values.filter((v): v is number => v !== null && v !== undefined);
+  if (nums.length === 0) return { div: 1, scale: '' };
+  const max = Math.max(...nums.map((v) => Math.abs(v)));
+  for (const s of SCALE_STEPS) if (max >= s.limit) return { div: s.div, scale: s.label };
+  return { div: 1, scale: '' };
+}
+
+/** Formata um valor já dividido pela escala comum do card (ver pickScale). */
+export function formatToScale(value: number | null | undefined, unit: MeasureUnit, div: number): string {
+  if (value === null || value === undefined) return '—';
+  switch (unit) {
+    case 'PERCENTAGE':
+      return value.toFixed(2);
+    case 'DAYS':
+      return value.toFixed(0);
+    case 'INDEX':
+      return value.toFixed(2);
+    default:
+      return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value / div);
+  }
+}
+
 export function statusColor(status: IndicatorStatus): string {
   const map: Record<IndicatorStatus, string> = {
     ON_TRACK: 'text-emerald-500',
