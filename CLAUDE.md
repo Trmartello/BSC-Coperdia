@@ -78,7 +78,14 @@ apps/
 - Plano de ação: `indicatorId = null` → avulso; `indicatorId = id` → vinculado
 - Cálculo: CalcEngineService faz sort topológico antes de avaliar fórmulas
 - `formula.variables` = JSON `{NOME_VAR: indicatorId}` para substituição em mathjs
-- Cenários foram **removidos** da UI. `scenario.store.ts` mantém apenas `activePeriod`.
+- Cenários foram **removidos** da UI. `scenario.store.ts` mantém `activePeriod` + `accumulate` (modo Acumular).
+
+### Modo "Acumular" (YTD)
+- Toggle **Acumular** na `Topbar` (store `scenario.store.ts`: `accumulate`/`toggleAccumulate`, em memória). Quando ligado, consolida os indicadores de **janeiro do ano do período até o mês selecionado** (Jan→mês). O seletor mostra "Acumulado: Jan–Jun 2026".
+- Cada indicador de **ENTRADA** acumula conforme `Indicator.accumulation` (enum `AccumulationMethod`): `SUM` (fluxos: Receita, Custos, Fluxo de Caixa…), `AVERAGE` (prazos/taxas: dias, %), `LAST` (saldos de balanço: Estoques, Contas a Receber, Patrimônio, Dívida…). Ajustável por indicador em **Configurações → Indicadores** (coluna "Acúmulo (YTD)").
+- Indicadores **CALCULATED** ignoram `accumulation`: são **recompostos pela fórmula sobre os insumos já acumulados** (ex.: NCG_ytd = média(PMR)+média(PME)−média(PMP); ROIC_ytd = NOPAT_ytd/CapInv_ytd×100). NÃO somar os calculados mensais.
+- Núcleo: `CalcEngineService.getAccumulatedValues(targetPeriod)` → `Map<id, {realized, forecast, goal}>`. Consumido por `DashboardService.getExecutiveDashboard(period, scenarioId, accumulated)` e `MapsService.findOne(id, period, accumulated)` (injeta o acumulado nas arrays `realizedValues/forecastValues/goals` que o front já lê). Query param `accumulated=true`.
+- Defaults: migration `20260624120000_add_indicator_accumulation` (AVERAGE p/ DAYS/PERCENTAGE/INDEX; LAST p/ saldos por código) + `seed.ts` (`acc` por indicador).
 
 ### Editor de Mapas (`app/dashboard/maps/[id]/page.tsx`)
 Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:

@@ -11,10 +11,15 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   @Get('executive')
-  executive(@Query('period') period?: string, @Query('scenarioId') scenarioId?: string) {
+  executive(
+    @Query('period') period?: string,
+    @Query('scenarioId') scenarioId?: string,
+    @Query('accumulated') accumulated?: string,
+  ) {
     const parsed = period ? new Date(period) : undefined;
     const validPeriod = parsed && !isNaN(parsed.getTime()) ? parsed : undefined;
-    return this.service.getExecutiveDashboard(validPeriod, scenarioId);
+    const acc = accumulated === 'true' || accumulated === '1';
+    return this.service.getExecutiveDashboard(validPeriod, scenarioId, acc);
   }
 
   @Get('audit-log')

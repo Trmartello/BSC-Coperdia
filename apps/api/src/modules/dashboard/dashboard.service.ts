@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CalcEngineService } from '../calc-engine/calc-engine.service';
 import Decimal from 'decimal.js';
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private calcEngine: CalcEngineService,
+  ) {}
 
-  async getExecutiveDashboard(period?: Date, scenarioId?: string) {
+  async getExecutiveDashboard(period?: Date, scenarioId?: string, accumulated = false) {
     // Se nenhum período válido foi informado, usa o período mais recente com dados realizados
     const effectivePeriod = period ?? (await this.latestRealizedPeriod()) ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
@@ -15,6 +19,10 @@ export class DashboardService {
     // Tenta os indicadores estratégicos; se nenhum existir, mostra todos os ativos
     const strategic = await this.prisma.indicator.count({ where: { code: { in: strategicCodes }, active: true } });
     const whereClause = strategic > 0 ? { code: { in: strategicCodes }, active: true } : { active: true };
+
+    // Modo "Acumular" (YTD): consolida jan→período. Calculados refletem o
+    // acumulado das bases de cálculo (fórmula sobre os insumos acumulados).
+    const acc = accumulated ? await this.calcEngine.getAccumulatedValues(effectivePeriod) : null;
 
     const indicators = await this.prisma.indicator.findMany({
       where: whereClause,
@@ -28,9 +36,16 @@ export class DashboardService {
 
     return indicators.map((ind) => {
       // Usa `!= null` (não truthiness) para não tratar valor 0 como ausente
-      const realized = ind.realizedValues[0]?.value != null ? new Decimal(ind.realizedValues[0].value.toString()).toNumber() : null;
-      const forecast = ind.forecastValues[0]?.value != null ? new Decimal(ind.forecastValues[0].value.toString()).toNumber() : null;
-      const goal = ind.goals[0]?.value != null ? new Decimal(ind.goals[0].value.toString()).toNumber() : null;
+      const accVal = acc?.get(ind.id);
+      const realized = acc
+        ? (accVal?.realized != null ? accVal.realized.toNumber() : null)
+        : (ind.realizedValues[0]?.value != null ? new Decimal(ind.realizedValues[0].value.toString()).toNumber() : null);
+      const forecast = acc
+        ? (accVal?.forecast != null ? accVal.forecast.toNumber() : null)
+        : (ind.forecastValues[0]?.value != null ? new Decimal(ind.forecastValues[0].value.toString()).toNumber() : null);
+      const goal = acc
+        ? (accVal?.goal != null ? accVal.goal.toNumber() : null)
+        : (ind.goals[0]?.value != null ? new Decimal(ind.goals[0].value.toString()).toNumber() : null);
 
       const effective = forecast ?? realized;
       // Desvio cru vs meta; inverte o sinal para indicadores onde "menor é melhor"

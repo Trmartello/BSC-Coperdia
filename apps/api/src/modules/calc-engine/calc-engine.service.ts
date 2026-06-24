@@ -26,6 +26,13 @@ export interface ComputedResult {
   status: Status;
 }
 
+// Valor consolidado (modo "Acumular" / YTD) por indicador
+export interface AccumulatedValue {
+  realized: Decimal | null;
+  forecast: Decimal | null;
+  goal: Decimal | null;
+}
+
 @Injectable()
 export class CalcEngineService implements OnModuleInit {
   private readonly logger = new Logger(CalcEngineService.name);
@@ -366,6 +373,126 @@ export class CalcEngineService implements OnModuleInit {
 
     if (upserts.length) await this.prisma.$transaction(upserts);
     if (upserts.length) this.logger.log(`recalculateGoals: upserted ${upserts.length} computed goal values`);
+  }
+
+  // ── Acumulação YTD (modo "Acumular") ─────────────────────────────────────────
+  // Consolida cada indicador de janeiro do ano do período até o mês selecionado.
+  // INPUT  → agrega os meses conforme indicator.accumulation:
+  //          SUM (fluxos) · AVERAGE (prazos/taxas) · LAST (saldos de balanço).
+  // CALCULATED → recalculado pela fórmula sobre os insumos JÁ acumulados, ou seja,
+  //          reflete o acumulado das bases de cálculo (não a soma dos calculados
+  //          mensais). Ex.: ROIC_ytd = NOPAT_ytd / CapInvestido_ytd × 100.
+
+  async getAccumulatedValues(targetPeriod: Date): Promise<Map<string, AccumulatedValue>> {
+    const graph = await this.buildGraph();
+    const evalOrder = [...this.topologicalSort(graph)].reverse(); // filhos antes dos pais
+
+    const indicators = await this.prisma.indicator.findMany({
+      where: { active: true },
+      select: { id: true, type: true, accumulation: true },
+    });
+
+    // Janela YTD: 1º de janeiro (UTC) do ano do período → período (inclusive)
+    const year = targetPeriod.getUTCFullYear();
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = targetPeriod;
+
+    const [realized, forecasts, goals] = await Promise.all([
+      this.prisma.realizedValue.findMany({
+        where: { period: { gte: start, lte: end } },
+        select: { indicatorId: true, period: true, value: true },
+      }),
+      this.prisma.forecastValue.findMany({
+        where: { scenarioId: null, period: { gte: start, lte: end } },
+        select: { indicatorId: true, period: true, value: true },
+      }),
+      this.prisma.goal.findMany({
+        where: { period: { gte: start, lte: end } },
+        select: { indicatorId: true, period: true, value: true },
+      }),
+    ]);
+
+    // indId → (periodISO → Decimal)
+    const groupByInd = (rows: { indicatorId: string; period: Date; value: any }[]) => {
+      const m = new Map<string, Map<string, Decimal>>();
+      for (const r of rows) {
+        if (!m.has(r.indicatorId)) m.set(r.indicatorId, new Map());
+        m.get(r.indicatorId)!.set(r.period.toISOString(), new Decimal(r.value.toString()));
+      }
+      return m;
+    };
+    const realizedByInd = groupByInd(realized);
+    const forecastByInd = groupByInd(forecasts);
+    const goalByInd = groupByInd(goals);
+
+    const aggregate = (
+      series: Map<string, Decimal> | undefined,
+      method: 'SUM' | 'AVERAGE' | 'LAST',
+    ): Decimal | null => {
+      if (!series || series.size === 0) return null;
+      const entries = [...series.entries()];
+      if (method === 'AVERAGE') {
+        const sum = entries.reduce((acc, [, v]) => acc.plus(v), new Decimal(0));
+        return sum.div(entries.length);
+      }
+      if (method === 'LAST') {
+        // ISO em UTC compara cronologicamente como string
+        let lastKey = entries[0][0];
+        for (const [k] of entries) if (k > lastKey) lastKey = k;
+        return series.get(lastKey)!;
+      }
+      // SUM (default p/ fluxos)
+      return entries.reduce((acc, [, v]) => acc.plus(v), new Decimal(0));
+    };
+
+    // estimativa efetiva por mês = estimativa ?? realizado (mesma regra dos cards)
+    const effectiveForecastSeries = (indId: string): Map<string, Decimal> => {
+      const f = forecastByInd.get(indId);
+      const r = realizedByInd.get(indId);
+      const out = new Map<string, Decimal>();
+      for (const k of new Set<string>([...(f?.keys() ?? []), ...(r?.keys() ?? [])])) {
+        out.set(k, (f?.get(k) ?? r?.get(k))!);
+      }
+      return out;
+    };
+
+    // 1) agrega indicadores de ENTRADA conforme o método de cada um
+    const aggR = new Map<string, Decimal>();
+    const aggF = new Map<string, Decimal>();
+    const aggG = new Map<string, Decimal>();
+    for (const ind of indicators) {
+      if (ind.type !== 'INPUT') continue;
+      const method = ind.accumulation as 'SUM' | 'AVERAGE' | 'LAST';
+      const r = aggregate(realizedByInd.get(ind.id), method);
+      if (r !== null) aggR.set(ind.id, r);
+      const f = aggregate(effectiveForecastSeries(ind.id), method);
+      if (f !== null) aggF.set(ind.id, f);
+      const g = aggregate(goalByInd.get(ind.id), method);
+      if (g !== null) aggG.set(ind.id, g);
+    }
+
+    // 2) recalcula CALCULATED pela fórmula sobre os acumulados (filhos antes dos pais)
+    const fillCalculated = (map: Map<string, Decimal>) => {
+      for (const id of evalOrder) {
+        const node = graph.get(id);
+        if (!node || node.type !== 'CALCULATED' || !node.formulaExpression || !node.formulaVariables) continue;
+        const computed = this.evaluateFormula(node.formulaExpression, node.formulaVariables, map);
+        if (computed !== null) map.set(id, computed);
+      }
+    };
+    fillCalculated(aggR);
+    fillCalculated(aggF);
+    fillCalculated(aggG);
+
+    const out = new Map<string, AccumulatedValue>();
+    for (const id of graph.keys()) {
+      out.set(id, {
+        realized: aggR.get(id) ?? null,
+        forecast: aggF.get(id) ?? null,
+        goal: aggG.get(id) ?? null,
+      });
+    }
+    return out;
   }
 
   // ── Recalculate baseline ESTIMATE (forecast w/ scenarioId=null) ──────────────

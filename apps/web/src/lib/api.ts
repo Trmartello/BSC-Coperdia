@@ -140,7 +140,8 @@ export const mapsApi = {
   deleteCategory: (id: string) => api.delete(`/maps/categories/${id}`),
   // maps
   list: (categoryId?: string) => api.get('/maps', { params: { categoryId } }),
-  get: (id: string, period?: string) => api.get(`/maps/${id}`, { params: period ? { period } : {} }),
+  get: (id: string, period?: string, accumulated?: boolean) =>
+    api.get(`/maps/${id}`, { params: { ...(period ? { period } : {}), ...(accumulated ? { accumulated: 'true' } : {}) } }),
   create: (data: { name: string; description?: string; categoryId: string }) => api.post('/maps', data),
   update: (id: string, data: any) => api.patch(`/maps/${id}`, data),
   delete: (id: string) => api.delete(`/maps/${id}`),
@@ -189,8 +190,8 @@ export const formulasApi = {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export const dashboardApi = {
-  executive: (period: string, scenarioId?: string) =>
-    api.get('/dashboard/executive', { params: { period, scenarioId } }),
+  executive: (period: string, accumulated?: boolean, scenarioId?: string) =>
+    api.get('/dashboard/executive', { params: { period, scenarioId, accumulated: accumulated ? 'true' : undefined } }),
   auditLog: (limit?: number) =>
     api.get('/dashboard/audit-log', { params: { limit } }),
 };

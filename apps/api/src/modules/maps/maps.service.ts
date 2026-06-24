@@ -45,7 +45,7 @@ export class MapsService {
     });
   }
 
-  async findOne(id: string, period?: string) {
+  async findOne(id: string, period?: string, accumulated = false) {
     // Mantém os valores calculados em dia para os cards do mapa
     await this.calcEngine.recalculateRealized();
 
@@ -82,6 +82,20 @@ export class MapsService {
       },
     });
     if (!map) throw new NotFoundException();
+
+    // Modo "Acumular" (YTD): substitui os valores pontuais dos cards pelos
+    // acumulados de jan→período. Calculados refletem o acumulado das bases.
+    if (accumulated && period) {
+      const acc = await this.calcEngine.getAccumulatedValues(new Date(period));
+      for (const entry of map.entries) {
+        const v = acc.get(entry.indicatorId);
+        const ind = entry.indicator as any;
+        ind.realizedValues = v?.realized != null ? [{ value: v.realized.toString() }] : [];
+        ind.forecastValues = v?.forecast != null ? [{ value: v.forecast.toString() }] : [];
+        ind.goals = v?.goal != null ? [{ value: v.goal.toString() }] : [];
+      }
+    }
+
     return map;
   }
 

@@ -43,8 +43,13 @@ export class MapsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Query('period') period?: string) {
-    return this.service.findOne(id, period);
+  findOne(
+    @Param('id') id: string,
+    @Query('period') period?: string,
+    @Query('accumulated') accumulated?: string,
+  ) {
+    const acc = accumulated === 'true' || accumulated === '1';
+    return this.service.findOne(id, period, acc);
   }
 
   @Roles(...WRITE_ROLES)

@@ -26,11 +26,11 @@ const STATUS_META: Record<string, { label: string; bar: string; chip: string }> 
 };
 
 export function ExecutiveDashboard() {
-  const { activePeriod } = useScenarioStore();
+  const { activePeriod, accumulate } = useScenarioStore();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard-executive', activePeriod],
-    queryFn: () => dashboardApi.executive(activePeriod).then((r) => r.data),
+    queryKey: ['dashboard-executive', activePeriod, accumulate],
+    queryFn: () => dashboardApi.executive(activePeriod, accumulate).then((r) => r.data),
     refetchInterval: 30_000,
   });
 
@@ -55,7 +55,10 @@ export function ExecutiveDashboard() {
       {/* Charts */}
       {kpis.length > 0 && (
         <div className="card-dark p-5">
-          <h3 className="text-sm font-semibold text-white/80 mb-4">Realizado vs Meta vs Previsto</h3>
+          <h3 className="text-sm font-semibold text-white/80 mb-4">
+            Realizado vs Meta vs Previsto
+            {accumulate && <span className="ml-2 text-[11px] font-normal text-purple-300/80">· acumulado no ano (YTD)</span>}
+          </h3>
           <ResponsiveContainer width="100%" height={280}>
             <ComposedChart data={kpis.map((k: any) => ({
               name: k.code,

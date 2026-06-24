@@ -5,10 +5,15 @@ import { ExecutiveDashboard } from '../../../components/dashboard/ExecutiveDashb
 import { useScenarioStore } from '../../../store/scenario.store';
 
 export default function ExecutivePage() {
-  const { activePeriod } = useScenarioStore();
+  const { activePeriod, accumulate } = useScenarioStore();
   const periodLabel = (() => {
     try {
-      return new Date(activePeriod + 'T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      const d = new Date(activePeriod + 'T12:00:00Z');
+      const long = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      if (!accumulate) return long;
+      const month = d.toLocaleDateString('pt-BR', { month: 'long', timeZone: 'UTC' });
+      const year = d.toLocaleDateString('pt-BR', { year: 'numeric', timeZone: 'UTC' });
+      return `acumulado de janeiro a ${month} de ${year}`;
     } catch {
       return activePeriod;
     }

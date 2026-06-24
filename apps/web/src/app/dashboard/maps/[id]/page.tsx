@@ -485,7 +485,7 @@ function ManageIndicatorsPanel({ existingIds, nodeLevels, onAdd, onLevelChange, 
 export default function MapEditorPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { activePeriod } = useScenarioStore();
+  const { activePeriod, accumulate } = useScenarioStore();
   const qc = useQueryClient();
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [selectedIndicatorId, setSelectedIndicatorId] = useState<string | null>(null);
@@ -496,8 +496,8 @@ export default function MapEditorPage() {
   });
 
   const { data: map, isLoading } = useQuery<IndicatorMap>({
-    queryKey: ['map', id, activePeriod],
-    queryFn: () => mapsApi.get(id, activePeriod).then((r) => r.data),
+    queryKey: ['map', id, activePeriod, accumulate],
+    queryFn: () => mapsApi.get(id, activePeriod, accumulate).then((r) => r.data),
   });
 
   const { data: flags } = useQuery({

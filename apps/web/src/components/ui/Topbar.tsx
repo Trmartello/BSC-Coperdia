@@ -5,14 +5,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/auth.store';
 import { useScenarioStore } from '../../store/scenario.store';
 import { indicatorsApi, settingsApi } from '../../lib/api';
-import { ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileSpreadsheet, Layers } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ImportDataModal } from '../indicators/ImportDataModal';
 import { NotificationsBell } from './NotificationsBell';
 
 export function Topbar() {
   const { user } = useAuthStore();
-  const { activePeriod, setActivePeriod } = useScenarioStore();
+  const { activePeriod, setActivePeriod, accumulate, toggleAccumulate } = useScenarioStore();
   const [showImport, setShowImport] = useState(false);
   const qc = useQueryClient();
 
@@ -44,9 +44,13 @@ export function Topbar() {
   const prevPeriod = () => { if (periodIdx > 0) setActivePeriod(periods[periodIdx - 1]); };
   const nextPeriod = () => { if (periodIdx < periods.length - 1) setActivePeriod(periods[periodIdx + 1]); };
 
+  const cap = (s: string) => s.replace('.', '').replace(/^\w/, (c) => c.toUpperCase());
   const displayPeriod = activePeriod
-    ? new Date(activePeriod + 'T12:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' })
-        .replace('.', '').replace(/^\w/, (c) => c.toUpperCase())
+    ? cap(new Date(activePeriod + 'T12:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' }))
+    : '—';
+  // No modo "Acumular", mostra a janela YTD (Jan→mês) diretamente no seletor.
+  const accDisplayPeriod = activePeriod
+    ? `Jan–${cap(new Date(activePeriod + 'T12:00:00Z').toLocaleDateString('pt-BR', { month: 'short', timeZone: 'UTC' }))} ${new Date(activePeriod + 'T12:00:00Z').toLocaleDateString('pt-BR', { year: 'numeric', timeZone: 'UTC' })}`
     : '—';
 
   const initials = user?.name
@@ -87,11 +91,32 @@ export function Topbar() {
         </span>
       </button>
 
+      {/* Acumular (YTD) toggle */}
+      <button
+        onClick={() => toggleAccumulate()}
+        className={cn(
+          'flex items-center gap-2 rounded-xl px-3 py-1.5 transition-colors border',
+          accumulate
+            ? 'bg-purple-600/20 text-purple-200 border-purple-500/30'
+            : 'bg-white/5 text-white/60 hover:bg-white/10 border-white/10',
+        )}
+        title="Acumular indicadores no ano (YTD): consolida de janeiro até o mês selecionado"
+      >
+        <Layers size={13} className={accumulate ? 'text-purple-300' : 'text-white/40'} />
+        <span className="text-xs">Acumular</span>
+        <span className={cn('relative w-8 h-4 rounded-full transition-colors', accumulate ? 'bg-purple-500' : 'bg-white/15')}>
+          <span className={cn('absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform', accumulate ? 'translate-x-4' : 'translate-x-0')} />
+        </span>
+      </button>
+
       {/* Period selector */}
-      <div className="flex items-center gap-1 bg-purple-600/15 border border-purple-500/25 rounded-xl px-2 py-1.5">
-        <span className="text-[10px] text-white/40 mr-1">Período:</span>
+      <div className={cn(
+        'flex items-center gap-1 rounded-xl px-2 py-1.5 border',
+        accumulate ? 'bg-purple-600/25 border-purple-500/40' : 'bg-purple-600/15 border-purple-500/25',
+      )}>
+        <span className="text-[10px] text-white/40 mr-1">{accumulate ? 'Acumulado:' : 'Período:'}</span>
         <button onClick={prevPeriod} disabled={periodIdx <= 0} className="text-white/40 hover:text-white/80 disabled:opacity-20 px-0.5"><ChevronLeft size={13} /></button>
-        <span className="text-xs font-semibold text-purple-200 min-w-[60px] text-center">{displayPeriod}</span>
+        <span className="text-xs font-semibold text-purple-200 min-w-[60px] text-center">{accumulate ? accDisplayPeriod : displayPeriod}</span>
         <button onClick={nextPeriod} disabled={periodIdx >= periods.length - 1} className="text-white/40 hover:text-white/80 disabled:opacity-20 px-0.5"><ChevronRight size={13} /></button>
       </div>
 

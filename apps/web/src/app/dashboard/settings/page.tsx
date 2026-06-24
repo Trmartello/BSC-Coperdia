@@ -22,6 +22,13 @@ const UNIT_LABEL: Record<string, string> = {
   CURRENCY: 'Moeda', PERCENTAGE: '%', NUMBER: 'Número', DAYS: 'Dias', INDEX: 'Índice',
 };
 
+// Método de consolidação no modo "Acumular" (YTD)
+const ACC_OPTIONS: { value: string; label: string }[] = [
+  { value: 'SUM', label: 'Soma (fluxo)' },
+  { value: 'AVERAGE', label: 'Média (prazo/taxa)' },
+  { value: 'LAST', label: 'Último saldo' },
+];
+
 export default function SettingsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('overview');
@@ -71,6 +78,19 @@ export default function SettingsPage() {
   const deleteIndMutation = useMutation({
     mutationFn: (id: string) => settingsApi.deleteIndicator(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings-indicators'] }); toast.success('Indicador removido'); },
+  });
+
+  const setAccMutation = useMutation({
+    mutationFn: ({ id, accumulation }: { id: string; accumulation: string }) =>
+      settingsApi.updateIndicator(id, { accumulation }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings-indicators'] });
+      // os valores acumulados dependem disso → revalida dashboard e mapas
+      qc.invalidateQueries({ queryKey: ['dashboard-executive'] });
+      qc.invalidateQueries({ queryKey: ['map'] });
+      toast.success('Método de acumulação atualizado');
+    },
+    onError: () => toast.error('Erro ao atualizar (verifique sua permissão)'),
   });
 
   const createCatMutation = useMutation({
@@ -187,7 +207,7 @@ export default function SettingsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/5">
-                {['Código', 'Nome', 'Categoria', 'Tipo', 'Unidade', 'Periodicidade', ''].map((h) => (
+                {['Código', 'Nome', 'Categoria', 'Tipo', 'Unidade', 'Acúmulo (YTD)', 'Periodicidade', ''].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-[11px] font-medium text-white/30 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -207,6 +227,24 @@ export default function SettingsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-white/40">{UNIT_LABEL[ind.unit] ?? ind.unit}</td>
+                  <td className="px-4 py-3">
+                    {ind.type === 'CALCULATED' ? (
+                      <span className="text-[11px] text-white/30 italic" title="Indicador calculado: a acumulação reflete a fórmula sobre os insumos já acumulados">
+                        Fórmula
+                      </span>
+                    ) : (
+                      <select
+                        value={ind.accumulation ?? 'SUM'}
+                        onChange={(e) => setAccMutation.mutate({ id: ind.id, accumulation: e.target.value })}
+                        className="bg-[#0d0f17] border border-white/10 rounded-lg px-2 py-1 text-xs text-white/70 focus:border-purple-500/40 outline-none cursor-pointer"
+                        title="Como este indicador é consolidado no modo Acumular (YTD)"
+                      >
+                        {ACC_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-xs text-white/40">{ind.periodicity}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">

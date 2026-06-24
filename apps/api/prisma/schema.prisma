@@ -50,6 +50,18 @@ enum IndicatorDirection {
   LOWER_IS_BETTER
 }
 
+// Como o indicador é consolidado no modo "Acumular" (YTD: jan → mês selecionado).
+// SUM     → fluxos (Receita, Custos, Fluxo de Caixa…): soma dos meses
+// AVERAGE → prazos/taxas (dias, %): média dos meses com valor
+// LAST    → saldos de balanço (Estoques, Patrimônio, Dívida…): último saldo do período
+// Indicadores CALCULATED ignoram este campo — são recalculados pela fórmula sobre
+// os insumos já acumulados.
+enum AccumulationMethod {
+  SUM
+  AVERAGE
+  LAST
+}
+
 enum ScenarioStatus {
   DRAFT
   ACTIVE
@@ -134,6 +146,7 @@ model Indicator {
   active      Boolean            @default(true)
   sortOrder   Int                @default(0)
   direction   IndicatorDirection @default(HIGHER_IS_BETTER)
+  accumulation AccumulationMethod @default(SUM) // consolidação no modo "Acumular" (YTD)
   monitoringPoints String[]      @default([])
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt

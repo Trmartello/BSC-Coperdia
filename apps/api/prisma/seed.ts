@@ -55,6 +55,7 @@ async function main() {
       direction: 'LOWER_IS_BETTER',
       responsible: 'Financeiro',
       sortOrder: 1,
+      accumulation: 'AVERAGE',
       monitoringPoints: pmrMonitoring,
     },
   });
@@ -80,6 +81,7 @@ async function main() {
       direction: 'LOWER_IS_BETTER',
       responsible: 'Logística',
       sortOrder: 2,
+      accumulation: 'AVERAGE',
       monitoringPoints: pmeMonitoring,
     },
   });
@@ -104,6 +106,7 @@ async function main() {
       direction: 'HIGHER_IS_BETTER',
       responsible: 'Financeiro',
       sortOrder: 3,
+      accumulation: 'AVERAGE',
       monitoringPoints: pmpMonitoring,
     },
   });
@@ -243,19 +246,21 @@ async function main() {
   type Dir = 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER';
   type Unit = 'CURRENCY' | 'PERCENTAGE';
 
+  // acc = consolidação no modo "Acumular": SUM (fluxos), LAST (saldos de balanço)
+  type Acc = 'SUM' | 'AVERAGE' | 'LAST';
   const inputDefs: {
-    code: string; name: string; unit: Unit; direction: Dir; responsible: string; realized: number; goal: number;
+    code: string; name: string; unit: Unit; direction: Dir; responsible: string; realized: number; goal: number; acc: Acc;
   }[] = [
-    { code: 'RECEITA',           name: 'Receita Líquida',       unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Comercial',     realized: 500, goal: 520 },
-    { code: 'CUSTOS',            name: 'Custos (CPV)',          unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Operações',     realized: 300, goal: 290 },
-    { code: 'DESPESAS',          name: 'Despesas Operacionais', unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Controladoria', realized: 120, goal: 115 },
-    { code: 'IMPOSTOS',          name: 'Impostos sobre Lucro',  unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Fiscal',        realized: 20,  goal: 18 },
-    { code: 'ESTOQUES',          name: 'Estoques',              unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Logística',     realized: 80,  goal: 75 },
-    { code: 'CONTAS_RECEBER',    name: 'Contas a Receber',      unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Financeiro',    realized: 90,  goal: 85 },
-    { code: 'ATIVO_IMOBILIZADO', name: 'Ativo Imobilizado',     unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Controladoria', realized: 230, goal: 230 },
-    { code: 'PATRIMONIO',        name: 'Patrimônio Líquido',    unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Controladoria', realized: 350, goal: 360 },
-    { code: 'DIVIDA',            name: 'Dívida Bruta',          unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Financeiro',    realized: 150, goal: 140 },
-    { code: 'FLUXO_CAIXA',       name: 'Fluxo de Caixa Livre',  unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Tesouraria',    realized: 45,  goal: 50 },
+    { code: 'RECEITA',           name: 'Receita Líquida',       unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Comercial',     realized: 500, goal: 520, acc: 'SUM' },
+    { code: 'CUSTOS',            name: 'Custos (CPV)',          unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Operações',     realized: 300, goal: 290, acc: 'SUM' },
+    { code: 'DESPESAS',          name: 'Despesas Operacionais', unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Controladoria', realized: 120, goal: 115, acc: 'SUM' },
+    { code: 'IMPOSTOS',          name: 'Impostos sobre Lucro',  unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Fiscal',        realized: 20,  goal: 18,  acc: 'SUM' },
+    { code: 'ESTOQUES',          name: 'Estoques',              unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Logística',     realized: 80,  goal: 75,  acc: 'LAST' },
+    { code: 'CONTAS_RECEBER',    name: 'Contas a Receber',      unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Financeiro',    realized: 90,  goal: 85,  acc: 'LAST' },
+    { code: 'ATIVO_IMOBILIZADO', name: 'Ativo Imobilizado',     unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Controladoria', realized: 230, goal: 230, acc: 'LAST' },
+    { code: 'PATRIMONIO',        name: 'Patrimônio Líquido',    unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Controladoria', realized: 350, goal: 360, acc: 'LAST' },
+    { code: 'DIVIDA',            name: 'Dívida Bruta',          unit: 'CURRENCY', direction: 'LOWER_IS_BETTER',  responsible: 'Financeiro',    realized: 150, goal: 140, acc: 'LAST' },
+    { code: 'FLUXO_CAIXA',       name: 'Fluxo de Caixa Livre',  unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER', responsible: 'Tesouraria',    realized: 45,  goal: 50,  acc: 'SUM' },
   ];
 
   // realized = valor realizado pré-computado a partir dos inputs (para o Dashboard)
@@ -305,7 +310,7 @@ async function main() {
       create: {
         code: def.code, name: def.name, category: 'Estratégico', type: 'INPUT',
         unit: def.unit, periodicity: 'MONTHLY', direction: def.direction,
-        responsible: def.responsible, sortOrder: order++,
+        responsible: def.responsible, sortOrder: order++, accumulation: def.acc,
         monitoringPoints: monitoring[def.code] ?? [],
       },
     });
