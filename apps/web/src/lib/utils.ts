@@ -30,7 +30,8 @@ export function formatNumber(value: number | null, unit: MeasureUnit): string {
 
 /**
  * Formats a number and separates the scale suffix (mil, mi, bi) from the digit string.
- * Used so the scale can be moved to the unit badge while only the raw number is displayed.
+ * Intl compact notation uses a non-breaking space ( ) between number and suffix,
+ * so we split on any whitespace.
  */
 export function formatNumberParts(value: number | null, unit: MeasureUnit): { num: string; scale: string } {
   if (value === null || value === undefined) return { num: '—', scale: '' };
@@ -44,10 +45,11 @@ export function formatNumberParts(value: number | null, unit: MeasureUnit): { nu
       return { num: value.toFixed(2), scale: '' };
     default: {
       const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(value);
-      const parts = formatted.split(' ').flatMap((p) => p.split(' '));
+      // Split on any whitespace (including   used by Intl)
+      const parts = formatted.split(/\s+/);
       const last = parts[parts.length - 1];
-      if (parts.length > 1 && /^[a-záéíóúãõ]+$/i.test(last)) {
-        return { num: parts.slice(0, -1).join(' '), scale: last };
+      if (parts.length > 1 && /^[a-zà-ÿ]+$/i.test(last)) {
+        return { num: parts.slice(0, -1).join(''), scale: last };
       }
       return { num: formatted, scale: '' };
     }
