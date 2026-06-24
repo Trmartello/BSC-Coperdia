@@ -40,14 +40,18 @@ function deviation(value: number | null, base: number | null): number | null {
   return ((value - base) / Math.abs(base)) * 100;
 }
 
-function deviationLabel(pct: number | null, direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER'): {
+function deviationLabel(
+  pct: number | null,
+  direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER',
+  suffix = 'vs meta',
+): {
   label: string;
   positive: boolean;
 } {
   if (pct === null) return { label: '—', positive: false };
   const isGood = direction === 'HIGHER_IS_BETTER' ? pct >= 0 : pct <= 0;
   const sign = pct > 0 ? '+' : '';
-  return { label: `${sign}${pct.toFixed(1)}% vs meta`, positive: isGood };
+  return { label: `${sign}${pct.toFixed(1)}% ${suffix}`, positive: isGood };
 }
 
 export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onUpdated }: Props) {
@@ -61,14 +65,14 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
   // Quando a estimativa está desabilitada nas configurações, o desvio é medido
   // sobre o valor realizado (não há "previsto" a considerar).
   const effective = showEstimate ? effectiveEstimate(realized, estimate) : realized;
-  // Cada coluna compara seu próprio valor contra a META:
+  // Cada coluna usa sua própria base de comparação:
   //   • esquerda  → Realizado vs Meta
-  //   • direita   → Estimativa vs Meta
+  //   • direita   → Estimativa vs Realizado
   const devRealizedVsGoal = deviation(realized, goal);
-  const devEstimateVsGoal = deviation(effective, goal);
+  const devEstimateVsRealized = deviation(effective, realized);
 
   const devGoalInfo = deviationLabel(devRealizedVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
-  const devEstInfo = deviationLabel(devEstimateVsGoal, indicator.direction ?? 'HIGHER_IS_BETTER');
+  const devEstInfo = deviationLabel(devEstimateVsRealized, indicator.direction ?? 'HIGHER_IS_BETTER', 'Vs Real.');
 
   // Estimativa de insumos é editável; calculados derivam da fórmula.
   const canEdit = showEstimate && indicator.type === 'INPUT';
