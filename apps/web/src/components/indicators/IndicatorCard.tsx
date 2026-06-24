@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ClipboardList, Paperclip, MessageSquare, ArrowUp, ArrowDown } from 'lucide-react';
-import { cn, formatNumber } from '../../lib/utils';
+import { cn, formatNumber, formatNumberParts } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
 import { useScenarioStore } from '../../store/scenario.store';
@@ -106,7 +106,7 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
         </div>
         <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
           <span className="text-xs font-bold text-purple-200 bg-purple-600/30 border border-purple-400/40 rounded-md px-2 py-1 leading-none uppercase tracking-wide">
-            {unitLabel(indicator.unit)}
+            {unitLabel(indicator.unit, formatNumberParts(realized, indicator.unit).scale)}
           </span>
         </div>
       </div>
@@ -211,7 +211,7 @@ function FooterAction({ icon, count, label, onClick }: {
   );
 }
 
-function unitLabel(unit: string): string {
+function unitLabel(unit: string, scale?: string): string {
   const map: Record<string, string> = {
     CURRENCY: 'R$',
     PERCENTAGE: '%',
@@ -219,5 +219,6 @@ function unitLabel(unit: string): string {
     DAYS: 'Dias',
     INDEX: 'Índice',
   };
-  return map[unit] ?? unit;
+  const base = map[unit] ?? unit;
+  return scale ? `${base} ${scale}` : base;
 }

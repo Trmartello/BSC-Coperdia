@@ -25,21 +25,32 @@ export function formatValue(value: number | null, unit: MeasureUnit): string {
 
 /** Same as formatValue but without the unit symbol — use inside cards where the unit badge is already shown. */
 export function formatNumber(value: number | null, unit: MeasureUnit): string {
-  if (value === null || value === undefined) return '—';
+  return formatNumberParts(value, unit).num;
+}
+
+/**
+ * Formats a number and separates the scale suffix (mil, mi, bi) from the digit string.
+ * Used so the scale can be moved to the unit badge while only the raw number is displayed.
+ */
+export function formatNumberParts(value: number | null, unit: MeasureUnit): { num: string; scale: string } {
+  if (value === null || value === undefined) return { num: '—', scale: '' };
 
   switch (unit) {
-    case 'CURRENCY':
-      // Sem "R$" — o badge no canto superior direito já indica a unidade.
-      return new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(value);
     case 'PERCENTAGE':
-      // Sem "%" — idem.
-      return value.toFixed(2);
+      return { num: value.toFixed(2), scale: '' };
     case 'DAYS':
-      return value.toFixed(0);
+      return { num: value.toFixed(0), scale: '' };
     case 'INDEX':
-      return value.toFixed(2);
-    default:
-      return new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(value);
+      return { num: value.toFixed(2), scale: '' };
+    default: {
+      const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(value);
+      const parts = formatted.split(' ').flatMap((p) => p.split(' '));
+      const last = parts[parts.length - 1];
+      if (parts.length > 1 && /^[a-záéíóúãõ]+$/i.test(last)) {
+        return { num: parts.slice(0, -1).join(' '), scale: last };
+      }
+      return { num: formatted, scale: '' };
+    }
   }
 }
 
