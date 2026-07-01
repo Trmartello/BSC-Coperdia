@@ -227,12 +227,13 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
   const humanized = humanizeExpression(form.expression, tokenToName);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={onClose}>
       <div
-        className="w-[420px] h-full bg-[#0d0f17] border-l border-white/10 p-5 overflow-y-auto"
+        className="w-[52vw] min-w-[520px] max-w-[780px] max-h-[92vh] bg-[#0d0f17] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-5">
+        {/* Header fixo */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 flex-shrink-0">
           <h2 className="text-lg font-bold text-white">
             {isEdit ? 'Editar Indicador' : 'Novo Indicador'}
           </h2>
@@ -241,7 +242,9 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
           </button>
         </div>
 
-        <div className="space-y-4">
+        {/* Corpo rolável */}
+        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+          <Section title="Informações do indicador" />
           <Field label="Nome do indicador">
             <input
               className="input-dark w-full"
@@ -276,6 +279,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
 
           {form.type === 'CALCULATED' && (
             <>
+              <Section title="Fórmula de cálculo" />
               <Field label="Indicadores usados na fórmula (variáveis)">
                 <input
                   className="input-dark w-full mb-2"
@@ -367,6 +371,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
             </>
           )}
 
+          <Section title="Configuração visual" />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Unidade">
               <select
@@ -405,20 +410,22 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
             </select>
           </Field>
 
+          <Section title="Descrição" />
           <Field label="Descrição do indicador (conceito)">
             <textarea
-              className="input-dark w-full resize-none"
-              rows={3}
+              className="input-dark w-full resize-y min-h-[96px] max-h-[320px] leading-relaxed"
+              rows={4}
               maxLength={1000}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="Descreva o que este indicador representa, como deve ser interpretado e qual seu impacto no negócio."
             />
             <p className="text-[10px] text-white/30 mt-1">
-              Aparece abaixo do título no modal de histórico. {form.description.length}/1000
+              Aparece abaixo do título no modal de histórico. Arraste o canto inferior para ampliar. {form.description.length}/1000
             </p>
           </Field>
 
+          <Section title="Classificação e responsáveis" />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Mapa / Categoria">
               <input
@@ -501,25 +508,27 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
               Aparecem como guia de possibilidades de trabalho no modal de informações.
             </p>
           </Field>
+        </div>
 
-          <button
-            onClick={() => saveMut.mutate()}
-            disabled={!form.name || saveMut.isPending}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm py-2.5 rounded-xl disabled:opacity-50"
-          >
-            {saveMut.isPending ? 'Salvando...' : isEdit ? 'Salvar alterações' : 'Criar indicador'}
-          </button>
-
+        {/* Footer fixo com ações */}
+        <div className="flex items-center gap-2 px-6 py-4 border-t border-white/5 flex-shrink-0">
           {isEdit && (
             <button
               onClick={handleDelete}
               disabled={deleteMut.isPending}
-              className="w-full mt-1 border border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm py-2.5 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
+              className="border border-red-500/30 text-red-400 hover:bg-red-500/10 text-sm px-4 py-2.5 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 flex-shrink-0"
             >
               <Trash2 size={14} />
-              {deleteMut.isPending ? 'Excluindo...' : 'Excluir indicador'}
+              {deleteMut.isPending ? 'Excluindo...' : 'Excluir'}
             </button>
           )}
+          <button
+            onClick={() => saveMut.mutate()}
+            disabled={!form.name || saveMut.isPending}
+            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-sm py-2.5 rounded-xl disabled:opacity-50 font-medium"
+          >
+            {saveMut.isPending ? 'Salvando...' : isEdit ? 'Salvar alterações' : 'Criar indicador'}
+          </button>
         </div>
       </div>
     </div>
@@ -532,5 +541,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label className="text-xs text-white/50 block mb-1">{label}</label>
       {children}
     </div>
+  );
+}
+
+function Section({ title }: { title: string }) {
+  return (
+    <p className="text-[10px] font-semibold text-white/35 uppercase tracking-widest border-b border-white/5 pb-1.5">
+      {title}
+    </p>
   );
 }

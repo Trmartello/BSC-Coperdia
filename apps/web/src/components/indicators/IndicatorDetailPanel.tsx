@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X, TrendingUp, TrendingDown,
-  Plus, Pencil, Check, ArrowUp, ArrowDown,
+  Plus, Pencil, Check, ArrowUp, ArrowDown, ClipboardList,
 } from 'lucide-react';
 import { indicatorsApi, actionPlansApi, settingsApi } from '../../lib/api';
 import { ActionPlanDetail } from '../action-plans/ActionPlanDetail';
@@ -71,12 +71,12 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
 
   const pts = data.slice(-15);
   const n = pts.length;
-  const step = 52;
-  const barW = step * 0.55;
+  const step = 50;
+  const barW = step * 0.76; // barras mais largas, separação fina entre elas
   const chartW = n * step;
-  const chartH = 140;
+  const chartH = 172; // gráfico com mais altura (elemento de destaque)
   const pad = 24;
-  const topPad = 58; // espaço para as duas linhas YoY acima das barras
+  const topPad = 60; // espaço para as duas linhas YoY acima das barras
 
   // Para cada um dos 2 meses mais recentes, encontrar o mesmo mês do ano anterior
   interface YoyPair {
@@ -189,8 +189,19 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
             >
               {/* área de hover maior que a barra */}
               <rect x={x(i) - barW / 2 - 4} width={barW + 8} y={topPad} height={baseY - topPad} rx={0} fill="transparent" />
-              <rect x={x(i) - barW / 2} width={barW} y={y(p.value)} height={baseY - y(p.value)} rx={3} fill={barColor}
-                style={{ transition: 'fill 0.12s' }} opacity={hovered ? 1 : 0.92} />
+              {(() => {
+                const bw = hovered ? barW + 8 : barW;
+                return (
+                  <rect
+                    x={x(i) - bw / 2} width={bw} y={y(p.value)} height={baseY - y(p.value)} rx={3}
+                    fill={barColor}
+                    stroke={hovered ? 'rgba(255,255,255,0.55)' : 'none'}
+                    strokeWidth={hovered ? 1.5 : 0}
+                    opacity={hovered ? 1 : 0.9}
+                    style={{ transition: 'all 0.12s ease-out', filter: hovered ? 'drop-shadow(0 0 6px rgba(255,255,255,0.25))' : 'none' }}
+                  />
+                );
+              })()}
               {p.value != null && (
                 <text
                   x={x(i)}
@@ -473,6 +484,8 @@ interface Props {
 export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('overview');
+  // Painel lateral do Plano de Ação (abre à direita, empurra o gráfico p/ a esquerda)
+  const [showActionPlan, setShowActionPlan] = useState(false);
   // Plano vinculado ao indicador: o problema é implícito (o próprio indicador),
   // então o fluxo começa direto em Iniciativas → Ações.
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
@@ -597,8 +610,10 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
+      <div className="flex h-full">
+      {/* Painel principal (gráfico) — fica à esquerda quando o Plano de Ação abre */}
       <div
-        className="w-[50vw] min-w-[460px] max-w-[800px] h-full bg-[#161b27] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl relative"
+        className="w-[48vw] min-w-[440px] max-w-[820px] h-full bg-[#161b27] border-l border-white/10 flex flex-col overflow-hidden shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -626,8 +641,8 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
             </p>
           )}
 
-          {/* Tabs */}
-          <div className="flex gap-1 mt-4">
+          {/* Tabs + botão Plano de Ação (abre painel lateral) */}
+          <div className="flex items-center gap-1 mt-4">
             {[{ id: 'overview', label: 'Visão Geral' }, { id: 'realized', label: 'Lançamentos' }].map((t) => (
               <button
                 key={t.id} onClick={() => setTab(t.id as Tab)}
@@ -637,6 +652,13 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                 {t.label}
               </button>
             ))}
+            <button
+              onClick={() => setShowActionPlan((s) => !s)}
+              className={cn('flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors ml-1',
+                showActionPlan ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30' : 'text-white/40 hover:text-white/70 border border-transparent')}
+            >
+              <ClipboardList size={13} /> Plano de Ação
+            </button>
           </div>
         </div>
 
@@ -720,34 +742,6 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                 </div>
               </div>
 
-              {/* Plano de Ação — vinculado ao indicador: problema implícito.
-                  Fluxo: Indicador → Iniciativas → Ações (sem campo "Problema"). */}
-              <div className="px-5 py-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Plano de Ação</p>
-                  {!canonicalPlanId && (
-                    <button
-                      onClick={() => ensurePlanMutation.mutate()}
-                      disabled={ensurePlanMutation.isPending}
-                      className="flex items-center gap-1 text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      <Plus size={11} /> Nova Iniciativa
-                    </button>
-                  )}
-                </div>
-
-                {canonicalPlanId ? (
-                  <ActionPlanDetail
-                    planId={canonicalPlanId}
-                    embedded
-                    autoNewInitiative={autoNewInitiative}
-                  />
-                ) : (
-                  <p className="text-xs text-white/20 text-center py-4">
-                    Nenhuma iniciativa ainda. Clique em <span className="text-white/40">Nova Iniciativa</span> para começar.
-                  </p>
-                )}
-              </div>
             </>
           )}
 
@@ -804,6 +798,47 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
             </div>
           )}
         </div>
+      </div>
+
+      {/* Painel do Plano de Ação — largura anima (0 → 40vw); o gráfico à esquerda continua visível */}
+      <div
+        className={cn('h-full bg-[#141926] overflow-hidden shadow-2xl transition-all duration-300 ease-out',
+          showActionPlan ? 'w-[40vw] min-w-[360px] max-w-[600px] border-l border-white/10' : 'w-0')}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-[40vw] min-w-[360px] max-w-[600px] h-full flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 flex-shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <ClipboardList size={16} className="text-blue-400 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-white leading-tight">Plano de Ação</p>
+                <p className="text-[10px] text-white/40 truncate">{ind?.name}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {!canonicalPlanId && (
+                <button
+                  onClick={() => ensurePlanMutation.mutate()}
+                  disabled={ensurePlanMutation.isPending}
+                  className="flex items-center gap-1 text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <Plus size={11} /> Nova Iniciativa
+                </button>
+              )}
+              <button onClick={() => setShowActionPlan(false)} className="text-white/30 hover:text-white/60 transition-colors"><X size={16} /></button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            {canonicalPlanId ? (
+              <ActionPlanDetail planId={canonicalPlanId} embedded autoNewInitiative={autoNewInitiative} />
+            ) : (
+              <p className="text-xs text-white/20 text-center py-8">
+                Nenhuma iniciativa ainda. Clique em <span className="text-white/40">Nova Iniciativa</span> para começar.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   );
