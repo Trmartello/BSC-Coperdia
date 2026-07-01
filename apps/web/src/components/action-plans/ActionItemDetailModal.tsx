@@ -395,7 +395,16 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
                 Cancelar
               </button>
               <button
-                onClick={() => updateMutation.mutate({ ...action, ownerName: owner?.name ?? action.ownerName, ownerId: owner?.id ?? action.ownerId ?? null })}
+                onClick={() => updateMutation.mutate({
+                  title: action.title,
+                  description: action.description ?? null,
+                  priority: action.priority,
+                  status: action.status,
+                  dueDate: action.dueDate ?? null,
+                  progress: action.progress,
+                  ownerName: owner?.name ?? action.ownerName,
+                  ownerId: owner?.id ?? action.ownerId ?? null,
+                })}
                 disabled={updateMutation.isPending}
                 className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm bg-purple-600 hover:bg-purple-700 text-white font-medium disabled:opacity-50 transition-colors"
               >
