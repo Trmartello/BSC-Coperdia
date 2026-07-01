@@ -169,6 +169,8 @@ export class BalanceteImportService {
     const defs = new Map<string, LevelDef>();
     const totalVals = new Map<string, Map<string, number>>(); // linhas "Totais" (N1/N2)
     const leafSums = new Map<string, Map<string, number>>();  // soma de folhas por ancestral
+    interface LeafDef { reducedCode: string; name: string; n3Code: string; vals: Map<string, number>; }
+    const leafDefs = new Map<string, LeafDef>(); // contas-folha por Cód. Reduzido (coluna E)
 
     const addDef = (label: string): string | null => {
       const code = this.codeOf(label);
@@ -207,12 +209,20 @@ export class BalanceteImportService {
       }
       if (levelPat.test(A) && levelPat.test(B) && levelPat.test(C) && D && D !== 'Totais') {
         const c1 = addDef(A), c2 = addDef(B), c3 = addDef(C);
+        // Conta-folha: coluna E (Cód. Reduzido) + Conta Contábil (D). Vira indicador.
+        const E = String(this.cellVal(row.getCell(5))).trim();
+        let leaf: LeafDef | null = null;
+        if (E && c3) {
+          leaf = leafDefs.get(E) ?? null;
+          if (!leaf) { leaf = { reducedCode: E, name: D, n3Code: c3, vals: new Map() }; leafDefs.set(E, leaf); }
+        }
         for (const mc of monthCols) {
           const v = this.num(row.getCell(mc.col).value);
           if (v === null) continue;
           if (c1) addVal(leafSums, c1, mc.iso, v);
           if (c2) addVal(leafSums, c2, mc.iso, v);
           if (c3) addVal(leafSums, c3, mc.iso, v);
+          if (leaf) leaf.vals.set(mc.iso, (leaf.vals.get(mc.iso) ?? 0) + v);
         }
       }
     });
@@ -250,7 +260,7 @@ export class BalanceteImportService {
     );
     const uniqueCode = (base: string): string => {
       let code = base, n = 2;
-      while (taken.has(code.toUpperCase())) code = `${base} (${n++})`;
+      while (taken.has(code.toUpperCase())) code = `${base}${n++}`;
       taken.add(code.toUpperCase());
       return code;
     };
@@ -259,7 +269,7 @@ export class BalanceteImportService {
       const category = rootText(def.code);
       const top = def.code.split('.')[0];
       const accumulation = (top === '1' || top === '2') ? 'LAST' : 'SUM'; // balanço=saldo; resultado=fluxo
-      const code = uniqueCode(this.balCode(def.label, def.code)); // abreviação + Cód. Reduzido
+      const code = uniqueCode(this.abbrevOf(def.label)); // níveis (A/B/C): só a abreviação
       const found = byAccount.get(def.code);
       if (found) {
         const upd = await this.prisma.indicator.update({
@@ -281,43 +291,98 @@ export class BalanceteImportService {
       }
     }
 
-    // ── relações pai→filho (hierarquia p/ o mapa causal) ──────────────────────
-    let relations = 0;
+    // ── contas-folha (coluna E) → indicadores INPUT ───────────────────────────
+    // code = iniciais do nome + Cód. Reduzido (ex.: "AES 1341"); nome = "Cód - Conta".
+    const leafList = [...leafDefs.values()];
+    let leavesCreated = 0;
+    const newLeafData: any[] = [];
+    for (const leaf of leafList) {
+      const found = byAccount.get(leaf.reducedCode);
+      if (found) { idByCode.set(leaf.reducedCode, found.id); continue; }
+      const top = leaf.n3Code.split('.')[0];
+      const accumulation = (top === '1' || top === '2') ? 'LAST' : 'SUM';
+      const code = uniqueCode(this.balCode(leaf.name, leaf.reducedCode)); // folha (D): abreviação + Cód. Reduzido (E)
+      newLeafData.push({
+        code, name: `${leaf.reducedCode} - ${leaf.name}`, category: rootText(leaf.n3Code),
+        type: 'INPUT', unit: 'CURRENCY', periodicity: 'MONTHLY', direction: 'HIGHER_IS_BETTER',
+        accumulation: accumulation as any, source: 'BALANCETE', accountCode: leaf.reducedCode,
+      });
+    }
+    for (let i = 0; i < newLeafData.length; i += 500) {
+      await this.prisma.indicator.createMany({ data: newLeafData.slice(i, i + 500), skipDuplicates: true });
+    }
+    if (newLeafData.length) {
+      const fetched = await this.prisma.indicator.findMany({
+        where: { accountCode: { in: newLeafData.map((d) => d.accountCode) } },
+        select: { id: true, accountCode: true },
+      });
+      for (const f of fetched) if (f.accountCode) idByCode.set(f.accountCode, f.id);
+      leavesCreated = newLeafData.length;
+    }
+
+    // ── relações pai→filho (hierarquia): níveis + folha→N3 ─────────────────────
+    const relData: { parentId: string; childId: string }[] = [];
     for (const def of sorted) {
       if (!def.parentCode) continue;
       const parentId = idByCode.get(def.parentCode);
       const childId = idByCode.get(def.code);
-      if (!parentId || !childId) continue;
-      await this.prisma.indicatorRelation.upsert({
-        where: { parentId_childId: { parentId, childId } },
-        create: { parentId, childId },
-        update: {},
-      });
-      relations++;
+      if (parentId && childId) relData.push({ parentId, childId });
+    }
+    for (const leaf of leafList) {
+      const parentId = idByCode.get(leaf.n3Code);
+      const childId = idByCode.get(leaf.reducedCode);
+      if (parentId && childId) relData.push({ parentId, childId });
+    }
+    let relations = 0;
+    for (let i = 0; i < relData.length; i += 500) {
+      const res = await this.prisma.indicatorRelation.createMany({ data: relData.slice(i, i + 500), skipDuplicates: true });
+      relations += res.count;
     }
 
-    // ── valores mensais (upsert idempotente) ──────────────────────────────────
-    const ops: any[] = [];
-    const periods = new Set<string>();
-    let values = 0;
+    // ── valores mensais (níveis + folhas) — cria os novos, atualiza os alterados ─
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+    const desired = new Map<string, { indicatorId: string; period: Date; value: number }>();
     for (const def of sorted) {
-      const id = idByCode.get(def.code)!;
+      const id = idByCode.get(def.code);
+      if (!id) continue;
       for (const mc of monthCols) {
         const v = valueFor(def.code, mc.iso);
         if (v === null) continue;
-        const rounded = Math.round(v * 100) / 100;
-        ops.push(this.prisma.realizedValue.upsert({
-          where: { indicatorId_period: { indicatorId: id, period: mc.period } },
-          create: { indicatorId: id, period: mc.period, value: rounded },
-          update: { value: rounded },
-        }));
-        values++;
-        periods.add(mc.iso.slice(0, 10));
+        desired.set(`${id}|${mc.iso}`, { indicatorId: id, period: mc.period, value: round2(v) });
       }
     }
-    for (let i = 0; i < ops.length; i += 200) {
-      await this.prisma.$transaction(ops.slice(i, i + 200));
+    for (const leaf of leafList) {
+      const id = idByCode.get(leaf.reducedCode);
+      if (!id) continue;
+      for (const mc of monthCols) {
+        const v = leaf.vals.get(mc.iso);
+        if (v === undefined) continue;
+        desired.set(`${id}|${mc.iso}`, { indicatorId: id, period: mc.period, value: round2(v) });
+      }
     }
+    const indIds = [...new Set([...desired.values()].map((d) => d.indicatorId))];
+    const existingRV = await this.prisma.realizedValue.findMany({
+      where: { indicatorId: { in: indIds }, period: { in: monthCols.map((m) => m.period) } },
+      select: { id: true, indicatorId: true, period: true, value: true },
+    });
+    const existingMap = new Map(existingRV.map((rv) => [`${rv.indicatorId}|${rv.period.toISOString()}`, rv]));
+    const toCreate: any[] = [];
+    const toUpdate: { id: string; value: number }[] = [];
+    const periods = new Set<string>();
+    for (const [key, d] of desired) {
+      periods.add(d.period.toISOString().slice(0, 10));
+      const ex = existingMap.get(key);
+      if (!ex) toCreate.push({ indicatorId: d.indicatorId, period: d.period, value: d.value });
+      else if (Number(ex.value) !== d.value) toUpdate.push({ id: ex.id, value: d.value });
+    }
+    for (let i = 0; i < toCreate.length; i += 1000) {
+      await this.prisma.realizedValue.createMany({ data: toCreate.slice(i, i + 1000), skipDuplicates: true });
+    }
+    for (const u of toUpdate) {
+      await this.prisma.realizedValue.update({ where: { id: u.id }, data: { value: u.value } });
+    }
+    const values = desired.size;
+    created += leavesCreated;
 
     // ── validação: Totais da planilha (N1/N2) vs soma das folhas ──────────────
     const warnings: string[] = [];
