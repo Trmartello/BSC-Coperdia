@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X, TrendingUp, TrendingDown,
-  Plus, Pencil, Check,
+  Plus, Pencil, Check, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { indicatorsApi, actionPlansApi, settingsApi } from '../../lib/api';
 import { ActionPlanDetail } from '../action-plans/ActionPlanDetail';
@@ -49,9 +49,6 @@ function fmtLarge(v: number | null | undefined, unit: string, decimals = 2): str
   return v.toFixed(decimals);
 }
 
-const UNIT_NAME: Record<string, string> = {
-  CURRENCY: 'Reais (R$)', PERCENTAGE: 'Percentual (%)', DAYS: 'Dias', NUMBER: 'Número', INDEX: 'Índice',
-};
 
 // melhora segundo a polaridade: variação favorável quando o sentido bate com a direção
 function isImprovement(pct: number | null, direction: string): boolean | null {
@@ -614,7 +611,6 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   ])).sort((a, b) => b.localeCompare(a));
   const realizedByPeriod = new Map(realizedHistory.map((r: any) => [r.period.slice(0, 10), r]));
 
-  const dirLabel = direction === 'LOWER_IS_BETTER' ? 'Quanto menor, melhor' : 'Quanto maior, melhor';
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
@@ -642,18 +638,12 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
           {isLoading ? (
             <div className="h-6 w-56 bg-white/5 rounded animate-pulse mt-2" />
           ) : (
-            <p className="text-lg font-bold text-white leading-snug mt-1.5">{ind?.name}</p>
-          )}
-
-          {/* Polaridade + unidade */}
-          {!isLoading && (
-            <div className="flex items-center gap-2 mt-2">
-              <span className="flex items-center gap-1.5 text-[10px] text-white/40">
-                <span className={cn('w-2 h-2 rounded-sm', direction === 'LOWER_IS_BETTER' ? 'bg-blue-500' : 'bg-emerald-500')} />
-                {dirLabel}
-              </span>
-              <span className="text-white/10">·</span>
-              <span className="text-[10px] text-white/40">Medido em {UNIT_NAME[unit] ?? unit}</span>
+            <div className="flex items-center gap-2 mt-1.5">
+              {/* Seta de direção (igual aos cards): ↑ verde = maior melhor; ↓ azul = menor melhor */}
+              {direction === 'LOWER_IS_BETTER'
+                ? <ArrowDown size={18} strokeWidth={3} className="flex-shrink-0 text-blue-500" />
+                : <ArrowUp size={18} strokeWidth={3} className="flex-shrink-0 text-green-500" />}
+              <p className="text-lg font-bold text-white leading-snug">{ind?.name}</p>
             </div>
           )}
 
