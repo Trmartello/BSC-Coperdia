@@ -50,8 +50,16 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
     aliases: {} as Record<string, string>, // indicatorId → nome amigável usado na fórmula
     monitoring: '',
     mapLevel: 1,
+    decimalPlaces: 2,
   });
   const [responsibleOwner, setResponsibleOwner] = useState<{ id: string; name: string } | null>(null);
+  // Busca (typeahead) na lista de indicadores usados na fórmula — debounce 300ms.
+  const [varSearch, setVarSearch] = useState('');
+  const [varSearchDeb, setVarSearchDeb] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setVarSearchDeb(varSearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [varSearch]);
 
   const { data: editData } = useQuery({
     queryKey: ['indicator', editIndicatorId],
@@ -82,6 +90,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         vars,
         aliases,
         monitoring: (editData.monitoringPoints ?? []).join('\n'),
+        decimalPlaces: editData.decimalPlaces ?? 2,
       }));
     }
   }, [editData]);
@@ -108,6 +117,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         direction: form.direction,
         periodicity: 'MONTHLY',
         responsible: responsibleOwner?.name ?? (form.responsible || null),
+        decimalPlaces: form.decimalPlaces,
         monitoringPoints: form.monitoring
           .split('\n')
           .map((s) => s.trim())
@@ -264,14 +274,31 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
           {form.type === 'CALCULATED' && (
             <>
               <Field label="Indicadores usados na fórmula (variáveis)">
-                <div className="max-h-32 overflow-y-auto border border-white/10 rounded-xl p-2 space-y-1">
-                  {indList
-                    .filter((i) => i.id !== editIndicatorId)
-                    .map((i) => (
-                      <label
-                        key={i.id}
-                        className="flex items-center gap-2 text-xs text-white/70 cursor-pointer"
-                      >
+                <input
+                  className="input-dark w-full mb-2"
+                  value={varSearch}
+                  onChange={(e) => setVarSearch(e.target.value)}
+                  placeholder="Pesquisar por nome, código, categoria..."
+                />
+                <div className="max-h-40 overflow-y-auto border border-white/10 rounded-xl p-2 space-y-1">
+                  {(() => {
+                    const q = varSearchDeb;
+                    const matches = (i: any) => !q
+                      || String(i.code ?? '').toLowerCase().includes(q)
+                      || String(i.name ?? '').toLowerCase().includes(q)
+                      || String(i.category ?? '').toLowerCase().includes(q)
+                      || String(i.responsible ?? '').toLowerCase().includes(q);
+                    // exclui o próprio; selecionados SEMPRE visíveis (primeiro),
+                    // demais correspondências limitadas a 50.
+                    const pool = indList.filter((i) => i.id !== editIndicatorId);
+                    const selected = pool.filter((i) => form.vars.includes(i.id));
+                    const rest = pool.filter((i) => !form.vars.includes(i.id) && matches(i)).slice(0, 50);
+                    const list = [...selected, ...rest];
+                    if (list.length === 0) {
+                      return <p className="text-[11px] text-white/30 px-1 py-2">Nenhum indicador encontrado.</p>;
+                    }
+                    return list.map((i) => (
+                      <label key={i.id} className="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={form.vars.includes(i.id)}
@@ -279,7 +306,8 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
                         />
                         <span className="font-mono text-white/40">{i.code}</span> {i.name}
                       </label>
-                    ))}
+                    ));
+                  })()}
                 </div>
               </Field>
 
@@ -361,6 +389,18 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
               </select>
             </Field>
           </div>
+
+          <Field label="Casas decimais (exibição no card)">
+            <select
+              className="input-dark w-full"
+              value={form.decimalPlaces}
+              onChange={(e) => setForm({ ...form, decimalPlaces: parseInt(e.target.value, 10) })}
+            >
+              {[0, 1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>{n} casa{n === 1 ? '' : 's'} decima{n === 1 ? 'l' : 'is'}</option>
+              ))}
+            </select>
+          </Field>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Mapa / Categoria">

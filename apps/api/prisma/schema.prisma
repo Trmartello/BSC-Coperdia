@@ -151,6 +151,7 @@ model Indicator {
   monitoringPoints String[]      @default([])
   accountCode String?            @unique // chave estável p/ import idempotente (balancete: código hierárquico 1 / 1.01 / 1.01.01)
   source      String?            // origem do indicador (ex.: "BALANCETE") p/ filtrar
+  decimalPlaces Int              @default(2) // casas decimais exibidas no card/dashboard
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 

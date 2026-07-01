@@ -126,6 +126,11 @@ Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
 - Endpoints: `GET /notifications`, `PATCH /notifications/:id/read`, `POST /notifications/read-all`, `POST /notifications/scan-off-track` (Roles), `POST /notifications/trigger-overdue`.
 - Sino: badge de não lidos, dropdown, botão "Varrer metas" (ADMIN/CONTROLADORIA). Clique marca lido e abre o alvo via **store reativo** `store/action-plan-intent.store.ts` (funciona mesmo já estando na página — `router.push` não remonta): OVERDUE→`requestEditAction` abre `ActionItemDetailModal` (form de edição), OFF_TRACK→`requestPlanForIndicator` chama `actionPlansApi.ensureForIndicator` (pega/cria plano) e abre `ActionPlanDetail` em drawer, INCONSISTENCY→`/dashboard/indicators`. A page de action-plans consome o intent em `useEffect`.
 
+### Casas decimais por indicador + busca de variáveis (form)
+- `Indicator.decimalPlaces Int @default(2)` (migration `20260701140000`; `20260701150000` seta DAYS→0 p/ não exibir "28,00 dias"). No form (`IndicatorFormPanel`): dropdown "Casas decimais" (0–4) salvo no payload; `settings.updateIndicator/createIndicator` fazem pass-through ao Prisma.
+- Formatação centralizada em `lib/utils.ts`: `formatValue/formatNumber/formatNumberParts(value, unit, decimals = 2)` — `clampDecimals` limita 0–6; CURRENCY/NUMBER usam `Intl` compact `maximumFractionDigits`; %/DIAS/ÍNDICE usam `toFixed(d)`. Threaded em IndicatorCard (`dp`), ExecutiveDashboard (KpiCard + FinancialAnalysisPanel, `kpi.decimalPlaces`), IndicatorTree, IndicatorDetailPanel (`fmtLarge`/`fmtBar`/PeriodRow recebem `decimals`). Dashboard endpoints retornam `decimalPlaces`.
+- **Busca de variáveis** no form (CALCULATED): input com debounce 300ms (`varSearchDeb`) filtra por code/name/category/responsible; **selecionados sempre primeiro e visíveis** (não são cortados pelo `slice(50)` das demais correspondências).
+
 ### Padrões do IndicatorCard (`components/indicators/IndicatorCard.tsx`)
 - Largura fixa `w-[260px]`. Sem botões Info/lixeira/delete no card (removidos).
 - Direção: `ArrowUp` verde (HIGHER_IS_BETTER) / `ArrowDown` azul (LOWER_IS_BETTER), antes do nome.

@@ -18,6 +18,7 @@ export interface Indicator {
   responsible?: string;
   active: boolean;
   sortOrder: number;
+  decimalPlaces?: number;
   formula?: Formula;
   parents?: IndicatorRelation[];
   children?: IndicatorRelation[];

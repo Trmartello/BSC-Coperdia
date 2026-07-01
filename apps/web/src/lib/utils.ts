@@ -6,26 +6,36 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatValue(value: number | null, unit: MeasureUnit): string {
+// Casas decimais padrão quando o indicador não define (indicadores antigos).
+export const DEFAULT_DECIMALS = 2;
+
+function clampDecimals(d: number): number {
+  const n = Math.trunc(Number(d));
+  if (!Number.isFinite(n)) return DEFAULT_DECIMALS;
+  return Math.min(Math.max(n, 0), 6);
+}
+
+export function formatValue(value: number | null, unit: MeasureUnit, decimals: number = DEFAULT_DECIMALS): string {
   if (value === null || value === undefined) return '—';
+  const d = clampDecimals(decimals);
 
   switch (unit) {
     case 'CURRENCY':
-      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(value);
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: d }).format(value);
     case 'PERCENTAGE':
-      return `${value.toFixed(2)}%`;
+      return `${value.toFixed(d)}%`;
     case 'DAYS':
-      return `${value.toFixed(0)} dias`;
+      return `${value.toFixed(d)} dias`;
     case 'INDEX':
-      return value.toFixed(2);
+      return value.toFixed(d);
     default:
-      return new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(value);
+      return new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: d }).format(value);
   }
 }
 
 /** Formata o número para exibição em cards. Inclui a escala (mil/mi/bi) mas omite o símbolo da unidade — o badge no header já indica R$, Dias, etc. */
-export function formatNumber(value: number | null, unit: MeasureUnit): string {
-  const { num, scale } = formatNumberParts(value, unit);
+export function formatNumber(value: number | null, unit: MeasureUnit, decimals: number = DEFAULT_DECIMALS): string {
+  const { num, scale } = formatNumberParts(value, unit, decimals);
   return scale ? `${num} ${scale}` : num;
 }
 
@@ -34,18 +44,19 @@ export function formatNumber(value: number | null, unit: MeasureUnit): string {
  * Intl compact notation uses a non-breaking space ( ) between number and suffix,
  * so we split on any whitespace.
  */
-export function formatNumberParts(value: number | null, unit: MeasureUnit): { num: string; scale: string } {
+export function formatNumberParts(value: number | null, unit: MeasureUnit, decimals: number = DEFAULT_DECIMALS): { num: string; scale: string } {
   if (value === null || value === undefined) return { num: '—', scale: '' };
+  const d = clampDecimals(decimals);
 
   switch (unit) {
     case 'PERCENTAGE':
-      return { num: value.toFixed(2), scale: '' };
+      return { num: value.toFixed(d), scale: '' };
     case 'DAYS':
-      return { num: value.toFixed(0), scale: '' };
+      return { num: value.toFixed(d), scale: '' };
     case 'INDEX':
-      return { num: value.toFixed(2), scale: '' };
+      return { num: value.toFixed(d), scale: '' };
     default: {
-      const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(value);
+      const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: d }).format(value);
       // Split on any whitespace (including   used by Intl)
       const parts = formatted.split(/\s+/);
       const last = parts[parts.length - 1];

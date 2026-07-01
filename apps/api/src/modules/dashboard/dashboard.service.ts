@@ -58,6 +58,7 @@ export class DashboardService {
         name: ind.name,
         unit: ind.unit,
         direction: ind.direction,
+        decimalPlaces: ind.decimalPlaces,
         realized,
         forecast,
         goal,
@@ -87,7 +88,7 @@ export class DashboardService {
       const previous = pr?.value != null ? new Decimal(pr.value.toString()).toNumber() : null;
       const delta = current != null && previous != null && previous !== 0
         ? ((current - previous) / Math.abs(previous)) * 100 : null;
-      return { id: ind.id, code: ind.code, name: ind.name, unit: ind.unit, direction: ind.direction, current, previous, delta };
+      return { id: ind.id, code: ind.code, name: ind.name, unit: ind.unit, direction: ind.direction, decimalPlaces: ind.decimalPlaces, current, previous, delta };
     });
   }
 

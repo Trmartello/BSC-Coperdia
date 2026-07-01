@@ -45,9 +45,9 @@ function IndicatorNode({ data }: NodeProps) {
 
       <div className="grid grid-cols-3 px-4 pb-2 gap-1">
         {[
-          { label: 'Realizado', val: formatValue(realized, indicator.unit) },
-          { label: 'Meta', val: formatValue(goal, indicator.unit) },
-          { label: 'Estimativa', val: formatValue(effective, indicator.unit) },
+          { label: 'Realizado', val: formatValue(realized, indicator.unit, indicator.decimalPlaces ?? 2) },
+          { label: 'Meta', val: formatValue(goal, indicator.unit, indicator.decimalPlaces ?? 2) },
+          { label: 'Estimativa', val: formatValue(effective, indicator.unit, indicator.decimalPlaces ?? 2) },
         ].map((col) => (
           <div key={col.label}>
             <p className="text-[9px] text-white/30 uppercase tracking-wider">{col.label}</p>

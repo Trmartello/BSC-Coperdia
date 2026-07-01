@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ClipboardList, Paperclip, MessageSquare, ArrowUp, ArrowDown } from 'lucide-react';
-import { cn, formatNumber, formatNumberParts } from '../../lib/utils';
+import { cn, formatNumber } from '../../lib/utils';
 import { Indicator, IndicatorStatus } from '../../types';
 import { indicatorsApi } from '../../lib/api';
 import { useScenarioStore } from '../../store/scenario.store';
@@ -57,6 +57,7 @@ function deviationLabel(
 export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onUpdated }: Props) {
   const { indicator, realized, goal, estimate, period, actionCount = 0, attachmentCount = 0, commentCount = 0 } = data;
   const { activePeriod } = useScenarioStore();
+  const dp = indicator.decimalPlaces ?? 2; // casas decimais configuradas no indicador
 
   const [editing, setEditing] = useState(false);
   const [inputValue, setInputValue] = useState(String(estimate ?? ''));
@@ -118,12 +119,12 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
 
       {/* ── Values grid ── */}
       <div className={cn('grid px-4 pb-1', showEstimate ? 'grid-cols-3' : 'grid-cols-2')}>
-        <ValueCol label="Realizado" value={formatNumber(realized, indicator.unit)} />
-        <ValueCol label="Meta" value={formatNumber(goal, indicator.unit)} bold />
+        <ValueCol label="Realizado" value={formatNumber(realized, indicator.unit, dp)} />
+        <ValueCol label="Meta" value={formatNumber(goal, indicator.unit, dp)} bold />
         {showEstimate && (
           <ValueCol
             label="Estimativa"
-            value={formatNumber(effective, indicator.unit)}
+            value={formatNumber(effective, indicator.unit, dp)}
             editable={canEdit}
             onEdit={() => { setInputValue(String(estimate ?? realized ?? '')); setEditing(true); }}
           />

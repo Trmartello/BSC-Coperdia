@@ -104,9 +104,9 @@ function KpiCard({ kpi }: { kpi: any }) {
         <span className={cn('text-[9px] px-2 py-0.5 rounded-full border', meta.chip)}>{meta.label}</span>
       </div>
       <p className="text-sm font-semibold text-white/80 mt-0.5 mb-3 truncate">{kpi.name}</p>
-      <p className="text-2xl font-bold text-white">{formatValue(kpi.effective, kpi.unit)}</p>
+      <p className="text-2xl font-bold text-white">{formatValue(kpi.effective, kpi.unit, kpi.decimalPlaces ?? 2)}</p>
       <div className="flex items-center justify-between mt-2">
-        <span className="text-xs text-white/40">Meta: {formatValue(kpi.goal, kpi.unit)}</span>
+        <span className="text-xs text-white/40">Meta: {formatValue(kpi.goal, kpi.unit, kpi.decimalPlaces ?? 2)}</span>
         {kpi.deviationGoal != null && (
           <span className={cn('text-xs font-medium', positive ? 'text-emerald-400' : 'text-red-400')}>
             {positive ? '▲' : '▼'} {Math.abs(kpi.deviationGoal).toFixed(1)}%
@@ -122,6 +122,7 @@ interface RatioRow {
   id: string; code: string; name: string;
   unit: 'CURRENCY' | 'PERCENTAGE' | 'NUMBER' | 'DAYS' | 'INDEX';
   direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER';
+  decimalPlaces?: number;
   current: number | null; previous: number | null; delta: number | null;
 }
 
@@ -153,10 +154,10 @@ function FinancialAnalysisPanel({ period }: { period: string }) {
               </div>
               <p className="text-xs font-semibold text-white/70 mt-0.5 mb-2 truncate" title={r.name}>{r.name}</p>
               <p className="text-2xl font-bold text-white">
-                {r.current != null ? formatValue(r.current, r.unit) : '—'}
+                {r.current != null ? formatValue(r.current, r.unit, r.decimalPlaces ?? 2) : '—'}
               </p>
               <p className="text-[10px] text-white/30 mt-1">
-                mês anterior: {r.previous != null ? formatValue(r.previous, r.unit) : '—'}
+                mês anterior: {r.previous != null ? formatValue(r.previous, r.unit, r.decimalPlaces ?? 2) : '—'}
               </p>
             </div>
           );

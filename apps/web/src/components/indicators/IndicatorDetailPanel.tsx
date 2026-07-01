@@ -24,28 +24,29 @@ function fmtMonthCompact(d: Date) {
   return `${MESES[d.getUTCMonth()]}'${String(d.getUTCFullYear()).slice(2)}`;
 }
 
-// Valor curto para rótulo sobre as barras do gráfico
-function fmtBar(v: number | null | undefined, unit: string): string {
+// Valor curto para rótulo sobre as barras do gráfico. `decimals` = casas
+// configuradas no indicador (aplicado nos valores não abreviados; M/k mantêm 1).
+function fmtBar(v: number | null | undefined, unit: string, decimals = 2): string {
   if (v == null) return '';
-  if (unit === 'PERCENTAGE') return `${v % 1 === 0 ? v : v.toFixed(1)}%`;
-  if (unit === 'DAYS') return `${Math.round(v)}`;
+  if (unit === 'PERCENTAGE') return `${v.toFixed(decimals)}%`;
+  if (unit === 'DAYS') return `${v.toFixed(decimals)}`;
   if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
   if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
-  return `${v % 1 === 0 ? v : v.toFixed(1)}`;
+  return `${v.toFixed(decimals)}`;
 }
 
-function fmtLarge(v: number | null | undefined, unit: string): string {
+function fmtLarge(v: number | null | undefined, unit: string, decimals = 2): string {
   if (v == null) return '—';
-  if (unit === 'PERCENTAGE') return `${v.toFixed(1)}%`;
+  if (unit === 'PERCENTAGE') return `${v.toFixed(decimals)}%`;
   if (unit === 'CURRENCY') {
     if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)} M`;
     if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(1)} k`;
-    return `R$ ${v.toFixed(2)}`;
+    return `R$ ${v.toFixed(decimals)}`;
   }
-  if (unit === 'DAYS') return `${v % 1 === 0 ? v : v.toFixed(1)} d`;
+  if (unit === 'DAYS') return `${v.toFixed(decimals)} d`;
   if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)} M`;
   if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)} k`;
-  return v % 1 === 0 ? String(v) : v.toFixed(1);
+  return v.toFixed(decimals);
 }
 
 const UNIT_NAME: Record<string, string> = {
@@ -62,8 +63,8 @@ function isImprovement(pct: number | null, direction: string): boolean | null {
 
 interface Pt { period: Date; value: number; goal?: number; prevYear?: number }
 
-function HistoryChart({ data, direction, unit, currentGoal }: {
-  data: Pt[]; direction: string; unit: string; currentGoal?: number | null;
+function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
+  data: Pt[]; direction: string; unit: string; currentGoal?: number | null; decimals?: number;
 }) {
   const [tooltip, setTooltip] = useState<{ i: number; x: number; y: number } | null>(null);
 
@@ -153,7 +154,7 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
             <line x1={pad} x2={fullW - pad} y1={y(goalLine)} y2={y(goalLine)}
               stroke="rgba(255,255,255,0.20)" strokeWidth={1} strokeDasharray="4 4" />
             <text x={fullW - pad - 2} y={y(goalLine) - 3} textAnchor="end" fontSize="7" fill="rgba(255,255,255,0.28)">
-              meta {fmtBar(goalLine, unit)}
+              meta {fmtBar(goalLine, unit, decimals)}
             </text>
           </g>
         )}
@@ -199,7 +200,7 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
                   fontWeight={isComparison ? 700 : 500}
                   fill={isComparison ? labelColor : 'rgba(255,255,255,0.35)'}
                 >
-                  {fmtBar(p.value, unit)}
+                  {fmtBar(p.value, unit, decimals)}
                 </text>
               )}
             </g>
@@ -226,7 +227,7 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
         {/* tooltip ao passar o mouse */}
         {tooltip != null && (() => {
           const p = pts[tooltip.i];
-          const label = `${fmtMonthCompact(p.period)}: ${fmtBar(p.value, unit)}`;
+          const label = `${fmtMonthCompact(p.period)}: ${fmtBar(p.value, unit, decimals)}`;
           const tw = label.length * 6.5 + 16;
           const tx = Math.min(Math.max(tooltip.x - tw / 2, pad), fullW - tw - pad);
           const ty = Math.max(tooltip.y - 34, 4);
@@ -247,11 +248,11 @@ function HistoryChart({ data, direction, unit, currentGoal }: {
 // ─── Linha de histórico unificado (Realizado + Meta + Estimativa) ─────────────
 
 function PeriodRow({
-  period, realized, goal, estimate, unit, indicatorId, isCalculated, onSaved,
+  period, realized, goal, estimate, unit, indicatorId, isCalculated, onSaved, decimals = 2,
 }: {
   period: string; // ISO date string
   realized?: any; goal?: any; estimate?: any;
-  unit: string; indicatorId: string; isCalculated: boolean; onSaved: () => void;
+  unit: string; indicatorId: string; isCalculated: boolean; onSaved: () => void; decimals?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [vals, setVals] = useState({
@@ -301,7 +302,7 @@ function PeriodRow({
     }
   }
 
-  const fv = (v: any) => v != null ? formatValue(parseFloat(v.value), unit as any) : '—';
+  const fv = (v: any) => v != null ? formatValue(parseFloat(v.value), unit as any, decimals) : '—';
 
   if (editing) {
     return (
@@ -529,6 +530,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   const ind = indicator as any;
   const direction = ind?.direction ?? 'HIGHER_IS_BETTER';
   const unit = ind?.unit ?? 'NUMBER';
+  const dp = ind?.decimalPlaces ?? 2; // casas decimais configuradas no indicador
 
   // ── Período de referência selecionado (mês de análise) ──────────────────────
   const refDate = new Date(period);
@@ -681,7 +683,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                     <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">Realizado</p>
                     <p className="text-[9px] text-white/35 mt-1">{fmtMonth(refDate)}</p>
                     <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
-                      {fmtLarge(effective, unit)}
+                      {fmtLarge(effective, unit, dp)}
                     </p>
                   </div>
 
@@ -692,7 +694,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                       {yoyPoint ? fmtMonth(yoyPoint.period) : 'Sem histórico'}
                     </p>
                     <p className={cn('text-[26px] font-black mt-1 leading-none', goodYoy == null ? 'text-white/40' : goodYoy ? 'text-emerald-400' : 'text-red-400')}>
-                      {yoyPoint ? fmtLarge(yoyPoint.value, unit) : '—'}
+                      {yoyPoint ? fmtLarge(yoyPoint.value, unit, dp) : '—'}
                     </p>
                     {yoy != null && (
                       <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodYoy ? 'text-emerald-400/70' : 'text-red-400/70')}>
@@ -706,7 +708,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                   <div className="flex flex-col pl-3 border-l border-blue-500/40">
                     <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Meta</p>
                     <p className="text-[9px] text-white/35 mt-1">
-                      {goal != null ? `Meta: ${fmtLarge(goal, unit)}` : 'Sem meta definida'}
+                      {goal != null ? `Meta: ${fmtLarge(goal, unit, dp)}` : 'Sem meta definida'}
                     </p>
                     {(() => {
                       const diff = effective != null && goal != null ? effective - goal : null;
@@ -714,7 +716,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                       return (
                         <>
                           <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white/40' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
-                            {diff != null ? `${sign}${fmtLarge(diff, unit)}` : '—'}
+                            {diff != null ? `${sign}${fmtLarge(diff, unit, dp)}` : '—'}
                           </p>
                           {vsGoal != null && (
                             <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodVsGoal ? 'text-emerald-400/70' : 'text-red-400/70')}>
@@ -737,7 +739,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                   <p className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Histórico — {chartData.length} períodos</p>
                   <div className="flex items-center gap-1 text-[12px] font-semibold text-white/55">
                     <span>Mês anterior:</span>
-                    <span className="text-white/85">{prevPoint ? fmtLarge(prevPoint.value, unit) : '—'}</span>
+                    <span className="text-white/85">{prevPoint ? fmtLarge(prevPoint.value, unit, dp) : '—'}</span>
                     {mom != null && (
                       <span className={cn('font-bold', goodMom ? 'text-emerald-400' : 'text-red-400')}>
                         ({mom > 0 ? '+' : ''}{mom.toFixed(1)}%)
@@ -745,7 +747,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                     )}
                   </div>
                 </div>
-                <HistoryChart data={chartData} direction={direction} unit={unit} currentGoal={goal} />
+                <HistoryChart data={chartData} direction={direction} unit={unit} currentGoal={goal} decimals={dp} />
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
                   <Legend swatch="bg-emerald-500/70" label="Atual + penúltimo (cor do status)" />
                   <Legend swatch="bg-indigo-400/50" label="Mesmo período ano anterior" />
@@ -828,6 +830,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                       unit={unit}
                       indicatorId={indicatorId}
                       isCalculated={ind?.type === 'CALCULATED'}
+                      decimals={ind?.decimalPlaces ?? 2}
                       onSaved={() => refetch()}
                     />
                   ))}
