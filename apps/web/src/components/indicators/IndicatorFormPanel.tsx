@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsApi, formulasApi, indicatorsApi, mapsApi } from '../../lib/api';
-import { cn } from '../../lib/utils';
+import { cn, toVarName, humanizeExpression, replaceVarToken } from '../../lib/utils';
 import { toast } from 'sonner';
 import { X, Trash2 } from 'lucide-react';
 import { UserSelector } from '../ui/UserSelector';
@@ -47,6 +47,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
     goal: '',
     expression: '',
     vars: [] as string[],
+    aliases: {} as Record<string, string>, // indicatorId → nome amigável usado na fórmula
     monitoring: '',
     mapLevel: 1,
   });
@@ -60,6 +61,14 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
 
   useEffect(() => {
     if (editData) {
+      // formula.variables = { alias: indicatorId } → reconstruir vars + aliases
+      const variables: Record<string, string> = editData.formula?.variables ?? {};
+      const aliases: Record<string, string> = {};
+      const vars: string[] = [];
+      for (const [alias, indId] of Object.entries(variables)) {
+        aliases[indId as string] = alias;
+        vars.push(indId as string);
+      }
       setForm((f) => ({
         ...f,
         name: editData.name ?? '',
@@ -70,7 +79,8 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         responsible: editData.responsible ?? '',
         goal: editData.goals?.[0]?.value != null ? String(editData.goals[0].value) : '',
         expression: editData.formula?.expression ?? '',
-        vars: editData.formula?.variables ? (Object.values(editData.formula.variables) as string[]) : [],
+        vars,
+        aliases,
         monitoring: (editData.monitoringPoints ?? []).join('\n'),
       }));
     }
@@ -80,10 +90,13 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      // Usa o nome amigável (alias) escolhido pelo usuário como token da fórmula;
+      // cai no código sanitizado quando não houver alias definido.
       const variables: Record<string, string> = {};
       for (const id of form.vars) {
         const ind = indList.find((i) => i.id === id);
-        if (ind) variables[ind.code] = id;
+        const alias = (form.aliases[id] || toVarName(ind?.code ?? '')).trim();
+        if (alias) variables[alias] = id;
       }
 
       let indicatorId = editIndicatorId as string;
@@ -154,6 +167,52 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
     deleteMut.mutate();
   }
 
+  // ── Variáveis da fórmula (com nomes amigáveis) ────────────────────────────
+  // Marca/desmarca um indicador como variável, atribuindo um alias único.
+  function toggleVar(ind: any, checked: boolean) {
+    setForm((f) => {
+      if (checked) {
+        const base = toVarName(ind.code);
+        const taken = new Set(
+          Object.entries(f.aliases).filter(([id]) => id !== ind.id).map(([, a]) => a),
+        );
+        let alias = base;
+        let n = 2;
+        while (taken.has(alias)) alias = `${base}_${n++}`;
+        return { ...f, vars: [...f.vars, ind.id], aliases: { ...f.aliases, [ind.id]: alias } };
+      }
+      const { [ind.id]: _removed, ...restAliases } = f.aliases;
+      return { ...f, vars: f.vars.filter((v) => v !== ind.id), aliases: restAliases };
+    });
+  }
+
+  // Renomeia o alias e propaga a troca para a expressão já digitada.
+  function setAlias(indId: string, raw: string) {
+    let next = raw.replace(/[^A-Za-z0-9_]/g, '_');
+    if (/^[0-9]/.test(next)) next = '_' + next;
+    setForm((f) => ({
+      ...f,
+      aliases: { ...f.aliases, [indId]: next },
+      expression: replaceVarToken(f.expression, f.aliases[indId] ?? '', next),
+    }));
+  }
+
+  // Insere o alias no fim da expressão (atalho para montar a fórmula).
+  function insertToken(indId: string) {
+    const alias = form.aliases[indId];
+    if (!alias) return;
+    setForm((f) => ({ ...f, expression: f.expression ? `${f.expression} ${alias}` : alias }));
+  }
+
+  // Mapa alias → nome do indicador, para a leitura amigável da fórmula.
+  const tokenToName: Record<string, string> = {};
+  for (const id of form.vars) {
+    const ind = indList.find((i) => i.id === id);
+    const alias = form.aliases[id];
+    if (alias && ind) tokenToName[alias] = ind.name;
+  }
+  const humanized = humanizeExpression(form.expression, tokenToName);
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
       <div
@@ -216,34 +275,63 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
                         <input
                           type="checkbox"
                           checked={form.vars.includes(i.id)}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              vars: e.target.checked
-                                ? [...form.vars, i.id]
-                                : form.vars.filter((v) => v !== i.id),
-                            })
-                          }
+                          onChange={(e) => toggleVar(i, e.target.checked)}
                         />
                         <span className="font-mono text-white/40">{i.code}</span> {i.name}
                       </label>
                     ))}
                 </div>
               </Field>
-              <Field label="Fórmula (use os códigos das variáveis)">
+
+              {form.vars.length > 0 && (
+                <Field label="Nomes amigáveis das variáveis">
+                  <div className="space-y-1.5 border border-white/10 rounded-xl p-2">
+                    {form.vars.map((id) => {
+                      const ind = indList.find((i) => i.id === id);
+                      if (!ind) return null;
+                      return (
+                        <div key={id} className="flex items-center gap-2">
+                          <input
+                            className="input-dark w-32 font-mono text-xs py-1.5"
+                            value={form.aliases[id] ?? ''}
+                            onChange={(e) => setAlias(id, e.target.value)}
+                            placeholder={toVarName(ind.code)}
+                          />
+                          <span className="text-[11px] text-white/50 truncate flex-1" title={ind.name}>
+                            = {ind.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => insertToken(id)}
+                            title="Inserir na fórmula"
+                            className="text-[10px] px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-colors flex-shrink-0"
+                          >
+                            inserir
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-white/30 mt-1">
+                    Dê um nome curto e claro a cada variável (ex.: <span className="font-mono">Receita</span>,{' '}
+                    <span className="font-mono">CustoFixo</span>) para a fórmula ficar legível.
+                  </p>
+                </Field>
+              )}
+
+              <Field label="Fórmula (use os nomes das variáveis)">
                 <input
                   className="input-dark w-full font-mono"
                   value={form.expression}
                   onChange={(e) => setForm({ ...form, expression: e.target.value })}
-                  placeholder="Ex: RECEITA - CUSTOS - DESPESAS"
+                  placeholder="Ex: (PMR + PME - PMP) * Receita"
                 />
-                <p className="text-[10px] text-white/30 mt-1">
-                  Variáveis:{' '}
-                  {form.vars
-                    .map((id) => indList.find((i) => i.id === id)?.code)
-                    .filter(Boolean)
-                    .join(', ') || '—'}
-                </p>
+                {form.expression.trim() && (
+                  <div className="mt-1.5 p-2 rounded-lg bg-purple-500/5 border border-purple-500/15">
+                    <p className="text-[9px] text-purple-300/70 uppercase tracking-wider mb-0.5">Leitura</p>
+                    <p className="text-[11px] text-white/70 leading-snug">{humanized}</p>
+                  </div>
+                )}
               </Field>
             </>
           )}

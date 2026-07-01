@@ -4,6 +4,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Target, ClipboardList, Sigma, Crosshair } from 'lucide-react';
 import { indicatorsApi } from '../../lib/api';
+import { humanizeExpression } from '../../lib/utils';
 
 interface Props {
   indicatorId: string;
@@ -18,9 +19,27 @@ export function IndicatorDetailModal({ indicatorId, onClose, onOpenActionPlan }:
     queryFn: () => indicatorsApi.get(indicatorId).then((r) => r.data),
   });
 
+  const { data: allInds = [] } = useQuery({
+    queryKey: ['indicators'],
+    queryFn: () => indicatorsApi.list().then((r) => r.data),
+  });
+
   const ind = indicator as any;
   const isCalculated = ind?.type === 'CALCULATED';
   const monitoringPoints: string[] = ind?.monitoringPoints ?? [];
+
+  // Leitura amigável da fórmula: troca cada variável (alias) pelo nome do indicador.
+  const formulaReading = (() => {
+    const expr = ind?.formula?.expression;
+    const variables: Record<string, string> = ind?.formula?.variables ?? {};
+    if (!expr || Object.keys(variables).length === 0) return '';
+    const byId = new Map((allInds as any[]).map((i) => [i.id, i.name]));
+    const tokenToName: Record<string, string> = {};
+    for (const [alias, indId] of Object.entries(variables)) {
+      tokenToName[alias] = byId.get(indId as string) ?? alias;
+    }
+    return humanizeExpression(expr, tokenToName);
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -71,6 +90,11 @@ export function IndicatorDetailModal({ indicatorId, onClose, onOpenActionPlan }:
                 <p className="text-[10px] text-white/40 uppercase tracking-wider">Fórmula</p>
               </div>
               <code className="text-sm text-purple-200 font-mono">{ind.formula.expression}</code>
+              {formulaReading && (
+                <p className="text-xs text-white/55 mt-2 leading-snug">
+                  <span className="text-white/30">Leitura: </span>{formulaReading}
+                </p>
+              )}
               {ind?.description && (
                 <p className="text-xs text-white/40 mt-2">{ind.description}</p>
               )}

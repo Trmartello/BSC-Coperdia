@@ -119,3 +119,47 @@ export function deltaArrow(delta: number): string {
   if (delta < 0) return '▼';
   return '—';
 }
+
+// ─── Fórmulas: nomes de variáveis amigáveis ──────────────────────────────────
+
+/**
+ * Converte um código de indicador em um nome de variável válido para a fórmula
+ * (mathjs): mantém letras/dígitos/underscore, troca o resto por "_" e evita
+ * começar com dígito. Ex.: "GER-046" → "GER_046".
+ */
+export function toVarName(code: string): string {
+  let v = (code ?? '').trim().replace(/[^A-Za-z0-9_]/g, '_');
+  if (/^[0-9]/.test(v)) v = '_' + v;
+  return v || 'VAR';
+}
+
+/** Escapa um texto para uso literal dentro de uma RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Substitui, com fronteira de palavra, uma variável por outra dentro de uma
+ * expressão — usado ao renomear o alias de uma variável já digitada na fórmula.
+ */
+export function replaceVarToken(expression: string, from: string, to: string): string {
+  if (!from || from === to) return expression;
+  return expression.replace(new RegExp(`\\b${escapeRegExp(from)}\\b`, 'g'), to);
+}
+
+/**
+ * Expande uma fórmula trocando cada token de variável pelo nome amigável do
+ * indicador, para o usuário conferir a composição do cálculo. Tokens não
+ * mapeados permanecem como estão (sinalizando algo fora do lugar).
+ * `tokenToName` = { NOME_VARIAVEL: "Nome do Indicador" }.
+ */
+export function humanizeExpression(expression: string, tokenToName: Record<string, string>): string {
+  if (!expression) return '';
+  // Substitui tokens do mais longo p/ o mais curto, evitando trocas parciais.
+  const tokens = Object.keys(tokenToName).sort((a, b) => b.length - a.length);
+  let out = expression;
+  for (const tok of tokens) {
+    out = out.replace(new RegExp(`\\b${escapeRegExp(tok)}\\b`, 'g'), tokenToName[tok]);
+  }
+  return out;
+}

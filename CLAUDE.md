@@ -77,7 +77,7 @@ apps/
 - `direction: HIGHER_IS_BETTER | LOWER_IS_BETTER` — define se ↑ é bom ou ruim
 - Plano de ação: `indicatorId = null` → avulso; `indicatorId = id` → vinculado
 - Cálculo: CalcEngineService faz sort topológico antes de avaliar fórmulas
-- `formula.variables` = JSON `{NOME_VAR: indicatorId}` para substituição em mathjs
+- `formula.variables` = JSON `{NOME_VAR: indicatorId}` para substituição em mathjs. **`NOME_VAR` é um alias amigável editável** (não mais o código): em `IndicatorFormPanel`, cada variável marcada ganha um campo de nome (default = `toVarName(code)`, sanitiza p/ identificador válido — ex.: `GER-046`→`GER_046`). Renomear o alias propaga a troca na expressão (`replaceVarToken`, fronteira de palavra). Uma prévia "Leitura" (`humanizeExpression`) mostra a fórmula com os nomes completos dos indicadores; o `IndicatorDetailModal` também exibe essa leitura. Helpers em `lib/utils.ts` (`toVarName`, `replaceVarToken`, `humanizeExpression`). O backend já aceita qualquer token no map de variáveis — mudança é só de front.
 - Cenários foram **removidos** da UI. `scenario.store.ts` mantém `activePeriod` + `accumulate` (modo Acumular).
 
 ### Modo "Acumular" (YTD)
