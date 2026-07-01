@@ -13,7 +13,7 @@ import ReactFlow, {
 } from 'reactflow';
 import { getHelperLines, HelperLines } from '../../../../components/maps/helperLines';
 import 'reactflow/dist/style.css';
-import { ArrowLeft, Plus, Pencil, Trash2, X, ChevronsRight, ChevronsLeft, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, X, ChevronsRight, ChevronsLeft, ArrowUp, ArrowDown, Maximize2, Minimize2 } from 'lucide-react';
 import { mapsApi, indicatorsApi, settingsApi } from '../../../../lib/api';
 import { useScenarioStore } from '../../../../store/scenario.store';
 import { IndicatorMap, MapEntry } from '../../../../types/maps';
@@ -39,37 +39,39 @@ const HANDLES = ([
   ['left', Position.Left],
 ] as const);
 
-function MapIndicatorNode({ data, selected }: NodeProps) {
+function MapIndicatorNode({ id, data, selected }: NodeProps) {
   const {
     indicator, realized, goal, estimate, period, showEstimate = true,
     actionCount, attachmentCount, commentCount,
     onInfo, onRemove, onOpenActionPlan, onUpdated,
-    level = 1, onExpandLevel,
-    hasDeepNeighbors = false, nextLevelVisible = false,
+    onToggleExpand, hasChildren = false, isExpanded = false, childCount = 0,
   } = data;
 
   return (
-    <div className={cn('group relative rounded-2xl transition-shadow [&:hover_.rf-handle]:!opacity-100',
+    <div className={cn('group relative rounded-2xl transition-shadow map-node-in [&:hover_.rf-handle]:!opacity-100',
       selected ? 'ring-2 ring-indigo-500 shadow-xl shadow-indigo-500/20' : '')}>
       {HANDLES.map(([hid, pos]) => (
         <Handle key={hid} id={hid} type="source" position={pos} className="rf-handle" style={HANDLE_STYLE} />
       ))}
 
-      {/* Botão aparece só se o card tiver vizinhos em nível mais profundo.
-          Recolhido → sempre visível (chama atenção p/ expandir).
-          Expandido → só ao passar o mouse sobre o card. */}
-      {onExpandLevel && hasDeepNeighbors && (
+      {/* Drill-down por card: revela SOMENTE os filhos diretos deste card.
+          Recolhido → sempre visível (convida a expandir, mostra a contagem).
+          Expandido → aparece só no hover (para recolher o ramo). */}
+      {onToggleExpand && hasChildren && (
         <button
-          onClick={(e) => { e.stopPropagation(); onExpandLevel(level); }}
+          onClick={(e) => { e.stopPropagation(); onToggleExpand(id); }}
           className={cn(
-            'nodrag absolute -bottom-3 -right-3 z-10 w-6 h-6 rounded-full bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/30 flex items-center justify-center shadow-lg transition-opacity',
-            nextLevelVisible ? 'opacity-0 group-hover:opacity-100' : 'opacity-100',
+            'nodrag absolute -bottom-3 -right-3 z-10 h-6 min-w-6 px-1.5 rounded-full bg-indigo-600/90 hover:bg-indigo-600 border border-indigo-400/30 flex items-center gap-0.5 justify-center shadow-lg transition-opacity',
+            isExpanded ? 'opacity-0 group-hover:opacity-100' : 'opacity-100',
           )}
-          title={nextLevelVisible ? 'Recolher próximo nível' : 'Expandir próximo nível'}
+          title={isExpanded ? 'Recolher este ramo' : `Expandir ${childCount} indicador(es) ligado(s)`}
         >
-          {nextLevelVisible
+          {isExpanded
             ? <ChevronsLeft size={11} className="text-white" />
-            : <ChevronsRight size={11} className="text-white" />}
+            : <>
+                <ChevronsRight size={11} className="text-white" />
+                {childCount > 0 && <span className="text-[9px] font-bold text-white leading-none">{childCount}</span>}
+              </>}
         </button>
       )}
 
@@ -149,7 +151,6 @@ function buildNodesAndEdges(
     onRemove: (id: string, name: string) => void;
     onRemoveEdge: (edgeId: string, parentId: string, childId: string) => void;
     onOpenActionPlan: (id: string) => void;
-    onExpandLevel: (level: number) => void;
     onUpdated: () => void;
   },
   showEstimate = true,
@@ -184,7 +185,6 @@ function buildNodesAndEdges(
         level,
         actionCount, attachmentCount, commentCount,
         onInfo: handlers?.onInfo, onRemove: handlers?.onRemove,
-        onExpandLevel: handlers?.onExpandLevel,
         onOpenActionPlan: handlers?.onOpenActionPlan, onUpdated: handlers?.onUpdated,
       },
     };
@@ -508,8 +508,14 @@ export default function MapEditorPage() {
 
   const [nodes, setNodes] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [visibleUpToLevel, setVisibleUpToLevel] = useState(99);
+  // Drill-down por nó: conjunto de cards atualmente expandidos (isExpanded).
+  // Nós-raiz (sem pai/agregador) começam visíveis; cada expansão revela SOMENTE
+  // os filhos diretos do card clicado. Substitui o antigo modelo por nível.
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const pendingLevelsRef = React.useRef<Map<string, number>>(new Map());
+
+  // Ao trocar de mapa, recolhe tudo (volta às raízes).
+  useEffect(() => { setExpandedNodes(new Set()); }, [id]);
 
   // Linhas-guia de alinhamento exibidas durante o arraste de um card
   const [helperLineH, setHelperLineH] = useState<number | undefined>();
@@ -549,46 +555,88 @@ export default function MapEditorPage() {
     [nodes, setNodes],
   );
 
-  const handleExpandLevel = useCallback((level: number) => {
-    setVisibleUpToLevel((prev) => (prev > level ? level : level + 1));
+  // ── Grafo de drill-down (child = causa/insumo → parent = agregado) ───────────
+  // Usa a semântica de data.parentId/childId das edges (robusto a reconexões).
+  // childrenMap: parent → filhos diretos; childHasParent: nós que têm agregador.
+  const childrenMap = React.useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const e of edges) {
+      const parent = (e.data as any)?.parentId ?? e.target;
+      const child = (e.data as any)?.childId ?? e.source;
+      if (!parent || !child) continue;
+      if (!m.has(parent)) m.set(parent, []);
+      if (!m.get(parent)!.includes(child)) m.get(parent)!.push(child);
+    }
+    return m;
+  }, [edges]);
+
+  const childHasParent = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const e of edges) {
+      const child = (e.data as any)?.childId ?? e.source;
+      if (child) s.add(child);
+    }
+    return s;
+  }, [edges]);
+
+  // Nós visíveis: parte das raízes e desce apenas pelos nós expandidos.
+  const visibleIds = React.useMemo(() => {
+    const allIds = nodes.map((n) => n.id);
+    let roots = allIds.filter((nid) => !childHasParent.has(nid));
+    // Fallback p/ ciclos (todo nó tem pai) → evita mapa em branco.
+    if (roots.length === 0) roots = allIds;
+
+    const visible = new Set<string>(roots);
+    const stack = [...roots];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (!expandedNodes.has(cur)) continue;
+      for (const child of childrenMap.get(cur) ?? []) {
+        if (!visible.has(child)) { visible.add(child); stack.push(child); }
+      }
+    }
+    return visible;
+  }, [nodes, expandedNodes, childrenMap, childHasParent]);
+
+  // Nós que possuem filhos diretos (podem ser expandidos).
+  const expandableIds = React.useMemo(
+    () => nodes.filter((n) => (childrenMap.get(n.id)?.length ?? 0) > 0).map((n) => n.id),
+    [nodes, childrenMap],
+  );
+  const allExpanded = expandableIds.length > 0 && expandableIds.every((nid) => expandedNodes.has(nid));
+
+  // Expandir/recolher UM card. Recolher remove APENAS este nó do conjunto de
+  // expandidos — a propagação de `visibleIds` (a partir das raízes) oculta
+  // automaticamente todos os descendentes que ficam inacessíveis. Em grafos em
+  // losango (filho compartilhado por 2 agregadores), o filho permanece visível
+  // pelo outro ramo ainda aberto, como esperado.
+  const handleToggleExpand = useCallback((nodeId: string) => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
   }, []);
 
-  const maxDefinedLevel = React.useMemo(
-    () => Math.max(1, ...nodes.map((n) => n.data?.level ?? 1)),
-    [nodes],
-  );
-
   const displayNodes = React.useMemo(() => {
-    const nodeLevel = new Map(nodes.map((n) => [n.id, n.data?.level ?? 1]));
-
-    // Adjacência bidirecional: para cada nó, quais nós estão conectados
-    const adj = new Map<string, string[]>();
-    for (const e of edges) {
-      if (!adj.has(e.source)) adj.set(e.source, []);
-      if (!adj.has(e.target)) adj.set(e.target, []);
-      adj.get(e.source)!.push(e.target);
-      adj.get(e.target)!.push(e.source);
-    }
-
     return nodes.map((n) => {
-      const level = nodeLevel.get(n.id) ?? 1;
-      const neighbors = adj.get(n.id) ?? [];
-      // Tem vizinhos em nível mais profundo?
-      const hasDeepNeighbors = neighbors.some((nid) => (nodeLevel.get(nid) ?? 1) > level);
-      // O nível seguinte já está visível?
-      const nextLevelVisible = visibleUpToLevel > level;
-
+      const childCount = childrenMap.get(n.id)?.length ?? 0;
       return {
         ...n,
-        hidden: level > visibleUpToLevel,
-        data: { ...n.data, hasDeepNeighbors, nextLevelVisible },
+        hidden: !visibleIds.has(n.id),
+        data: {
+          ...n.data,
+          hasChildren: childCount > 0,
+          childCount,
+          isExpanded: expandedNodes.has(n.id),
+          onToggleExpand: handleToggleExpand,
+        },
       };
     });
-  }, [nodes, edges, visibleUpToLevel]);
+  }, [nodes, childrenMap, visibleIds, expandedNodes, handleToggleExpand]);
 
   const displayEdges = React.useMemo(() => {
-    const nodeLevel = new Map(nodes.map((n) => [n.id, n.data?.level ?? 1]));
-
     // Geometria atual de cada nó (centro + dimensões) para roteamento flutuante
     const geom = new Map<string, { cx: number; cy: number; w: number; h: number; x: number; y: number }>();
     for (const n of nodes) {
@@ -627,11 +675,56 @@ export default function MapEditorPage() {
       return {
         ...e,
         ...(handles ?? {}),
-        hidden: (nodeLevel.get(e.source) ?? 1) > visibleUpToLevel
-               || (nodeLevel.get(e.target) ?? 1) > visibleUpToLevel,
+        // Conexão só aparece quando AMBOS os cards estão visíveis.
+        hidden: !visibleIds.has(e.source) || !visibleIds.has(e.target),
       };
     });
-  }, [edges, nodes, visibleUpToLevel]);
+  }, [edges, nodes, visibleIds]);
+
+  // 1) Expandir PRÓXIMO nível: expande todos os cards visíveis, com filhos, que
+  //    ainda não estão expandidos → cresce a fronteira visível em uma camada.
+  const expandNextLevel = useCallback(() => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const nid of visibleIds) {
+        if ((childrenMap.get(nid)?.length ?? 0) > 0 && !next.has(nid)) { next.add(nid); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [visibleIds, childrenMap]);
+
+  // 2) Recolher PRÓXIMO nível: fecha apenas os nós expandidos "mais profundos" —
+  //    aqueles cujos filhos ainda NÃO estão expandidos (folhas da árvore de
+  //    expansão). Depth-free → robusto a grafos em losango (DAG, filho com vários
+  //    agregadores) e simétrico/reversível em relação a expandNextLevel.
+  const collapseLastLevel = useCallback(() => {
+    setExpandedNodes((prev) => {
+      if (prev.size === 0) return prev;
+      const deepest = [...prev].filter(
+        (nid) => !(childrenMap.get(nid) ?? []).some((c) => prev.has(c)),
+      );
+      if (deepest.length === 0) return new Set(); // ciclo → recolhe tudo
+      const next = new Set(prev);
+      for (const nid of deepest) next.delete(nid);
+      return next;
+    });
+  }, [childrenMap]);
+
+  // 3) Expandir TODOS os níveis: expande recursivamente toda a árvore.
+  const expandAllLevels = useCallback(() => {
+    setExpandedNodes(new Set(expandableIds));
+  }, [expandableIds]);
+
+  // 4) Recolher TODOS os níveis: volta somente às raízes (isExpanded=false).
+  const collapseAllLevels = useCallback(() => {
+    setExpandedNodes(new Set());
+  }, []);
+
+  const canExpandNext = React.useMemo(
+    () => [...visibleIds].some((nid) => (childrenMap.get(nid)?.length ?? 0) > 0 && !expandedNodes.has(nid)),
+    [visibleIds, childrenMap, expandedNodes],
+  );
 
   const handleRemoveIndicator = useCallback(async (indId: string, name: string) => {
     if (typeof window !== 'undefined' && !window.confirm(`Remover "${name}" deste mapa?`)) return;
@@ -664,13 +757,12 @@ export default function MapEditorPage() {
       onInfo: (indId) => setInfoIndicatorId(indId),
       onRemove: handleRemoveIndicator,
       onRemoveEdge: handleRemoveEdge,
-      onExpandLevel: handleExpandLevel,
       onOpenActionPlan: (indId) => setSelectedIndicatorId((prev) => (prev === indId ? null : indId)),
       onUpdated: () => qc.invalidateQueries({ queryKey: ['map', id] }),
     }, showEstimate, activePeriod, pendingLevelsRef.current);
     setNodes(n);
     setEdges(e);
-  }, [map, showEstimate, activePeriod, handleExpandLevel]);
+  }, [map, showEstimate, activePeriod]);
 
   // Criar conexão: source = causa (filho), target = recebe impacto (pai)
   const onConnect = useCallback(
@@ -867,34 +959,46 @@ export default function MapEditorPage() {
         </div>
         <div className="flex-1" />
 
-        {/* Level expand / collapse controls */}
+        {/* Controles de expansão da árvore — 4 ações independentes.
+            Próximo nível (parcial) e Todos (recursivo), expandir e recolher. */}
         <div className="flex items-center gap-1 border border-white/10 rounded-xl overflow-hidden text-xs">
           <button
-            onClick={() => {
-              const selLevel = selectedIndicatorId
-                ? (nodes.find((n) => n.id === selectedIndicatorId)?.data?.level ?? 1) : 1;
-              setVisibleUpToLevel(selLevel);
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 transition-colors"
-            title="Recolher níveis"
+            onClick={expandNextLevel}
+            disabled={!canExpandNext}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Expandir próximo nível"
           >
-            <ChevronsLeft size={13} /> Recolher
+            <ChevronsRight size={13} /> <span className="hidden xl:inline">Próximo</span>
           </button>
           <div className="w-px h-5 bg-white/10" />
           <button
-            onClick={() => {
-              const selLevel = selectedIndicatorId
-                ? (nodes.find((n) => n.id === selectedIndicatorId)?.data?.level ?? maxDefinedLevel)
-                : maxDefinedLevel;
-              setVisibleUpToLevel(visibleUpToLevel >= maxDefinedLevel ? selLevel : maxDefinedLevel);
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 transition-colors"
-            title="Expandir níveis"
+            onClick={collapseLastLevel}
+            disabled={expandedNodes.size === 0}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Recolher próximo nível (fecha a última camada aberta)"
           >
-            <ChevronsRight size={13} /> Expandir
+            <ChevronsLeft size={13} /> <span className="hidden xl:inline">Recolher</span>
+          </button>
+          <div className="w-px h-5 bg-white/10" />
+          <button
+            onClick={expandAllLevels}
+            disabled={allExpanded}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Expandir todos os níveis"
+          >
+            <Maximize2 size={12} /> <span className="hidden xl:inline">Todos</span>
+          </button>
+          <div className="w-px h-5 bg-white/10" />
+          <button
+            onClick={collapseAllLevels}
+            disabled={expandedNodes.size === 0}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Recolher todos os níveis (só as raízes)"
+          >
+            <Minimize2 size={12} /> <span className="hidden xl:inline">Nenhum</span>
           </button>
           <div className="px-2 py-1.5 bg-indigo-600/20 text-indigo-300 font-semibold text-[10px]">
-            {visibleUpToLevel >= maxDefinedLevel ? 'Todos' : `Níveis 1–${visibleUpToLevel}`}
+            {allExpanded ? 'Tudo' : expandedNodes.size === 0 ? 'Raízes' : `${visibleIds.size}/${nodes.length}`}
           </div>
         </div>
 

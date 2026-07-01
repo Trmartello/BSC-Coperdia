@@ -103,7 +103,9 @@ Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
 - **`manualRoute`** é persistido no `flowData` JSON e restaurado em `buildNodesAndEdges`.
 - **Background**: `BackgroundVariant.Dots`, gap 20, size 1.5, cor `rgba(255,255,255,0.14)`.
 - **MiniMap**: 120×80, opacity 0.85, pannable/zoomable. Dimensões vão no `style`, não como props.
-- **Níveis**: ao adicionar card pelo painel "Gerenciar Indicadores", o nível sugerido pré-selecionado é `max(níveis em uso) + 1` (componente `IndicatorRow`).
+- **Drill-down por nó (expansão progressiva)**: estado `expandedNodes: Set<string>` (não mais `visibleUpToLevel`). Grafo derivado das edges por semântica `data.parentId/childId` (child=causa/insumo, parent=agregado): `childrenMap` (parent→[child]) e `childHasParent`. **Raízes** = nós que nunca são `childId` (fallback = todos, p/ ciclos) começam visíveis. `visibleIds` propaga das raízes descendo só pelos nós em `expandedNodes` (reachability) → oculta descendentes inacessíveis automaticamente; edge visível só quando ambos os extremos visíveis. Botão `→`/`←` no card chama `onToggleExpand(id)` (revela SÓ os filhos diretos; recolher remove apenas o nó, a propagação cuida do resto — robusto a losango/DAG). Reset ao trocar `id`.
+- **4 ações globais** (topbar): `expandNextLevel` (expande toda a fronteira visível → +1 camada), `collapseLastLevel` (fecha os expandidos "mais profundos" = sem filho expandido; **depth-free**, simétrico/reversível), `expandAllLevels` (= todos os `expandableIds`), `collapseAllLevels` (= só raízes). Badge: `Raízes` / `visíveis/total` / `Tudo`. Animação de entrada `.map-node-in` (globals.css). NÃO usar modelo por nível — a antiga lógica `visibleUpToLevel`/`onExpandLevel` foi removida.
+- **Níveis (metadado)**: `node.data.level` ainda existe só para o painel "Gerenciar Indicadores" (sugestão `max(níveis)+1` no `IndicatorRow`), **desacoplado da visibilidade**.
 - **Gerenciar Indicadores**: drawer lateral direito fixo (`fixed top-12 right-0 bottom-0 w-[380px]`) com backdrop.
 
 ### Alertas / Sino (`components/ui/NotificationsBell.tsx` + módulo `notifications`)
