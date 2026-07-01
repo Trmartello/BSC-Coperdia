@@ -68,6 +68,13 @@ export class IndicatorsController {
     return this.balancete.importBalancete(file.buffer, req.user.id);
   }
 
+  // Gera índices financeiros de análise (Liquidez, Endividamento…) sobre o balancete
+  @Roles('ADMIN', 'CONTROLADORIA')
+  @Post('generate-ratios')
+  generateRatios(@Request() req: any) {
+    return this.balancete.generateFinancialRatios(req.user.id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

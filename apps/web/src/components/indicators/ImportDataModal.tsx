@@ -40,6 +40,25 @@ export function ImportDataModal({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [mode, setMode] = useState<'lancamento' | 'balancete'>('lancamento');
   const [balResult, setBalResult] = useState<BalanceteResult | null>(null);
+  const [ratioResult, setRatioResult] = useState<{ created: string[]; updated: string[]; skipped: string[] } | null>(null);
+  const [genRatios, setGenRatios] = useState(false);
+
+  async function handleGenerateRatios() {
+    setGenRatios(true);
+    setRatioResult(null);
+    try {
+      const res = await indicatorsApi.generateRatios();
+      setRatioResult(res.data);
+      const n = (res.data.created?.length ?? 0) + (res.data.updated?.length ?? 0);
+      toast.success(`${n} índice(s) de análise gerado(s)`);
+      qc.invalidateQueries({ queryKey: ['indicators'] });
+      qc.invalidateQueries({ queryKey: ['settings-indicators'] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao gerar índices');
+    } finally {
+      setGenRatios(false);
+    }
+  }
 
   async function handleBalancete(file: File) {
     setUploading(true);
@@ -157,6 +176,30 @@ export function ImportDataModal({ onClose }: { onClose: () => void }) {
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBalancete(f); e.target.value = ''; }}
             />
+
+            {/* Índices de análise financeira sobre o balancete */}
+            <div className="border-t border-white/5 pt-4">
+              <p className="text-xs text-white/45 mb-2">
+                Após importar, gere os <strong className="text-white/70">índices de análise</strong> (Liquidez Corrente/Imediata/Geral, Capital Circulante Líquido, Endividamento, Imobilização do PL) — calculados sobre as contas do balancete.
+              </p>
+              <button
+                onClick={handleGenerateRatios}
+                disabled={genRatios}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-white/70 transition-colors disabled:opacity-50"
+              >
+                {genRatios ? 'Gerando índices...' : 'Gerar índices de análise'}
+              </button>
+              {ratioResult && (
+                <div className="mt-2 text-xs text-white/50 space-y-1">
+                  <p className="text-emerald-400">{ratioResult.created.length} criado(s) · {ratioResult.updated.length} atualizado(s)</p>
+                  {ratioResult.skipped.length > 0 && (
+                    <ul className="text-amber-400/80 list-disc list-inside">
+                      {ratioResult.skipped.map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
 
             {balResult && (
               <div className="space-y-4">

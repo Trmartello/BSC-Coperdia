@@ -70,6 +70,7 @@ export const indicatorsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  generateRatios: () => api.post('/indicators/generate-ratios'),
   periods: () => api.get<string[]>('/indicators/periods'),
   addRelation: (parentId: string, childId: string) =>
     api.post('/indicators/relations', { parentId, childId }),

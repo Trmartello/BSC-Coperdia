@@ -32,6 +32,36 @@ const STOPWORDS = new Set(['DE', 'DA', 'DO', 'DAS', 'DOS', 'E', 'A', 'O', 'AS', 
 
 interface LevelDef { code: string; label: string; level: number; parentCode: string | null; }
 
+// Catálogo de índices financeiros padrão. Cada índice referencia as contas do
+// balancete pelo `accountCode` (estável), não pela abreviação (que pode variar).
+// `expr(c)` monta a expressão usando c(accountCode) = abreviação atual da conta.
+type RatioUnit = 'INDEX' | 'CURRENCY' | 'PERCENTAGE';
+interface RatioDef {
+  key: string; name: string; unit: RatioUnit;
+  direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER';
+  needs: string[]; expr: (c: (acc: string) => string) => string;
+}
+// abs() em cada conta: o balancete guarda Passivo/PL como NEGATIVO (Ativo+Passivo≈0).
+// Índices financeiros usam magnitudes, então trabalhamos com valores absolutos.
+const FINANCIAL_RATIOS: RatioDef[] = [
+  { key: 'LC', name: 'Liquidez Corrente', unit: 'INDEX', direction: 'HIGHER_IS_BETTER',
+    needs: ['1.01', '2.01'], expr: (a) => `${a('1.01')} / ${a('2.01')}` },
+  { key: 'LI', name: 'Liquidez Imediata', unit: 'INDEX', direction: 'HIGHER_IS_BETTER',
+    needs: ['1.01.01', '2.01'], expr: (a) => `${a('1.01.01')} / ${a('2.01')}` },
+  { key: 'LG', name: 'Liquidez Geral', unit: 'INDEX', direction: 'HIGHER_IS_BETTER',
+    needs: ['1.01', '1.03.01', '2.01', '2.03'], expr: (a) => `(${a('1.01')} + ${a('1.03.01')}) / (${a('2.01')} + ${a('2.03')})` },
+  { key: 'CCL', name: 'Capital Circulante Líquido', unit: 'CURRENCY', direction: 'HIGHER_IS_BETTER',
+    needs: ['1.01', '2.01'], expr: (a) => `${a('1.01')} - ${a('2.01')}` },
+  { key: 'EG', name: 'Endividamento Geral (Cap. Terceiros / Ativo)', unit: 'PERCENTAGE', direction: 'LOWER_IS_BETTER',
+    needs: ['2.01', '2.03', '1'], expr: (a) => `(${a('2.01')} + ${a('2.03')}) / ${a('1')} * 100` },
+  { key: 'CEND', name: 'Composição do Endividamento', unit: 'PERCENTAGE', direction: 'LOWER_IS_BETTER',
+    needs: ['2.01', '2.03'], expr: (a) => `${a('2.01')} / (${a('2.01')} + ${a('2.03')}) * 100` },
+  { key: 'GE', name: 'Grau de Endividamento (Cap. Terceiros / PL)', unit: 'PERCENTAGE', direction: 'LOWER_IS_BETTER',
+    needs: ['2.01', '2.03', '2.07'], expr: (a) => `(${a('2.01')} + ${a('2.03')}) / ${a('2.07')} * 100` },
+  { key: 'IPL', name: 'Imobilização do Patrimônio Líquido', unit: 'PERCENTAGE', direction: 'LOWER_IS_BETTER',
+    needs: ['1.03.13', '2.07'], expr: (a) => `${a('1.03.13')} / ${a('2.07')} * 100` },
+];
+
 @Injectable()
 export class BalanceteImportService {
   private readonly logger = new Logger(BalanceteImportService.name);
@@ -298,5 +328,62 @@ export class BalanceteImportService {
       warningCount: warnings.length,
       warnings: warnings.slice(0, 25),
     };
+  }
+
+  // ── Índices financeiros de análise (CALCULATED sobre as contas do balancete) ──
+  // Idempotente: casa cada índice pelo accountCode "R.<KEY>". Só cria quando as
+  // contas necessárias existem (após importar o balancete). Reexecutar atualiza.
+  async generateFinancialRatios(userId: string) {
+    const existing = await this.prisma.indicator.findMany();
+    const byAccount = new Map(existing.filter((e) => e.accountCode).map((e) => [e.accountCode!, e]));
+    const taken = new Set(existing.map((e) => e.code.toUpperCase()));
+    const codeOfAcc = (acc: string) => byAccount.get(acc)!.code;
+    const idOfAcc = (acc: string) => byAccount.get(acc)!.id;
+
+    const created: string[] = [];
+    const updated: string[] = [];
+    const skipped: string[] = [];
+
+    for (const def of FINANCIAL_RATIOS) {
+      const missing = def.needs.filter((a) => !byAccount.has(a));
+      if (missing.length) { skipped.push(`${def.name} — faltam contas ${missing.join(', ')}`); continue; }
+
+      const absExpr = (acc: string) => `abs(${codeOfAcc(acc)})`;
+      const expression = def.expr(absExpr);
+      const variables: Record<string, string> = {};
+      for (const a of def.needs) variables[codeOfAcc(a)] = idOfAcc(a);
+
+      const acctKey = `R.${def.key}`;
+      let ind = byAccount.get(acctKey);
+      if (ind) {
+        ind = await this.prisma.indicator.update({
+          where: { id: ind.id },
+          data: { name: def.name, unit: def.unit as any, direction: def.direction as any, type: 'CALCULATED', category: 'Análise Financeira', source: 'RATIO' },
+        });
+        updated.push(def.name);
+      } else {
+        let code = def.key; let n = 2;
+        while (taken.has(code.toUpperCase())) code = `${def.key}${n++}`;
+        taken.add(code.toUpperCase());
+        ind = await this.prisma.indicator.create({
+          data: { code, name: def.name, category: 'Análise Financeira', type: 'CALCULATED', unit: def.unit as any, periodicity: 'MONTHLY', direction: def.direction as any, source: 'RATIO', accountCode: acctKey },
+        });
+        byAccount.set(acctKey, ind);
+        created.push(def.name);
+      }
+      await this.prisma.formula.upsert({
+        where: { indicatorId: ind.id },
+        create: { indicatorId: ind.id, expression, variables, description: `${def.name} = ${expression}` },
+        update: { expression, variables, description: `${def.name} = ${expression}` },
+      });
+    }
+
+    await this.calcEngine.recalculateRealized();
+    await this.audit.log({
+      userId, action: 'CREATE', entity: 'Indicator', entityId: 'generate-ratios',
+      after: { created: created.length, updated: updated.length, skipped: skipped.length },
+    });
+
+    return { created, updated, skipped };
   }
 }
