@@ -343,6 +343,7 @@ export class BalanceteImportService {
     const created: string[] = [];
     const updated: string[] = [];
     const skipped: string[] = [];
+    const idByKey = new Map<string, string>();
 
     for (const def of FINANCIAL_RATIOS) {
       const missing = def.needs.filter((a) => !byAccount.has(a));
@@ -376,14 +377,59 @@ export class BalanceteImportService {
         create: { indicatorId: ind.id, expression, variables, description: `${def.name} = ${expression}` },
         update: { expression, variables, description: `${def.name} = ${expression}` },
       });
+      idByKey.set(def.key, ind.id);
     }
 
     await this.calcEngine.recalculateRealized();
+
+    const map = await this.ensureAnalysisMap(userId, idByKey);
+
     await this.audit.log({
       userId, action: 'CREATE', entity: 'Indicator', entityId: 'generate-ratios',
       after: { created: created.length, updated: updated.length, skipped: skipped.length },
     });
 
-    return { created, updated, skipped };
+    return { created, updated, skipped, map };
+  }
+
+  // Monta (idempotente) a estrutura + mapa "Análise Financeira" com os índices,
+  // dispostos em duas colunas (Liquidez | Endividamento), todos no nível 1.
+  private async ensureAnalysisMap(userId: string, idByKey: Map<string, string>) {
+    let structure = await this.prisma.mapStructure.findFirst({ where: { name: 'Análise Financeira' } });
+    if (!structure) {
+      structure = await this.prisma.mapStructure.create({
+        data: { name: 'Análise Financeira', description: 'Índices de liquidez e endividamento (balancete)', category: 'Financeiro', createdBy: userId },
+      });
+    }
+
+    let category = await this.prisma.mapCategory.findFirst({ where: { name: 'Financeiro' } })
+      ?? await this.prisma.mapCategory.findFirst();
+    if (!category) category = await this.prisma.mapCategory.create({ data: { name: 'Financeiro', userId } });
+
+    let map = await this.prisma.indicatorMap.findFirst({ where: { name: 'Índices de Análise', structureId: structure.id } });
+    if (!map) {
+      map = await this.prisma.indicatorMap.create({
+        data: { name: 'Índices de Análise', description: 'Liquidez e Endividamento', categoryId: category.id, structureId: structure.id, userId },
+      });
+    }
+
+    const groups = [['LC', 'LI', 'LG', 'CCL'], ['EG', 'CEND', 'GE', 'IPL']];
+    const nodes: any[] = [];
+    for (let col = 0; col < groups.length; col++) {
+      for (let row = 0; row < groups[col].length; row++) {
+        const id = idByKey.get(groups[col][row]);
+        if (!id) continue;
+        const position = { x: col * 380, y: row * 180 };
+        await this.prisma.indicatorMapEntry.upsert({
+          where: { mapId_indicatorId: { mapId: map.id, indicatorId: id } },
+          create: { mapId: map.id, indicatorId: id, positionX: position.x, positionY: position.y },
+          update: { positionX: position.x, positionY: position.y },
+        });
+        nodes.push({ id, position, data: { level: 1 } });
+      }
+    }
+    await this.prisma.indicatorMap.update({ where: { id: map.id }, data: { flowData: { nodes, edges: [] } as any } });
+
+    return { structureId: structure.id, mapId: map.id, name: 'Índices de Análise', entries: nodes.length };
   }
 }

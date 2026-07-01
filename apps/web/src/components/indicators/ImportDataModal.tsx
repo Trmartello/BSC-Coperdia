@@ -40,7 +40,7 @@ export function ImportDataModal({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [mode, setMode] = useState<'lancamento' | 'balancete'>('lancamento');
   const [balResult, setBalResult] = useState<BalanceteResult | null>(null);
-  const [ratioResult, setRatioResult] = useState<{ created: string[]; updated: string[]; skipped: string[] } | null>(null);
+  const [ratioResult, setRatioResult] = useState<{ created: string[]; updated: string[]; skipped: string[]; map?: { name: string; entries: number } } | null>(null);
   const [genRatios, setGenRatios] = useState(false);
 
   async function handleGenerateRatios() {
@@ -180,7 +180,7 @@ export function ImportDataModal({ onClose }: { onClose: () => void }) {
             {/* Índices de análise financeira sobre o balancete */}
             <div className="border-t border-white/5 pt-4">
               <p className="text-xs text-white/45 mb-2">
-                Após importar, gere os <strong className="text-white/70">índices de análise</strong> (Liquidez Corrente/Imediata/Geral, Capital Circulante Líquido, Endividamento, Imobilização do PL) — calculados sobre as contas do balancete.
+                Após importar, gere os <strong className="text-white/70">índices de análise</strong> (Liquidez Corrente/Imediata/Geral, Capital Circulante Líquido, Endividamento, Imobilização do PL) — calculados sobre as contas do balancete e organizados no mapa <strong className="text-white/70">Análise Financeira</strong>.
               </p>
               <button
                 onClick={handleGenerateRatios}
@@ -191,7 +191,10 @@ export function ImportDataModal({ onClose }: { onClose: () => void }) {
               </button>
               {ratioResult && (
                 <div className="mt-2 text-xs text-white/50 space-y-1">
-                  <p className="text-emerald-400">{ratioResult.created.length} criado(s) · {ratioResult.updated.length} atualizado(s)</p>
+                  <p className="text-emerald-400">
+                    {ratioResult.created.length} criado(s) · {ratioResult.updated.length} atualizado(s)
+                    {ratioResult.map && ` · mapa "${ratioResult.map.name}" (${ratioResult.map.entries} indicadores)`}
+                  </p>
                   {ratioResult.skipped.length > 0 && (
                     <ul className="text-amber-400/80 list-disc list-inside">
                       {ratioResult.skipped.map((s, i) => <li key={i}>{s}</li>)}
