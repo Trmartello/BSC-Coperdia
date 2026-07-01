@@ -68,6 +68,29 @@ export class DashboardService {
     });
   }
 
+  // Índices de análise financeira (source=RATIO): valor atual + mês anterior + variação.
+  async getFinancialAnalysis(period?: Date) {
+    const effectivePeriod = period ?? (await this.latestRealizedPeriod()) ?? new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), 1));
+    const prev = new Date(Date.UTC(effectivePeriod.getUTCFullYear(), effectivePeriod.getUTCMonth() - 1, 1));
+
+    const inds = await this.prisma.indicator.findMany({
+      where: { source: 'RATIO', active: true },
+      orderBy: { createdAt: 'asc' },
+      include: { realizedValues: { where: { period: { in: [effectivePeriod, prev] } } } },
+    });
+
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    return inds.map((ind) => {
+      const cur = ind.realizedValues.find((r) => iso(r.period) === iso(effectivePeriod));
+      const pr = ind.realizedValues.find((r) => iso(r.period) === iso(prev));
+      const current = cur?.value != null ? new Decimal(cur.value.toString()).toNumber() : null;
+      const previous = pr?.value != null ? new Decimal(pr.value.toString()).toNumber() : null;
+      const delta = current != null && previous != null && previous !== 0
+        ? ((current - previous) / Math.abs(previous)) * 100 : null;
+      return { id: ind.id, code: ind.code, name: ind.name, unit: ind.unit, direction: ind.direction, current, previous, delta };
+    });
+  }
+
   private async latestRealizedPeriod(): Promise<Date | null> {
     const latest = await this.prisma.realizedValue.findFirst({
       orderBy: { period: 'desc' },

@@ -52,6 +52,9 @@ export function ExecutiveDashboard() {
         )}
       </div>
 
+      {/* Análise Financeira (índices do balancete) */}
+      <FinancialAnalysisPanel period={activePeriod} />
+
       {/* Charts */}
       {kpis.length > 0 && (
         <div className="card-dark p-5">
@@ -114,6 +117,54 @@ function KpiCard({ kpi }: { kpi: any }) {
   );
 }
 
+
+interface RatioRow {
+  id: string; code: string; name: string;
+  unit: 'CURRENCY' | 'PERCENTAGE' | 'NUMBER' | 'DAYS' | 'INDEX';
+  direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER';
+  current: number | null; previous: number | null; delta: number | null;
+}
+
+function FinancialAnalysisPanel({ period }: { period: string }) {
+  const { data = [] } = useQuery<RatioRow[]>({
+    queryKey: ['financial-analysis', period],
+    queryFn: () => dashboardApi.financialAnalysis(period).then((r) => r.data),
+    refetchInterval: 60_000,
+  });
+
+  if (!data || data.length === 0) return null;
+
+  return (
+    <div className="card-dark p-5">
+      <h3 className="text-sm font-semibold text-white/80 mb-4">Análise Financeira · índices do balancete</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {data.map((r) => {
+          // Variação positiva é "boa" conforme a direção do índice
+          const good = r.delta != null && (r.direction === 'HIGHER_IS_BETTER' ? r.delta >= 0 : r.delta <= 0);
+          return (
+            <div key={r.id} className="bg-white/[0.03] border border-white/8 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest">{r.code}</p>
+                {r.delta != null && (
+                  <span className={cn('text-[10px] font-medium', good ? 'text-emerald-400' : 'text-red-400')}>
+                    {r.delta >= 0 ? '▲' : '▼'} {Math.abs(r.delta).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              <p className="text-xs font-semibold text-white/70 mt-0.5 mb-2 truncate" title={r.name}>{r.name}</p>
+              <p className="text-2xl font-bold text-white">
+                {r.current != null ? formatValue(r.current, r.unit) : '—'}
+              </p>
+              <p className="text-[10px] text-white/30 mt-1">
+                mês anterior: {r.previous != null ? formatValue(r.previous, r.unit) : '—'}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function DashboardSkeleton() {
   return (

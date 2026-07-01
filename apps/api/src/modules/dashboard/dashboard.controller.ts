@@ -22,6 +22,13 @@ export class DashboardController {
     return this.service.getExecutiveDashboard(validPeriod, scenarioId, acc);
   }
 
+  @Get('financial-analysis')
+  financialAnalysis(@Query('period') period?: string) {
+    const parsed = period ? new Date(period) : undefined;
+    const validPeriod = parsed && !isNaN(parsed.getTime()) ? parsed : undefined;
+    return this.service.getFinancialAnalysis(validPeriod);
+  }
+
   @Get('audit-log')
   auditLog(@Query('limit') limit?: string) {
     const parsed = limit ? parseInt(limit, 10) : 50;

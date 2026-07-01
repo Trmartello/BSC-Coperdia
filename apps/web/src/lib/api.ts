@@ -211,6 +211,8 @@ export const dashboardApi = {
     api.get('/dashboard/executive', { params: { period, scenarioId, accumulated: accumulated ? 'true' : undefined } }),
   auditLog: (limit?: number) =>
     api.get('/dashboard/audit-log', { params: { limit } }),
+  financialAnalysis: (period: string) =>
+    api.get('/dashboard/financial-analysis', { params: { period } }),
 };
 
 // ─── Notifications (alertas do sino) ──────────────────────────────────────────
