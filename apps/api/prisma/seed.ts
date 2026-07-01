@@ -6,18 +6,11 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Produção: só semeia quando o banco está vazio, para nunca sobrescrever
-  // dados reais em deploys subsequentes. (Local roda sem a flag → comportamento normal.)
-  if (process.env.SEED_ONLY_IF_EMPTY === 'true') {
-    const existingUsers = await prisma.user.count();
-    if (existingUsers > 0) {
-      console.log('⏭️  Banco já populado — seed ignorado (SEED_ONLY_IF_EMPTY).');
-      return;
-    }
-    console.log('📦 Banco vazio — aplicando seed inicial em produção...');
-  }
-
-  // ── Users ──────────────────────────────────────────────────────────────────
+  // ── Users (SEMPRE garantidos, mesmo em prod) ────────────────────────────────
+  // Roda antes do guard SEED_ONLY_IF_EMPTY: upsert com update:{} é idempotente e
+  // NÃO altera usuários já existentes — apenas cria os que faltam. Assim novos
+  // perfis (ex.: Controladoria/Gestor) aparecem no próximo deploy sem tocar em
+  // dados reais.
   const adminHash = await bcrypt.hash('admin123', 12);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@coperdia.com.br' },
@@ -31,6 +24,32 @@ async function main() {
     update: {},
     create: { name: 'Diretoria Copérdia', email: 'diretoria@coperdia.com.br', passwordHash: dirHash, role: 'DIRETORIA' },
   });
+
+  const contrHash = await bcrypt.hash('controladoria123', 12);
+  await prisma.user.upsert({
+    where: { email: 'controladoria@coperdia.com.br' },
+    update: {},
+    create: { name: 'Controladoria Copérdia', email: 'controladoria@coperdia.com.br', passwordHash: contrHash, role: 'CONTROLADORIA' },
+  });
+
+  const gestorHash = await bcrypt.hash('gestor123', 12);
+  await prisma.user.upsert({
+    where: { email: 'gestor@coperdia.com.br' },
+    update: {},
+    create: { name: 'Gestor Copérdia', email: 'gestor@coperdia.com.br', passwordHash: gestorHash, role: 'GESTOR' },
+  });
+
+  // Produção: além dos usuários (acima), o restante só é semeado quando o banco
+  // está vazio, para nunca sobrescrever dados reais em deploys subsequentes.
+  // (Local roda sem a flag → comportamento normal.)
+  if (process.env.SEED_ONLY_IF_EMPTY === 'true') {
+    const existingIndicators = await prisma.indicator.count();
+    if (existingIndicators > 0) {
+      console.log('⏭️  Banco já populado — usuários garantidos, restante do seed ignorado (SEED_ONLY_IF_EMPTY).');
+      return;
+    }
+    console.log('📦 Banco vazio — aplicando seed inicial em produção...');
+  }
 
   // ── Indicators: Capital de Giro ────────────────────────────────────────────
 
@@ -503,6 +522,8 @@ async function main() {
   console.log('✅ Seed concluído!');
   console.log('   Admin: admin@coperdia.com.br / admin123');
   console.log('   Direção: diretoria@coperdia.com.br / diretoria123');
+  console.log('   Controladoria: controladoria@coperdia.com.br / controladoria123');
+  console.log('   Gestor: gestor@coperdia.com.br / gestor123');
 }
 
 main()
