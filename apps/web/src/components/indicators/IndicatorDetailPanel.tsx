@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X, TrendingUp, TrendingDown,
   Plus, Pencil, Check, ArrowUp, ArrowDown, ClipboardList,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { indicatorsApi, actionPlansApi, settingsApi } from '../../lib/api';
 import { ActionPlanDetail } from '../action-plans/ActionPlanDetail';
@@ -72,11 +73,11 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
   const pts = data.slice(-15);
   const n = pts.length;
   const step = 50;
-  const barW = step * 0.76; // barras mais largas, separação fina entre elas
+  const barW = step * 0.88; // barras largas, separação mínima entre elas
   const chartW = n * step;
   const chartH = 172; // gráfico com mais altura (elemento de destaque)
-  const pad = 24;
-  const topPad = 60; // espaço para as duas linhas YoY acima das barras
+  const pad = 8; // margem lateral mínima — barras quase encostam nas bordas do modal
+  const topPad = 62; // espaço para as duas linhas YoY acima das barras
 
   // Para cada um dos 2 meses mais recentes, encontrar o mesmo mês do ano anterior
   interface YoyPair {
@@ -97,7 +98,7 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
     const pct = pts[pi].value !== 0
       ? ((pts[ri].value - pts[pi].value) / Math.abs(pts[pi].value)) * 100 : 0;
     const good = direction === 'LOWER_IS_BETTER' ? pct <= 0 : pct >= 0;
-    yoyPairs.push({ recentIdx: ri, prevIdx: pi, pct, good, lineY: offset === 0 ? topPad - 16 : topPad - 32 });
+    yoyPairs.push({ recentIdx: ri, prevIdx: pi, pct, good, lineY: offset === 0 ? topPad - 16 : topPad - 38 });
   }
   const prevYearIdxSet = new Set(yoyPairs.map((p) => p.prevIdx));
 
@@ -131,14 +132,14 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
           const labelColor = pair.good ? '#34d399' : '#f87171';
           const monthName = MESES[pts[pair.recentIdx].period.getUTCMonth()];
           const label = `${monthName} ${pair.pct > 0 ? '+' : ''}${pair.pct.toFixed(1)}% YoY`;
-          const labelW = label.length * 6.2 + 10;
+          const labelW = label.length * 7.4 + 14;
           return (
             <g key={`yoy-${pi}`}>
               <line x1={lx1} x2={lx2} y1={ly} y2={ly} stroke={color} strokeWidth={1} strokeDasharray="4 3" />
               <line x1={lx1} x2={lx1} y1={ly - 5} y2={ly + 5} stroke={color} strokeWidth={1.5} />
               <line x1={lx2} x2={lx2} y1={ly - 5} y2={ly + 5} stroke={color} strokeWidth={1.5} />
-              <rect x={midX - labelW / 2} y={ly - 10} width={labelW} height={14} rx={3} fill="#161b27" />
-              <text x={midX} y={ly + 1} textAnchor="middle" fontSize="10" fontWeight="700" fill={labelColor}>
+              <rect x={midX - labelW / 2} y={ly - 11} width={labelW} height={18} rx={4} fill="#161b27" />
+              <text x={midX} y={ly + 2} textAnchor="middle" fontSize="13" fontWeight="800" fill={labelColor}>
                 {label}
               </text>
             </g>
@@ -150,7 +151,7 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
           <g>
             <line x1={pad} x2={fullW - pad} y1={y(goalLine)} y2={y(goalLine)}
               stroke="rgba(255,255,255,0.20)" strokeWidth={1} strokeDasharray="4 4" />
-            <text x={fullW - pad - 2} y={y(goalLine) - 3} textAnchor="end" fontSize="7" fill="rgba(255,255,255,0.28)">
+            <text x={fullW - pad - 2} y={y(goalLine) - 4} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.35)">
               meta {fmtBar(goalLine, unit, decimals)}
             </text>
           </g>
@@ -180,7 +181,7 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
 
           const isComparison = isRecent || isPrevYear;
           const hovered = tooltip?.i === i;
-          const labelSize = hovered ? 14 : (isComparison ? 10 : 9);
+          const labelSize = hovered ? 20 : (isComparison ? 13 : 12);
           return (
             <g key={`b-${i}`}
               onMouseEnter={() => setTooltip({ i, x: x(i), y: y(p.value) })}
@@ -190,7 +191,7 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
               {/* área de hover maior que a barra */}
               <rect x={x(i) - barW / 2 - 4} width={barW + 8} y={topPad} height={baseY - topPad} rx={0} fill="transparent" />
               {(() => {
-                const bw = hovered ? barW + 8 : barW;
+                const bw = hovered ? barW + 4 : barW;
                 return (
                   <rect
                     x={x(i) - bw / 2} width={bw} y={y(p.value)} height={baseY - y(p.value)} rx={3}
@@ -205,7 +206,7 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
               {p.value != null && (
                 <text
                   x={x(i)}
-                  y={y(p.value) - (hovered ? 9 : isComparison ? 6 : 5)}
+                  y={y(p.value) - (hovered ? 13 : isComparison ? 8 : 7)}
                   textAnchor="middle"
                   fontSize={labelSize}
                   fontWeight={hovered ? 800 : isComparison ? 700 : 600}
@@ -227,8 +228,8 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
               key={`t-${i}`}
               x={x(i)} y={baseY + 6}
               textAnchor="end"
-              fontSize="9" fontWeight={highlight ? 700 : 400}
-              fill={highlight ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.32)'}
+              fontSize="11" fontWeight={highlight ? 700 : 400}
+              fill={highlight ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.4)'}
               transform={`rotate(-45,${x(i)},${baseY + 6})`}
             >
               {fmtMonthCompact(p.period)}
@@ -490,6 +491,24 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   // então o fluxo começa direto em Iniciativas → Ações.
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   const [autoNewInitiative, setAutoNewInitiative] = useState(false);
+  // Rodapé expansível com as frentes de trabalho (monitoringPoints) — fechado por padrão.
+  const [showFrentes, setShowFrentes] = useState(false);
+
+  // ESC em dois estágios: 1º fecha o painel do Plano de Ação (se aberto),
+  // 2º fecha o modal do indicador (gráfico).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showActionPlan) {
+        e.stopPropagation();
+        setShowActionPlan(false);
+      } else {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showActionPlan, onClose]);
 
   const { data: indicator, isLoading, refetch } = useQuery({
     queryKey: ['indicator-detail', indicatorId, period],
@@ -529,6 +548,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   const direction = ind?.direction ?? 'HIGHER_IS_BETTER';
   const unit = ind?.unit ?? 'NUMBER';
   const dp = ind?.decimalPlaces ?? 2; // casas decimais configuradas no indicador
+  const monitoringPoints: string[] = ind?.monitoringPoints ?? []; // frentes de trabalho cadastradas
 
   // ── Período de referência selecionado (mês de análise) ──────────────────────
   const refDate = new Date(period);
@@ -609,7 +629,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
 
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="flex h-full">
       {/* Painel principal (gráfico) — fica à esquerda quando o Plano de Ação abre */}
       <div
@@ -734,11 +754,46 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                     )}
                   </div>
                 </div>
-                <HistoryChart data={chartData} direction={direction} unit={unit} currentGoal={goal} decimals={dp} />
+                {/* -mx-4 faz o gráfico "sangrar" para fora do padding, aproximando as barras das bordas do modal */}
+                <div className="-mx-4">
+                  <HistoryChart data={chartData} direction={direction} unit={unit} currentGoal={goal} decimals={dp} />
+                </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
                   <Legend swatch="bg-emerald-500/70" label="Atual + penúltimo (cor do status)" />
                   <Legend swatch="bg-indigo-400/50" label="Mesmo período ano anterior" />
                   <Legend line="border-white/40" label="Meta do período atual" />
+                </div>
+
+                {/* Rodapé: frentes de trabalho (expander fechado por padrão) */}
+                <div className="mt-3 border-t border-white/5 pt-2.5">
+                  <button
+                    onClick={() => setShowFrentes((s) => !s)}
+                    className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-white/45 hover:text-white/75 uppercase tracking-wider transition-colors"
+                  >
+                    {showFrentes ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                    Frentes de trabalho
+                    {monitoringPoints.length > 0 && (
+                      <span className="text-white/25 normal-case tracking-normal">({monitoringPoints.length})</span>
+                    )}
+                  </button>
+                  {showFrentes && (
+                    <div className="mt-2.5 pl-1">
+                      {monitoringPoints.length > 0 ? (
+                        <ul className="space-y-2">
+                          {monitoringPoints.map((point, i) => (
+                            <li key={i} className="flex items-start gap-2.5 text-[13px] text-white/75">
+                              <span className="text-purple-400 mt-1.5 text-[8px] flex-shrink-0">●</span>
+                              <span className="leading-snug whitespace-pre-line">{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-white/25 py-1">
+                          Nenhuma frente de trabalho cadastrada para este indicador.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -830,7 +885,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
           </div>
           <div className="flex-1 overflow-y-auto px-5 py-4">
             {canonicalPlanId ? (
-              <ActionPlanDetail planId={canonicalPlanId} embedded autoNewInitiative={autoNewInitiative} />
+              <ActionPlanDetail planId={canonicalPlanId} embedded showFilters autoNewInitiative={autoNewInitiative} />
             ) : (
               <p className="text-xs text-white/20 text-center py-8">
                 Nenhuma iniciativa ainda. Clique em <span className="text-white/40">Nova Iniciativa</span> para começar.

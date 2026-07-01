@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown, ChevronRight, Plus, X,
-  Calendar, User, CheckSquare, Trash2,
+  Calendar, User, CheckSquare, Trash2, Search,
 } from 'lucide-react';
 import { actionPlansApi } from '../../lib/api';
 import {
@@ -15,7 +15,22 @@ import {
   PRIORITY_LABEL, PRIORITY_COLOR,
   ActionItemPriority, ActionItemStatus, PlanStatus,
 } from '../../types/action-plan';
+import { MultiFilter, toggleSet } from './MultiFilter';
 import { cn } from '../../lib/utils';
+
+// Opções dos filtros de ação (mesmas cores/dots da página de Planos de Ação).
+const STATUS_FILTER_OPTS = [
+  { value: 'PENDING',     label: 'Pendente',     dot: 'bg-slate-400',   valueClass: 'text-slate-300' },
+  { value: 'IN_PROGRESS', label: 'Em andamento', dot: 'bg-amber-400',   valueClass: 'text-amber-300' },
+  { value: 'DONE',        label: 'Concluída',    dot: 'bg-emerald-400', valueClass: 'text-emerald-300' },
+  { value: 'OVERDUE',     label: 'Atrasada',     dot: 'bg-red-400',     valueClass: 'text-red-300' },
+  { value: 'CANCELLED',   label: 'Cancelada',    dot: 'bg-slate-600',   valueClass: 'text-slate-500' },
+];
+const PRIORITY_FILTER_OPTS = [
+  { value: 'HIGH',   label: 'Alta',  dot: 'bg-red-400',   valueClass: 'text-red-400' },
+  { value: 'MEDIUM', label: 'Média', dot: 'bg-amber-400', valueClass: 'text-amber-400' },
+  { value: 'LOW',    label: 'Baixa', dot: 'bg-blue-400',  valueClass: 'text-blue-400' },
+];
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -30,14 +45,19 @@ interface Props {
   asPanel?: boolean; // true = painel lateral, false = página cheia
   embedded?: boolean; // true = sem cabeçalho do problema, fluindo no container pai (uso dentro de indicador)
   autoNewInitiative?: boolean; // abre o modal de nova iniciativa ao montar
+  showFilters?: boolean; // exibe a barra de filtros (status/prioridade/busca) sobre as ações
 }
 
-export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewInitiative }: Props) {
+export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewInitiative, showFilters }: Props) {
   const qc = useQueryClient();
   const [expandedInits, setExpandedInits] = useState<Set<string>>(new Set());
   const [showNewInit, setShowNewInit] = useState(false);
   const [newActionFor, setNewActionFor] = useState<string | null>(null);
   const [selectedAction, setSelectedAction] = useState<ActionItem | null>(null);
+  // Filtros das ações (status / prioridade / busca textual) — atuam sobre as ações do plano.
+  const [fStatuses, setFStatuses] = useState<Set<string>>(new Set());
+  const [fPriorities, setFPriorities] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
   // Confirmação de exclusão (ação / iniciativa / plano)
   const [confirm, setConfirm] = useState<null | { message: string; confirmLabel: string; onConfirm: () => void }>(null);
 
@@ -142,6 +162,21 @@ export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewIn
   const allActions = plan.initiatives?.flatMap((i) => i.actions ?? []) ?? [];
   const doneCount = allActions.filter((a) => a.status === 'DONE').length;
 
+  // ── Filtros de ação ─────────────────────────────────────────────────────────
+  const filtersActive = fStatuses.size > 0 || fPriorities.size > 0 || search.trim() !== '';
+  const q = search.trim().toLowerCase();
+  const matchAction = (a: ActionItem): boolean => {
+    if (fStatuses.size > 0 && !fStatuses.has(a.status)) return false;
+    if (fPriorities.size > 0 && !fPriorities.has(a.priority)) return false;
+    if (q) {
+      const hay = `${a.title} ${a.description ?? ''} ${a.ownerName ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  };
+  const matchedTotal = filtersActive ? allActions.filter(matchAction).length : allActions.length;
+  const clearFilters = () => { setFStatuses(new Set()); setFPriorities(new Set()); setSearch(''); };
+
   return (
     <>
       <div className={cn('flex flex-col', embedded ? '' : asPanel ? 'h-full' : 'min-h-screen')}>
@@ -190,12 +225,73 @@ export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewIn
           </div>
         )}
 
+        {/* ── Barra de filtros (opcional) ── */}
+        {showFilters && allActions.length > 0 && (
+          <div className={cn('space-y-2', embedded ? 'mb-3' : 'px-6 pt-4')}>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-transparent focus-within:border-white/15 transition-colors">
+              <Search size={13} className="text-white/30 flex-shrink-0" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Pesquisar ações..."
+                className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <MultiFilter
+                label="Status"
+                allLabel="Todos"
+                selected={fStatuses}
+                onToggle={(v) => setFStatuses((p) => toggleSet(p, v))}
+                onClear={() => setFStatuses(new Set())}
+                options={STATUS_FILTER_OPTS}
+              />
+              <MultiFilter
+                label="Prioridade"
+                allLabel="Todas"
+                selected={fPriorities}
+                onToggle={(v) => setFPriorities((p) => toggleSet(p, v))}
+                onClear={() => setFPriorities(new Set())}
+                options={PRIORITY_FILTER_OPTS}
+              />
+              {filtersActive && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/80 border border-white/10 hover:border-white/20 transition-colors"
+                >
+                  <X size={12} /> Limpar
+                </button>
+              )}
+              <span className="text-[11px] text-white/30 ml-auto">
+                {filtersActive ? `${matchedTotal} de ${allActions.length} ações` : `${allActions.length} ações`}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* ── Initiatives ── */}
         <div className={cn('space-y-3', embedded ? '' : 'flex-1 overflow-y-auto px-6 py-4')}>
+          {/* Nova Iniciativa — sempre no topo para acesso rápido */}
+          <button
+            onClick={() => setShowNewInit(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed border-white/15 hover:border-white/30 text-sm text-white/40 hover:text-white/70 transition-all"
+          >
+            <Plus size={14} />
+            Nova Iniciativa
+          </button>
+
           {(plan.initiatives ?? []).map((initiative) => {
             const isOpen = expandedInits.has(initiative.id);
-            const actions = initiative.actions ?? [];
-            const doneActs = actions.filter((a) => a.status === 'DONE').length;
+            const allActs = initiative.actions ?? [];
+            const doneActs = allActs.filter((a) => a.status === 'DONE').length;
+            // Com filtros ativos: mostra só as ações que casam e oculta iniciativas vazias.
+            const actions = filtersActive ? allActs.filter(matchAction) : allActs;
+            if (filtersActive && actions.length === 0) return null;
 
             return (
               <div key={initiative.id} className="rounded-2xl border border-white/8 bg-white/2 overflow-hidden">
@@ -214,7 +310,7 @@ export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewIn
                         <p className="text-xs text-white/35 mt-0.5 truncate">{initiative.description}</p>
                       )}
                     </div>
-                    <span className="text-xs text-white/30 flex-shrink-0">{doneActs}/{actions.length} ações</span>
+                    <span className="text-xs text-white/30 flex-shrink-0">{doneActs}/{allActs.length} ações</span>
                     <span className={cn(
                       'text-[10px] px-2.5 py-1 rounded-full border font-medium flex-shrink-0',
                       initiative.status === 'DONE' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
@@ -233,8 +329,8 @@ export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewIn
                   </button>
                 </div>
 
-                {/* Action items */}
-                {isOpen && (
+                {/* Action items (força aberto quando há filtros para exibir as ações encontradas) */}
+                {(isOpen || filtersActive) && (
                   <div className="border-t border-white/5">
                     {actions.map((item) => (
                       <ActionRow
@@ -259,14 +355,15 @@ export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewIn
             );
           })}
 
-          {/* New Initiative button */}
-          <button
-            onClick={() => setShowNewInit(true)}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed border-white/15 hover:border-white/30 text-sm text-white/40 hover:text-white/70 transition-all"
-          >
-            <Plus size={14} />
-            Nova Iniciativa
-          </button>
+          {/* Nenhuma ação corresponde aos filtros */}
+          {showFilters && filtersActive && matchedTotal === 0 && (
+            <div className="text-center py-8 text-white/30">
+              <p className="text-sm">Nenhuma ação corresponde aos filtros.</p>
+              <button onClick={clearFilters} className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                Limpar filtros
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

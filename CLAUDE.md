@@ -140,6 +140,28 @@ Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
 - Desvio: esquerda = **Realizado vs Meta** (`vs meta`); direita = **Estimativa vs Realizado** (`Vs Real.`). `deviationLabel(pct, direction, suffix)` recebe o sufixo do texto; a cor (verde/vermelho) respeita a `direction`.
 - Footer (ações/anexos/comentários) só renderiza se ao menos um count > 0.
 
+### Modal de Criação/Edição de Indicador (`components/indicators/IndicatorFormPanel.tsx`)
+- **Modal centrado** (não mais drawer lateral): overlay `fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4` (fundo escurecido + desfoque; clique no overlay fecha). Card interno `w-[52vw] min-w-[520px] max-w-[780px] max-h-[92vh] rounded-2xl flex flex-col overflow-hidden` (~50% da largura).
+- **Layout em 3 faixas**: header fixo (título + X) · corpo rolável (`px-6 py-5 space-y-5 overflow-y-auto flex-1`) · footer sticky (Excluir à esquerda + Salvar à direita).
+- **Grupos por seção** via helper `Section({ title })`: **"Informações do indicador"**, **"Fórmula de cálculo"** (só CALCULATED), **"Configuração visual"** (unidade, direção, casas decimais, nível), **"Descrição"**, **"Classificação e responsáveis"**.
+- **Descrição/conceito**: textarea **redimensionável** `input-dark w-full resize-y min-h-[96px] max-h-[320px] leading-relaxed`, `maxLength 1000`; salva `description: form.description.trim() || null`.
+- Busca de variáveis + casas decimais: ver seção acima. `aliases` (indicatorId→nome amigável) + prévia "Leitura" (`humanizeExpression`).
+
+### Modal de Histórico do Indicador (`components/indicators/IndicatorDetailPanel.tsx`)
+- **Dois painéis lado a lado**: overlay `fixed inset-0 z-40 flex justify-end` → `flex h-full` com o painel principal (gráfico/histórico) e o painel lateral do Plano de Ação.
+- **Painel principal** (gráfico): `w-[48vw] min-w-[440px] max-w-[820px]`. Título com **seta de direção** (`ArrowDown` azul p/ LOWER_IS_BETTER · `ArrowUp` verde p/ HIGHER_IS_BETTER) + nome; **descrição abaixo do título** (`text-[13px] text-white/50 whitespace-pre-line`). Removidos o subtítulo antigo e os badges de polaridade/unidade.
+- **Métricas compactas**: grid de 3 colunas, label+data em uma linha, valor `text-lg font-bold`, Δ como chip inline (sem caixa de tooltip separada).
+- **Backdrop ofuscado**: o overlay externo (`fixed inset-0 z-40 flex justify-end`) tem `bg-black/60 backdrop-blur-sm` — os ~50% restantes da tela ficam escurecidos/desfocados p/ foco no histórico. Clique no backdrop fecha (os painéis dão `stopPropagation`).
+- **ESC em 2 estágios** (`useEffect` keydown em `window`, deps `[showActionPlan, onClose]`): 1º ESC fecha o painel do Plano de Ação (se aberto); 2º ESC fecha o modal do gráfico (`onClose`).
+- **Botão "Plano de Ação"** após as tabs (Visão Geral | Lançamentos), ícone `ClipboardList` → toggle `showActionPlan`. O **painel lateral** tem **largura animada** (`w-0` → `w-[40vw] min-w-[360px] max-w-[600px]`, `transition-all duration-300`); o gráfico à esquerda **continua visível**. Contém header (ícone + "Plano de Ação" + nome + "Nova Iniciativa" + X) e `ActionPlanDetail planId={canonicalPlanId} embedded showFilters autoNewInitiative`. `canonicalPlanId` = plano existente ou recém-criado (`ensureForIndicator`).
+- **Rodapé "Frentes de trabalho"** abaixo do gráfico (expander `showFrentes`, **fechado por padrão**): lista `ind.monitoringPoints` (as frentes cadastradas no form) com bullets roxos; vazio → aviso. Chevron `ChevronRight`/`ChevronDown`.
+- **HistoryChart** (SVG inline): geometria `step=50`, `barW=step*0.88` (barras largas, gap mínimo), `chartH=172`, `pad=8` (margem lateral mínima — barras quase encostam nas bordas; o gráfico ainda "sangra" via wrapper `-mx-4`), `topPad=62` (2 linhas YoY acima). Fontes ampliadas: rótulos de barra 12 (comparação 13) → **20 no hover**; rótulos YoY fontSize **13**/peso 800 (caixa 18px); meses do eixo 11; "meta" 10. **Hover realça** a barra (`bw=barW+4`, stroke branco `0.55`, `drop-shadow`) **e aumenta muito o rótulo** (→20), `transition 0.12s`. `fmtBar`/`fmtLarge`/`PeriodRow` recebem `decimals` (= `ind.decimalPlaces ?? 2`).
+
+### Painel de Plano de Ação (`components/action-plans/ActionPlanDetail.tsx`)
+- **Filtros de ação** (prop `showFilters`, ligada no painel embutido do indicador): barra com **busca textual** (título/descrição/responsável), **Status** e **Prioridade** (multi-seleção). Com filtro ativo, oculta iniciativas sem ações correspondentes, força abrir as que têm match e mostra "X de Y ações" + estado vazio. Escopo já é do indicador (o `canonicalPlanId` é do próprio indicador).
+- **`MultiFilter`** (`components/action-plans/MultiFilter.tsx`): dropdown de checkboxes reutilizável (dots/cores por opção, busca opcional) — **extraído** da página de Planos de Ação; `page.tsx` e o painel do indicador importam o mesmo componente + helper `toggleSet`.
+- **"Nova Iniciativa"** fica **no topo** da lista (antes das iniciativas), não mais no rodapé.
+
 ## Banco de Dados
 - **URL**: `postgresql://postgres:postgres@localhost:5432/bsc_coperdia`
 - **Seed**: usuários + indicadores (PMR/PME/PMP/NCG e derivados) + mapas + planos
