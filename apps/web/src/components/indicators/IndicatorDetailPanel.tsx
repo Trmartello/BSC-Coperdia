@@ -657,6 +657,13 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
             </div>
           )}
 
+          {/* Descrição / conceito do indicador (só se houver) */}
+          {!isLoading && ind?.description && (
+            <p className="text-[13px] text-white/50 leading-relaxed mt-2 max-w-prose whitespace-pre-line">
+              {ind.description}
+            </p>
+          )}
+
           {/* Tabs */}
           <div className="flex gap-1 mt-4">
             {[{ id: 'overview', label: 'Visão Geral' }, { id: 'realized', label: 'Lançamentos' }].map((t) => (

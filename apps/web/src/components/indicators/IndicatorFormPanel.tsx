@@ -51,6 +51,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
     monitoring: '',
     mapLevel: 1,
     decimalPlaces: 2,
+    description: '',
   });
   const [responsibleOwner, setResponsibleOwner] = useState<{ id: string; name: string } | null>(null);
   // Busca (typeahead) na lista de indicadores usados na fórmula — debounce 300ms.
@@ -91,6 +92,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         aliases,
         monitoring: (editData.monitoringPoints ?? []).join('\n'),
         decimalPlaces: editData.decimalPlaces ?? 2,
+        description: editData.description ?? '',
       }));
     }
   }, [editData]);
@@ -118,6 +120,7 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
         periodicity: 'MONTHLY',
         responsible: responsibleOwner?.name ?? (form.responsible || null),
         decimalPlaces: form.decimalPlaces,
+        description: form.description.trim() || null,
         monitoringPoints: form.monitoring
           .split('\n')
           .map((s) => s.trim())
@@ -400,6 +403,20 @@ export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }:
                 <option key={n} value={n}>{n} casa{n === 1 ? '' : 's'} decima{n === 1 ? 'l' : 'is'}</option>
               ))}
             </select>
+          </Field>
+
+          <Field label="Descrição do indicador (conceito)">
+            <textarea
+              className="input-dark w-full resize-none"
+              rows={3}
+              maxLength={1000}
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Descreva o que este indicador representa, como deve ser interpretado e qual seu impacto no negócio."
+            />
+            <p className="text-[10px] text-white/30 mt-1">
+              Aparece abaixo do título no modal de histórico. {form.description.length}/1000
+            </p>
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
