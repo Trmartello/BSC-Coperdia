@@ -21,7 +21,7 @@ export function formatValue(value: number | null, unit: MeasureUnit, decimals: n
 
   switch (unit) {
     case 'CURRENCY':
-      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: d }).format(value);
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
     case 'PERCENTAGE':
       return `${value.toFixed(d)}%`;
     case 'DAYS':
@@ -29,7 +29,7 @@ export function formatValue(value: number | null, unit: MeasureUnit, decimals: n
     case 'INDEX':
       return value.toFixed(d);
     default:
-      return new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: d }).format(value);
+      return new Intl.NumberFormat('pt-BR', { notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
   }
 }
 
@@ -56,7 +56,7 @@ export function formatNumberParts(value: number | null, unit: MeasureUnit, decim
     case 'INDEX':
       return { num: value.toFixed(d), scale: '' };
     default: {
-      const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: d }).format(value);
+      const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
       // Split on any whitespace (including   used by Intl)
       const parts = formatted.split(/\s+/);
       const last = parts[parts.length - 1];
