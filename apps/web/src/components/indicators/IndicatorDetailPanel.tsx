@@ -179,6 +179,8 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
           }
 
           const isComparison = isRecent || isPrevYear;
+          const hovered = tooltip?.i === i;
+          const labelSize = hovered ? 14 : (isComparison ? 10 : 9);
           return (
             <g key={`b-${i}`}
               onMouseEnter={() => setTooltip({ i, x: x(i), y: y(p.value) })}
@@ -187,15 +189,17 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
             >
               {/* área de hover maior que a barra */}
               <rect x={x(i) - barW / 2 - 4} width={barW + 8} y={topPad} height={baseY - topPad} rx={0} fill="transparent" />
-              <rect x={x(i) - barW / 2} width={barW} y={y(p.value)} height={baseY - y(p.value)} rx={3} fill={barColor} />
+              <rect x={x(i) - barW / 2} width={barW} y={y(p.value)} height={baseY - y(p.value)} rx={3} fill={barColor}
+                style={{ transition: 'fill 0.12s' }} opacity={hovered ? 1 : 0.92} />
               {p.value != null && (
                 <text
                   x={x(i)}
-                  y={y(p.value) - (isComparison ? 6 : 4)}
+                  y={y(p.value) - (hovered ? 9 : isComparison ? 6 : 5)}
                   textAnchor="middle"
-                  fontSize={isComparison ? 10 : 8}
-                  fontWeight={isComparison ? 700 : 500}
-                  fill={isComparison ? labelColor : 'rgba(255,255,255,0.35)'}
+                  fontSize={labelSize}
+                  fontWeight={hovered ? 800 : isComparison ? 700 : 600}
+                  fill={hovered ? '#ffffff' : isComparison ? labelColor : 'rgba(255,255,255,0.55)'}
+                  style={{ transition: 'font-size 0.12s ease-out' }}
                 >
                   {fmtBar(p.value, unit, decimals)}
                 </text>
@@ -221,22 +225,6 @@ function HistoryChart({ data, direction, unit, currentGoal, decimals = 2 }: {
           );
         })}
 
-        {/* tooltip ao passar o mouse */}
-        {tooltip != null && (() => {
-          const p = pts[tooltip.i];
-          const label = `${fmtMonthCompact(p.period)}: ${fmtBar(p.value, unit, decimals)}`;
-          const tw = label.length * 6.5 + 16;
-          const tx = Math.min(Math.max(tooltip.x - tw / 2, pad), fullW - tw - pad);
-          const ty = Math.max(tooltip.y - 34, 4);
-          return (
-            <g pointerEvents="none">
-              <rect x={tx} y={ty} width={tw} height={20} rx={4} fill="rgba(30,37,60,0.97)" stroke="rgba(255,255,255,0.15)" strokeWidth={0.8} />
-              <text x={tx + tw / 2} y={ty + 13} textAnchor="middle" fontSize="11" fontWeight="600" fill="rgba(255,255,255,0.92)">
-                {label}
-              </text>
-            </g>
-          );
-        })()}
       </svg>
     </div>
   );
@@ -592,11 +580,6 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
       };
     });
 
-  const STATUS_BADGE = goodVsGoal === null
-    ? { label: 'SEM META', dot: 'bg-white/30', color: 'text-white/40' }
-    : goodVsGoal
-    ? { label: 'NO ALVO', dot: 'bg-emerald-400', color: 'text-emerald-400' }
-    : { label: 'FORA DO ALVO', dot: 'bg-red-400', color: 'text-red-400' };
 
   const realizedHistory = [...(ind?.realizedValues ?? [])].sort(
     (a: any, b: any) => new Date(b.period).getTime() - new Date(a.period).getTime());
@@ -620,18 +603,7 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
       >
         {/* Header */}
         <div className="px-5 pt-5 pb-4 border-b border-white/5">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2 text-[10px]">
-              <span className={cn('flex items-center gap-1.5 font-semibold uppercase tracking-wider', STATUS_BADGE.color)}>
-                <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_BADGE.dot)} />
-                {STATUS_BADGE.label}
-              </span>
-              {!isLoading && (
-                <span className="text-white/30">
-                  {ind?.code} · {String(ind?.category ?? '').toUpperCase()} · {period.slice(0, 7)}
-                </span>
-              )}
-            </div>
+          <div className="flex items-start justify-end">
             <button onClick={onClose} className="text-white/30 hover:text-white/60 transition-colors"><X size={16} /></button>
           </div>
 
@@ -673,61 +645,57 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
             <>
               {/* Métricas principais (3 colunas — Realizado / VS Ano Anterior / VS Meta)
                   separadas por divisórias verticais (sem caixas estilo KPI) */}
-              <div className="px-5 py-4 border-b border-white/5 space-y-3">
-                <div className="grid grid-cols-3">
+              {/* Métricas principais — versão compacta (label+data numa linha, valor menor, Δ inline) */}
+              <div className="px-5 py-3 border-b border-white/5">
+                <div className="grid grid-cols-3 gap-2">
                   {/* REALIZADO */}
-                  <div className="flex flex-col pr-3">
-                    <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">Realizado</p>
-                    <p className="text-[9px] text-white/35 mt-1">{fmtMonth(refDate)}</p>
-                    <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
+                  <div className="pr-3 min-w-0">
+                    <p className="text-[9px] font-semibold text-white/30 uppercase tracking-wider truncate">
+                      Realizado · {fmtMonth(refDate)}
+                    </p>
+                    <p className={cn('text-lg font-bold leading-tight mt-0.5', goodVsGoal == null ? 'text-white' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
                       {fmtLarge(effective, unit, dp)}
                     </p>
                   </div>
 
-                  {/* VS ANO ANTERIOR — mostra o valor absoluto do ano anterior */}
-                  <div className="flex flex-col px-3 border-l border-blue-500/40">
-                    <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Ano Anterior</p>
-                    <p className="text-[9px] text-white/35 mt-1">
-                      {yoyPoint ? fmtMonth(yoyPoint.period) : 'Sem histórico'}
+                  {/* VS ANO ANTERIOR */}
+                  <div className="px-3 border-l border-white/10 min-w-0">
+                    <p className="text-[9px] font-semibold text-white/30 uppercase tracking-wider truncate">
+                      Ano anterior{yoyPoint ? ` · ${fmtMonth(yoyPoint.period)}` : ''}
                     </p>
-                    <p className={cn('text-[26px] font-black mt-1 leading-none', goodYoy == null ? 'text-white/40' : goodYoy ? 'text-emerald-400' : 'text-red-400')}>
+                    <p className={cn('text-lg font-bold leading-tight mt-0.5', goodYoy == null ? 'text-white/40' : goodYoy ? 'text-emerald-400' : 'text-red-400')}>
                       {yoyPoint ? fmtLarge(yoyPoint.value, unit, dp) : '—'}
                     </p>
                     {yoy != null && (
-                      <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodYoy ? 'text-emerald-400/70' : 'text-red-400/70')}>
-                        {goodYoy ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
-                        <span className="leading-tight">{yoy > 0 ? '+' : ''}{yoy.toFixed(0)}% {goodYoy ? 'Melhorou' : 'Piorou'}</span>
-                      </div>
+                      <span className={cn('inline-flex items-center gap-0.5 text-[9px] mt-0.5', goodYoy ? 'text-emerald-400/70' : 'text-red-400/70')}>
+                        {goodYoy ? <TrendingUp size={9} /> : <TrendingDown size={9} />}{yoy > 0 ? '+' : ''}{yoy.toFixed(0)}%
+                      </span>
                     )}
                   </div>
 
-                  {/* VS META — mostra diferença absoluta em unidade */}
-                  <div className="flex flex-col pl-3 border-l border-blue-500/40">
-                    <p className="text-[8px] font-semibold text-white/30 uppercase tracking-widest">VS Meta</p>
-                    <p className="text-[9px] text-white/35 mt-1">
-                      {goal != null ? `Meta: ${fmtLarge(goal, unit, dp)}` : 'Sem meta definida'}
+                  {/* VS META */}
+                  <div className="pl-3 border-l border-white/10 min-w-0">
+                    <p className="text-[9px] font-semibold text-white/30 uppercase tracking-wider truncate">
+                      Meta{goal != null ? ` · ${fmtLarge(goal, unit, dp)}` : ''}
                     </p>
                     {(() => {
                       const diff = effective != null && goal != null ? effective - goal : null;
                       const sign = diff != null ? (diff >= 0 ? '+' : '') : '';
                       return (
                         <>
-                          <p className={cn('text-[26px] font-black mt-1 leading-none', goodVsGoal == null ? 'text-white/40' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
-                            {diff != null ? `${sign}${fmtLarge(diff, unit, dp)}` : '—'}
+                          <p className={cn('text-lg font-bold leading-tight mt-0.5', goodVsGoal == null ? 'text-white/40' : goodVsGoal ? 'text-emerald-400' : 'text-red-400')}>
+                            {diff != null ? `${sign}${fmtLarge(diff, unit, dp)}` : (goal == null ? 'Sem meta' : '—')}
                           </p>
                           {vsGoal != null && (
-                            <div className={cn('flex items-center gap-1 mt-1.5 text-[9px]', goodVsGoal ? 'text-emerald-400/70' : 'text-red-400/70')}>
-                              {goodVsGoal ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
-                              <span className="leading-tight">{Math.abs(vsGoal).toFixed(0)}% {goodVsGoal ? 'melhor que a meta' : 'pior que a meta'}</span>
-                            </div>
+                            <span className={cn('inline-flex items-center gap-0.5 text-[9px] mt-0.5', goodVsGoal ? 'text-emerald-400/70' : 'text-red-400/70')}>
+                              {goodVsGoal ? <TrendingUp size={9} /> : <TrendingDown size={9} />}{Math.abs(vsGoal).toFixed(0)}%
+                            </span>
                           )}
                         </>
                       );
                     })()}
                   </div>
                 </div>
-
-                {/* Strip compacto removido — info movida para o header do Histórico */}
               </div>
 
               {/* Gráfico histórico */}
