@@ -558,26 +558,47 @@ export default function MapEditorPage() {
   // ── Grafo de drill-down (child = causa/insumo → parent = agregado) ───────────
   // Usa a semântica de data.parentId/childId das edges (robusto a reconexões).
   // childrenMap: parent → filhos diretos; childHasParent: nós que têm agregador.
+  // Nível cadastrado de cada nó (badge "Nível" no painel Gerenciar Indicadores).
+  const levelOf = React.useMemo(
+    () => new Map(nodes.map((n) => [n.id, n.data?.level ?? 1])),
+    [nodes],
+  );
+
+  // Drill-down (parent = agregador/raso → child = detalhe/profundo). Direção
+  // por edge, de forma HÍBRIDA:
+  //  • níveis diferentes → o nível MAIS RASO é o pai (respeita os níveis
+  //    cadastrados: ex. Ciclo Financeiro nível 1 é pai dos vizinhos nível 2);
+  //  • níveis iguais/não definidos → usa a semântica da relação
+  //    (data.parentId = agregado, data.childId = causa), preservando o
+  //    comportamento em mapas sem níveis configurados.
   const childrenMap = React.useMemo(() => {
     const m = new Map<string, string[]>();
-    for (const e of edges) {
-      const parent = (e.data as any)?.parentId ?? e.target;
-      const child = (e.data as any)?.childId ?? e.source;
-      if (!parent || !child) continue;
+    const push = (parent?: string, child?: string) => {
+      if (!parent || !child || parent === child) return;
       if (!m.has(parent)) m.set(parent, []);
       if (!m.get(parent)!.includes(child)) m.get(parent)!.push(child);
+    };
+    for (const e of edges) {
+      if (!e.source || !e.target) continue;
+      const ls = levelOf.get(e.source) ?? 1;
+      const lt = levelOf.get(e.target) ?? 1;
+      if (ls !== lt) {
+        if (ls < lt) push(e.source, e.target);
+        else push(e.target, e.source);
+      } else {
+        push((e.data as any)?.parentId ?? e.target, (e.data as any)?.childId ?? e.source);
+      }
     }
     return m;
-  }, [edges]);
+  }, [edges, levelOf]);
 
+  // Nós que são filhos de alguém → têm agregador. Os demais são raízes (topo da
+  // hierarquia) e começam visíveis.
   const childHasParent = React.useMemo(() => {
     const s = new Set<string>();
-    for (const e of edges) {
-      const child = (e.data as any)?.childId ?? e.source;
-      if (child) s.add(child);
-    }
+    for (const kids of childrenMap.values()) for (const c of kids) s.add(c);
     return s;
-  }, [edges]);
+  }, [childrenMap]);
 
   // Nós visíveis: parte das raízes e desce apenas pelos nós expandidos.
   const visibleIds = React.useMemo(() => {
@@ -914,13 +935,15 @@ export default function MapEditorPage() {
     [nodes],
   );
 
-  // Update level of an existing node on the map (stored in node data; persisted on Save)
+  // Update level of an existing node on the map. O nível dita a hierarquia de
+  // drill-down (childrenMap/visibleIds recomputam), então marca dirty p/ auto-save.
   const handleNodeLevelChange = useCallback((indicatorId: string, level: number) => {
     setNodes((nds) =>
       nds.map((n) =>
         n.id === indicatorId ? { ...n, data: { ...n.data, level } } : n,
       ),
     );
+    dirtyRef.current = true;
   }, [setNodes]);
 
   if (isLoading) return <div className="h-full bg-[#0d0f17] animate-pulse rounded-2xl" />;
