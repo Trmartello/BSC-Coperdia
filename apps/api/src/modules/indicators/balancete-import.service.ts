@@ -120,7 +120,8 @@ export class BalanceteImportService {
     return label.replace(/^\s*\d+(?:\.\d+)*\s+/, '').trim();
   }
 
-  private genAbbrev(label: string, taken: Set<string>): string {
+  // Abreviação financeira (sem contador): dicionário ou iniciais das palavras.
+  private abbrevOf(label: string): string {
     const text = this.stripAccents(this.labelText(label)).toUpperCase();
     let base = ABBR_DICT[text];
     if (!base) {
@@ -131,11 +132,21 @@ export class BalanceteImportService {
     }
     base = base.replace(/[^A-Z0-9]/g, '') || 'IND';
     if (/^[0-9]/.test(base)) base = '_' + base;
-    let cand = base;
-    let n = 2;
-    while (taken.has(cand.toUpperCase())) cand = `${base}${n++}`;
-    taken.add(cand.toUpperCase());
-    return cand;
+    return base;
+  }
+
+  // Código do indicador de balancete = abreviação + Cód. Reduzido (código do
+  // plano de contas). Único por natureza (o código do plano é único) e legível.
+  // Ex.: "9.05.02 OUTROS CUSTOS DAS VENDAS" → "OCV 9.05.02".
+  private balCode(label: string, accountCode: string): string {
+    return `${this.abbrevOf(label)} ${accountCode}`;
+  }
+
+  // Converte um código em token válido para fórmula (mathjs). Ex.: "AC 1.01" → "AC_1_01".
+  private toToken(code: string): string {
+    let t = code.replace(/[^A-Za-z0-9_]/g, '_');
+    if (/^[0-9]/.test(t)) t = '_' + t;
+    return t || 'VAR';
   }
 
   // ── import principal ──────────────────────────────────────────────────────
@@ -226,26 +237,38 @@ export class BalanceteImportService {
     // ── grava indicadores (nível) ────────────────────────────────────────────
     const existing = await this.prisma.indicator.findMany();
     const byAccount = new Map(existing.filter((e) => e.accountCode).map((e) => [e.accountCode!, e]));
-    const taken = new Set(existing.map((e) => e.code.toUpperCase()));
 
     const sorted = [...defs.values()].sort((a, b) => a.level - b.level || a.code.localeCompare(b.code, undefined, { numeric: true }));
     const idByCode = new Map<string, string>();
     let created = 0, updated = 0;
 
+    // `taken` = códigos que NÃO pertencem aos indicadores deste balancete (que
+    // serão reatribuídos) — evita colisão com indicadores de outra origem.
+    const defCodes = new Set(sorted.map((d) => d.code));
+    const taken = new Set(
+      existing.filter((e) => !(e.accountCode && defCodes.has(e.accountCode))).map((e) => e.code.toUpperCase()),
+    );
+    const uniqueCode = (base: string): string => {
+      let code = base, n = 2;
+      while (taken.has(code.toUpperCase())) code = `${base} (${n++})`;
+      taken.add(code.toUpperCase());
+      return code;
+    };
+
     for (const def of sorted) {
       const category = rootText(def.code);
       const top = def.code.split('.')[0];
       const accumulation = (top === '1' || top === '2') ? 'LAST' : 'SUM'; // balanço=saldo; resultado=fluxo
+      const code = uniqueCode(this.balCode(def.label, def.code)); // abreviação + Cód. Reduzido
       const found = byAccount.get(def.code);
       if (found) {
         const upd = await this.prisma.indicator.update({
           where: { id: found.id },
-          data: { name: def.label, category, source: 'BALANCETE' },
+          data: { code, name: def.label, category, source: 'BALANCETE' },
         });
         idByCode.set(def.code, upd.id);
         updated++;
       } else {
-        const code = this.genAbbrev(def.label, taken);
         const ind = await this.prisma.indicator.create({
           data: {
             code, name: def.label, category, type: 'INPUT', unit: 'CURRENCY',
@@ -409,8 +432,21 @@ export class BalanceteImportService {
   async generateFinancialRatios(userId: string) {
     const existing = await this.prisma.indicator.findMany();
     const byAccount = new Map(existing.filter((e) => e.accountCode).map((e) => [e.accountCode!, e]));
-    const taken = new Set(existing.map((e) => e.code.toUpperCase()));
-    const codeOfAcc = (acc: string) => byAccount.get(acc)!.code;
+    // `taken` exclui os próprios índices (R.*) que serão reatribuídos → permite
+    // recuperar o código limpo (ex.: "EG") quando ele deixa de estar ocupado.
+    const ratioAccts = new Set(FINANCIAL_RATIOS.map((d) => `R.${d.key}`));
+    const taken = new Set(
+      existing.filter((e) => !(e.accountCode && ratioAccts.has(e.accountCode))).map((e) => e.code.toUpperCase()),
+    );
+    const uniqueCode = (base: string): string => {
+      let code = base, n = 2;
+      while (taken.has(code.toUpperCase())) code = `${base}${n++}`;
+      taken.add(code.toUpperCase());
+      return code;
+    };
+    // Token de fórmula sanitizado a partir do código da conta (que agora contém
+    // "abreviação + Cód. Reduzido", ex.: "AC 1.01" → token "AC_1_01").
+    const tokenOfAcc = (acc: string) => this.toToken(byAccount.get(acc)!.code);
     const idOfAcc = (acc: string) => byAccount.get(acc)!.id;
 
     const created: string[] = [];
@@ -422,23 +458,21 @@ export class BalanceteImportService {
       const missing = def.needs.filter((a) => !byAccount.has(a));
       if (missing.length) { skipped.push(`${def.name} — faltam contas ${missing.join(', ')}`); continue; }
 
-      const absExpr = (acc: string) => `abs(${codeOfAcc(acc)})`;
+      const absExpr = (acc: string) => `abs(${tokenOfAcc(acc)})`;
       const expression = def.expr(absExpr);
       const variables: Record<string, string> = {};
-      for (const a of def.needs) variables[codeOfAcc(a)] = idOfAcc(a);
+      for (const a of def.needs) variables[tokenOfAcc(a)] = idOfAcc(a);
 
       const acctKey = `R.${def.key}`;
+      const code = uniqueCode(def.key);
       let ind = byAccount.get(acctKey);
       if (ind) {
         ind = await this.prisma.indicator.update({
           where: { id: ind.id },
-          data: { name: def.name, unit: def.unit as any, direction: def.direction as any, type: 'CALCULATED', category: 'Análise Financeira', source: 'RATIO' },
+          data: { code, name: def.name, unit: def.unit as any, direction: def.direction as any, type: 'CALCULATED', category: 'Análise Financeira', source: 'RATIO' },
         });
         updated.push(def.name);
       } else {
-        let code = def.key; let n = 2;
-        while (taken.has(code.toUpperCase())) code = `${def.key}${n++}`;
-        taken.add(code.toUpperCase());
         ind = await this.prisma.indicator.create({
           data: { code, name: def.name, category: 'Análise Financeira', type: 'CALCULATED', unit: def.unit as any, periodicity: 'MONTHLY', direction: def.direction as any, source: 'RATIO', accountCode: acctKey },
         });
