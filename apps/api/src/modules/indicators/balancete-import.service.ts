@@ -313,9 +313,13 @@ export class BalanceteImportService {
 
     await this.calcEngine.recalculateRealized();
 
+    // Cria NOVOS mapas causais a partir da hierarquia (um por grupo N1), sem
+    // tocar nos mapas existentes (estrutura própria "Balancete").
+    const builtMaps = await this.ensureBalanceteMaps(userId, sorted, idByCode);
+
     await this.audit.log({
       userId, action: 'CREATE', entity: 'Indicator', entityId: 'balancete-import',
-      after: { created, updated, values, relations, warningCount: warnings.length },
+      after: { created, updated, values, relations, warningCount: warnings.length, maps: builtMaps.maps.length },
     });
 
     return {
@@ -327,7 +331,76 @@ export class BalanceteImportService {
       periods: [...periods].sort(),
       warningCount: warnings.length,
       warnings: warnings.slice(0, 25),
+      maps: builtMaps.maps,
     };
+  }
+
+  // Gera (idempotente) a estrutura "Balancete" com um mapa por grupo N1 (Ativo,
+  // Passivo, Resultado…), contendo N1→N2→N3 com níveis para o drill-down.
+  // NÃO altera estruturas/mapas já existentes (escopo próprio por nome).
+  private async ensureBalanceteMaps(userId: string, sorted: LevelDef[], idByCode: Map<string, string>) {
+    let structure = await this.prisma.mapStructure.findFirst({ where: { name: 'Balancete' } });
+    if (!structure) {
+      structure = await this.prisma.mapStructure.create({
+        data: { name: 'Balancete', description: 'Estrutura patrimonial e de resultado (importada do balancete)', category: 'Financeiro', createdBy: userId },
+      });
+    }
+    let category = await this.prisma.mapCategory.findFirst({ where: { name: 'Financeiro' } })
+      ?? await this.prisma.mapCategory.findFirst();
+    if (!category) category = await this.prisma.mapCategory.create({ data: { name: 'Financeiro', userId } });
+
+    const childrenOf = (code: string) => sorted.filter((d) => d.parentCode === code);
+    const n1s = sorted.filter((d) => d.level === 1);
+    const maps: { name: string; entries: number }[] = [];
+
+    for (const n1 of n1s) {
+      const n2s = childrenOf(n1.code);
+      if (n2s.length === 0) continue; // pula grupos sem desdobramento
+
+      const nodes: any[] = [];
+      const entries: { id: string; x: number; y: number }[] = [];
+      const place = (code: string, level: number, yIdx: number) => {
+        const id = idByCode.get(code);
+        if (!id) return;
+        const position = { x: (level - 1) * 380, y: yIdx * 160 };
+        nodes.push({ id, position, data: { level } });
+        entries.push({ id, x: position.x, y: position.y });
+      };
+
+      let y = 0, sumY = 0, cnt = 0;
+      for (const n2 of n2s) {
+        const n3s = childrenOf(n2.code);
+        let n2y: number;
+        if (n3s.length) {
+          const start = y;
+          for (const n3 of n3s) { place(n3.code, 3, y); y++; }
+          n2y = (start + (y - 1)) / 2;
+        } else {
+          n2y = y; y++;
+        }
+        place(n2.code, 2, n2y);
+        sumY += n2y; cnt++;
+      }
+      place(n1.code, 1, cnt ? sumY / cnt : 0);
+
+      const mapName = this.labelText(n1.label);
+      let map = await this.prisma.indicatorMap.findFirst({ where: { name: mapName, structureId: structure.id } });
+      if (!map) {
+        map = await this.prisma.indicatorMap.create({
+          data: { name: mapName, description: `Hierarquia ${n1.label}`, categoryId: category.id, structureId: structure.id, userId },
+        });
+      }
+      for (const e of entries) {
+        await this.prisma.indicatorMapEntry.upsert({
+          where: { mapId_indicatorId: { mapId: map.id, indicatorId: e.id } },
+          create: { mapId: map.id, indicatorId: e.id, positionX: e.x, positionY: e.y },
+          update: { positionX: e.x, positionY: e.y },
+        });
+      }
+      await this.prisma.indicatorMap.update({ where: { id: map.id }, data: { flowData: { nodes, edges: [] } as any } });
+      maps.push({ name: mapName, entries: entries.length });
+    }
+    return { structureId: structure.id, maps };
   }
 
   // ── Índices financeiros de análise (CALCULATED sobre as contas do balancete) ──
