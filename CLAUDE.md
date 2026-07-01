@@ -109,9 +109,9 @@ Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
 ### Padrões do IndicatorCard (`components/indicators/IndicatorCard.tsx`)
 - Largura fixa `w-[260px]`. Sem botões Info/lixeira/delete no card (removidos).
 - Direção: `ArrowUp` verde (HIGHER_IS_BETTER) / `ArrowDown` azul (LOWER_IS_BETTER), antes do nome.
-- Unidade: badge roxo destacado no canto superior direito (`unitLabel()`).
-- Valores numéricos via `formatNumber()` (sem símbolo de unidade — o badge já mostra).
-- Desvio: esquerda = Realizado vs Meta; direita = Estimativa vs Meta. Base sempre a Meta.
+- Unidade: badge roxo no canto superior direito (`unitLabel(unit)`) — mostra **apenas a medida** (`R$`, `Dias`, `%`, `Índice`, `Nº`), **sem sufixo de escala**.
+- Valores numéricos via `formatNumber()` (sem símbolo de unidade — o badge já mostra). A **escala (mil/mi/bi)** fica **em cada coluna, independente** (ex.: `12 mil`, `5,2 mil`, `1,5 mi`). `formatNumber = num + scale` de `formatNumberParts()`; `Intl` usa espaço não-quebrável (` `) entre número e escala — o split usa `/\s+/`.
+- Desvio: esquerda = **Realizado vs Meta** (`vs meta`); direita = **Estimativa vs Realizado** (`Vs Real.`). `deviationLabel(pct, direction, suffix)` recebe o sufixo do texto; a cor (verde/vermelho) respeita a `direction`.
 - Footer (ações/anexos/comentários) só renderiza se ao menos um count > 0.
 
 ## Banco de Dados
@@ -124,6 +124,7 @@ Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
   SEMPRE validar antes de push: `cd apps/api && npx tsc --noEmit` e `cd apps/web && npx next build` (ambos devem sair 0).
 - `next build` deve rodar de dentro de `apps/web`, nunca da raiz.
 - Deploy parado/antigo no Railway = build novo falhou silenciosamente. Conferir deps no `package.json` do app afetado.
+- **Branch monitorado pelo Railway = `claude/fervent-shannon-lmub77`** (é o *default branch* do repo no GitHub). Push só para `main` **NÃO dispara deploy** — sempre empurrar para os dois (o `main:claude/fervent-shannon-lmub77` resolve). Projeto: 2 serviços — API (`bsc-coperdia-production`) e Web (`renewed-tenderness-production-60e3.up.railway.app`).
 
 ## Fluxo Eficiente (economia de tokens)
 - Sempre fazer push para **`main` E `claude/fervent-shannon-lmub77`**.
