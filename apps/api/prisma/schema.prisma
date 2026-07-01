@@ -149,6 +149,8 @@ model Indicator {
   direction   IndicatorDirection @default(HIGHER_IS_BETTER)
   accumulation AccumulationMethod @default(SUM) // consolidação no modo "Acumular" (YTD)
   monitoringPoints String[]      @default([])
+  accountCode String?            @unique // chave estável p/ import idempotente (balancete: código hierárquico 1 / 1.01 / 1.01.01)
+  source      String?            // origem do indicador (ex.: "BALANCETE") p/ filtrar
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 

@@ -21,11 +21,42 @@ interface ImportResult {
   }[];
 }
 
+interface BalanceteResult {
+  created: number;
+  updated: number;
+  levels: number;
+  values: number;
+  relations: number;
+  periods: string[];
+  warningCount: number;
+  warnings: string[];
+}
+
 export function ImportDataModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
+  const balRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [mode, setMode] = useState<'lancamento' | 'balancete'>('lancamento');
+  const [balResult, setBalResult] = useState<BalanceteResult | null>(null);
+
+  async function handleBalancete(file: File) {
+    setUploading(true);
+    setBalResult(null);
+    try {
+      const res = await indicatorsApi.importBalancete(file);
+      setBalResult(res.data);
+      toast.success(`Balancete importado: ${res.data.created} criados, ${res.data.updated} atualizados`);
+      qc.invalidateQueries({ queryKey: ['indicators'] });
+      qc.invalidateQueries({ queryKey: ['indicator-periods'] });
+      qc.invalidateQueries({ queryKey: ['settings-indicators'] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao importar o balancete');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function handleDownloadTemplate() {
     try {
@@ -80,7 +111,92 @@ export function ImportDataModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className="text-white/30 hover:text-white/70"><X size={18} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        {/* Tabs */}
+        <div className="flex gap-1 px-5 pt-3 border-b border-white/5 flex-shrink-0">
+          {[
+            { k: 'lancamento', l: 'Lançamento (Realizado/Meta/Estimativa)' },
+            { k: 'balancete', l: 'Balancete (N1/N2/N3 mensal)' },
+          ].map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setMode(t.k as any)}
+              className={
+                'px-3 py-2 text-xs font-medium rounded-t-lg transition-colors ' +
+                (mode === t.k ? 'text-white border-b-2 border-emerald-400' : 'text-white/40 hover:text-white/70')
+              }
+            >
+              {t.l}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'balancete' && (
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            <div className="flex gap-3 bg-purple-600/8 border border-purple-500/20 rounded-xl p-4">
+              <Info size={16} className="text-purple-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-white/55 leading-relaxed space-y-1">
+                <p>Envie a planilha do balancete com colunas <strong className="text-white/80">N1, N2, N3, Conta Contábil, Cód. Reduzido</strong> e uma coluna por mês (ex.: <span className="font-mono">jan 2025</span>).</p>
+                <p className="text-white/35 text-xs">
+                  São criados/atualizados apenas os indicadores de nível (N1/N2/N3) com abreviações financeiras (AT, AC, DISP…). N1/N2 usam as linhas <strong className="text-white/50">Totais</strong>; N3 soma as contas. Reimportar só atualiza os valores e insere os meses novos.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => balRef.current?.click()}
+              disabled={uploading}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-sm text-white font-medium transition-colors disabled:opacity-50"
+            >
+              <Upload size={15} />
+              {uploading ? 'Importando balancete...' : 'Importar balancete (.xlsx)'}
+            </button>
+            <input
+              ref={balRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBalancete(f); e.target.value = ''; }}
+            />
+
+            {balResult && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3">
+                  <CheckCircle2 size={16} />
+                  <span>
+                    {balResult.created} criados · {balResult.updated} atualizados · {balResult.values} valores
+                    {balResult.periods?.length > 0 && ` · ${balResult.periods.length} mês(es)`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Níveis', count: balResult.levels, color: 'text-blue-400' },
+                    { label: 'Relações', count: balResult.relations, color: 'text-purple-400' },
+                    { label: 'Divergências', count: balResult.warningCount, color: balResult.warningCount ? 'text-amber-400' : 'text-emerald-400' },
+                  ].map((b) => (
+                    <div key={b.label} className="bg-white/3 border border-white/8 rounded-xl p-3 text-center">
+                      <p className={`text-xl font-bold ${b.color}`}>{b.count}</p>
+                      <p className="text-[10px] text-white/35 mt-0.5">{b.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {balResult.warnings?.length > 0 && (
+                  <div className="border border-amber-500/30 rounded-xl overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 text-amber-300 text-xs font-semibold uppercase tracking-wider">
+                      <AlertTriangle size={14} /> Divergências Totais × soma das contas ({balResult.warningCount})
+                    </div>
+                    <div className="divide-y divide-white/5 max-h-40 overflow-y-auto">
+                      {balResult.warnings.map((w, i) => (
+                        <div key={i} className="px-4 py-2 text-xs text-white/50 font-mono">{w}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className={'flex-1 overflow-y-auto p-5 space-y-5' + (mode === 'balancete' ? ' hidden' : '')}>
           {/* Instruções */}
           <div className="flex gap-3 bg-purple-600/8 border border-purple-500/20 rounded-xl p-4">
             <Info size={16} className="text-purple-400 flex-shrink-0 mt-0.5" />

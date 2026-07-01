@@ -9,6 +9,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { IndicatorsService } from './indicators.service';
+import { BalanceteImportService } from './balancete-import.service';
 import { CreateIndicatorDto } from './dto/create-indicator.dto';
 import { UpdateForecastDto } from './dto/update-forecast.dto';
 
@@ -17,7 +18,10 @@ import { UpdateForecastDto } from './dto/update-forecast.dto';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('indicators')
 export class IndicatorsController {
-  constructor(private readonly service: IndicatorsService) {}
+  constructor(
+    private readonly service: IndicatorsService,
+    private readonly balancete: BalanceteImportService,
+  ) {}
 
   @Get('periods')
   getAvailablePeriods() {
@@ -53,6 +57,15 @@ export class IndicatorsController {
   importData(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
     if (!file) throw new BadRequestException('Envie o arquivo Excel gerado pelo modelo.');
     return this.service.importSpreadsheet(file.buffer, req.user.id);
+  }
+
+  // Importa o balancete (N1/N2/N3 + colunas mensais) → indicadores de nível
+  @Roles('ADMIN', 'CONTROLADORIA')
+  @Post('import-balancete')
+  @UseInterceptors(FileInterceptor('file'))
+  importBalancete(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
+    if (!file) throw new BadRequestException('Envie a planilha do balancete (.xlsx).');
+    return this.balancete.importBalancete(file.buffer, req.user.id);
   }
 
   @Get(':id')

@@ -63,6 +63,13 @@ export const indicatorsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  importBalancete: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/indicators/import-balancete', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   periods: () => api.get<string[]>('/indicators/periods'),
   addRelation: (parentId: string, childId: string) =>
     api.post('/indicators/relations', { parentId, childId }),

@@ -87,6 +87,13 @@ apps/
 - Núcleo: `CalcEngineService.getAccumulatedValues(targetPeriod)` → `Map<id, {realized, forecast, goal}>`. Consumido por `DashboardService.getExecutiveDashboard(period, scenarioId, accumulated)` e `MapsService.findOne(id, period, accumulated)` (injeta o acumulado nas arrays `realizedValues/forecastValues/goals` que o front já lê). Query param `accumulated=true`.
 - Defaults: migration `20260624120000_add_indicator_accumulation` (AVERAGE p/ DAYS/PERCENTAGE/INDEX; LAST p/ saldos por código) + `seed.ts` (`acc` por indicador).
 
+### Importação de Balancete (planilha larga → indicadores de nível)
+- Fonte: `.xlsx` com colunas **N1, N2, N3, Conta Contábil, Cód. Reduzido** + **1 coluna por mês** (cabeçalho "jan 2025"…). Serviço `BalanceteImportService` (`apps/api/src/modules/indicators/balancete-import.service.ts`), endpoint `POST /indicators/import-balancete` (Roles ADMIN/CONTROLADORIA, multer).
+- Cria/atualiza **só os indicadores de nível** (N1/N2/N3) — folhas NÃO viram indicadores. **N1/N2** usam as linhas **"Totais"** da planilha; **N3** = soma das contas-folha (a planilha não traz linha Totais de N3). Valida Totais×soma e reporta divergências.
+- **Idempotente**: casa por `Indicator.accountCode` (código hierárquico `1` / `1.01` / `1.01.01`, `@unique`) → UPDATE; `RealizedValue` upsert por `[indicatorId, period]` (reimport mensal só atualiza e insere o mês novo). Campo `Indicator.source = "BALANCETE"`. Migration `20260701130000_add_indicator_account_code`.
+- **Abreviações financeiras** como `code` (NUNCA GER-xxx): dicionário (ATIVO TOTAL→AT, ATIVO CIRCULANTE→AC, DISPONIBILIDADES→DISP, ATIVO NÃO CIRCULANTE→ANC, IMOBILIZADO→IMOB…) + iniciais das palavras significativas p/ o resto, com unicidade; editável depois no editor de fórmulas. `accumulation` = LAST p/ códigos 1/2 (balanço/saldo), SUM p/ demais (resultado/fluxo). Relações pai→filho (N3→N2→N1) para o mapa causal.
+- Front: aba **"Balancete"** no `ImportDataModal` (botão "Importar" da Topbar), `indicatorsApi.importBalancete(file)`.
+
 ### Estruturas de Mapas (containers/pastas) — `app/dashboard/maps/page.tsx`
 - Camada hierárquica acima dos mapas: **`MapStructure` → `IndicatorMap` → `IndicatorMapEntry`**. Modelo `MapStructure` (nome, descrição, `category` texto livre/área, `createdBy`, timestamps); `IndicatorMap.structureId` (FK `onDelete: Cascade`). Migration `20260701120000_add_map_structures` cria a tabela + faz backfill (uma estrutura por categoria existente, vincula os mapas). Seed cria 4 estruturas (`structMap` por categoria).
 - **Galeria em 2 níveis (mesma página, estado `openStructure`)**: lista de estruturas ↔ mapas da estrutura. Clique no mapa → editor `/dashboard/maps/[id]` (rota inalterada).
