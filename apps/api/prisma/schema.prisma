@@ -126,6 +126,7 @@ model User {
   actionItems         ActionItem[] @relation("ActionItemCreator")
   ownedActionItems    ActionItem[] @relation("ActionItemOwner")
   mapCategories   MapCategory[]
+  mapStructures   MapStructure[]
   indicatorMaps   IndicatorMap[]
 
   @@map("users")
@@ -436,6 +437,24 @@ model ScenarioValue {
 
 // ─── Indicator Maps ───────────────────────────────────────────────────────────
 
+// Estrutura (container/pasta) que organiza mapas causais numa camada acima.
+// Hierarquia: MapStructure → IndicatorMap → IndicatorMapEntry (indicadores).
+// `category` é um texto livre/área (Financeiro, Comercial, Operacional, Agro, RH…).
+model MapStructure {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String   @default("Geral")
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator User           @relation(fields: [createdBy], references: [id])
+  maps    IndicatorMap[]
+
+  @@map("map_structures")
+}
+
 model MapCategory {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -457,15 +476,18 @@ model IndicatorMap {
   name        String
   description String?
   categoryId  String
+  structureId String?  // estrutura (container) à qual o mapa pertence
   flowData    Json?    // ReactFlow nodes + edges JSON
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   userId      String
 
-  category MapCategory       @relation(fields: [categoryId], references: [id])
-  user     User              @relation(fields: [userId], references: [id])
-  entries  IndicatorMapEntry[]
+  category  MapCategory       @relation(fields: [categoryId], references: [id])
+  structure MapStructure?     @relation(fields: [structureId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id])
+  entries   IndicatorMapEntry[]
 
+  @@index([structureId])
   @@map("indicator_maps")
 }
 

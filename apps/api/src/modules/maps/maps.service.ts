@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CalcEngineService } from '../calc-engine/calc-engine.service';
 
@@ -8,6 +8,86 @@ export class MapsService {
     private prisma: PrismaService,
     private calcEngine: CalcEngineService,
   ) {}
+
+  // ── Structures (containers/pastas de mapas) ─────────────────────────────────
+
+  async getStructures() {
+    return this.prisma.mapStructure.findMany({
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { maps: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async getStructure(id: string) {
+    const structure = await this.prisma.mapStructure.findUnique({
+      where: { id },
+      include: {
+        creator: { select: { id: true, name: true } },
+        maps: {
+          include: {
+            category: true,
+            _count: { select: { entries: true } },
+            entries: { select: { indicatorId: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+    if (!structure) throw new NotFoundException('Estrutura não encontrada');
+    return structure;
+  }
+
+  async createStructure(
+    data: { name: string; description?: string; category?: string },
+    userId: string,
+  ) {
+    return this.prisma.mapStructure.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        category: data.category ?? 'Geral',
+        createdBy: userId,
+      },
+      include: { creator: { select: { id: true, name: true } }, _count: { select: { maps: true } } },
+    });
+  }
+
+  async updateStructure(
+    id: string,
+    data: { name?: string; description?: string; category?: string },
+  ) {
+    await this.ensureStructure(id);
+    return this.prisma.mapStructure.update({
+      where: { id },
+      data,
+      include: { creator: { select: { id: true, name: true } }, _count: { select: { maps: true } } },
+    });
+  }
+
+  /**
+   * Exclui uma estrutura. Se ainda houver mapas vinculados, é obrigatório
+   * confirmar a exclusão em cascata (`deleteMaps=true`) — caso contrário a
+   * operação é bloqueada para que o usuário mova os mapas antes.
+   */
+  async deleteStructure(id: string, deleteMaps = false) {
+    await this.ensureStructure(id);
+    const mapCount = await this.prisma.indicatorMap.count({ where: { structureId: id } });
+    if (mapCount > 0 && !deleteMaps) {
+      throw new ConflictException(
+        'A estrutura possui mapas vinculados. Mova-os para outra estrutura ou confirme a exclusão em cascata.',
+      );
+    }
+    // onDelete: Cascade nos mapas cuida da remoção dos mapas + entries.
+    return this.prisma.mapStructure.delete({ where: { id } });
+  }
+
+  private async ensureStructure(id: string) {
+    const exists = await this.prisma.mapStructure.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) throw new NotFoundException('Estrutura não encontrada');
+  }
 
   // ── Categories ─────────────────────────────────────────────────────────────
 
@@ -32,9 +112,12 @@ export class MapsService {
 
   // ── Maps ───────────────────────────────────────────────────────────────────
 
-  async findAll(categoryId?: string) {
+  async findAll(filter?: { categoryId?: string; structureId?: string }) {
+    const where: any = {};
+    if (filter?.categoryId) where.categoryId = filter.categoryId;
+    if (filter?.structureId) where.structureId = filter.structureId;
     return this.prisma.indicatorMap.findMany({
-      where: categoryId ? { categoryId } : undefined,
+      where: Object.keys(where).length ? where : undefined,
       include: {
         category: true,
         _count: { select: { entries: true } },
@@ -99,14 +182,20 @@ export class MapsService {
     return map;
   }
 
-  async create(data: { name: string; description?: string; categoryId: string }, userId: string) {
+  async create(
+    data: { name: string; description?: string; categoryId: string; structureId?: string },
+    userId: string,
+  ) {
     return this.prisma.indicatorMap.create({
       data: { ...data, userId },
       include: { category: true },
     });
   }
 
-  async update(id: string, data: { name?: string; description?: string; categoryId?: string; flowData?: any }) {
+  async update(
+    id: string,
+    data: { name?: string; description?: string; categoryId?: string; structureId?: string; flowData?: any },
+  ) {
     return this.prisma.indicatorMap.update({
       where: { id },
       data,
@@ -116,6 +205,38 @@ export class MapsService {
 
   async delete(id: string) {
     return this.prisma.indicatorMap.delete({ where: { id } });
+  }
+
+  /**
+   * Duplica um mapa (dentro da mesma estrutura): copia nome (+ " (cópia)"),
+   * descrição, categoria, estrutura, layout (flowData) e todos os indicadores
+   * com suas posições. Não afeta o mapa original nem os demais da estrutura.
+   */
+  async duplicate(id: string, userId: string) {
+    const source = await this.prisma.indicatorMap.findUnique({
+      where: { id },
+      include: { entries: true },
+    });
+    if (!source) throw new NotFoundException('Mapa não encontrado');
+
+    return this.prisma.indicatorMap.create({
+      data: {
+        name: `${source.name} (cópia)`,
+        description: source.description,
+        categoryId: source.categoryId,
+        structureId: source.structureId,
+        flowData: (source.flowData ?? undefined) as any,
+        userId,
+        entries: {
+          create: source.entries.map((e) => ({
+            indicatorId: e.indicatorId,
+            positionX: e.positionX,
+            positionY: e.positionY,
+          })),
+        },
+      },
+      include: { category: true, _count: { select: { entries: true } } },
+    });
   }
 
   // ── Save ReactFlow layout ──────────────────────────────────────────────────

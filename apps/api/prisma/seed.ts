@@ -396,6 +396,22 @@ async function main() {
     catMap[cat.name] = record.id;
   }
 
+  // ── Map Structures (containers/pastas) ──────────────────────────────────────
+  const structureDefs = [
+    { name: 'Estrutura Financeira Estratégica', category: 'Financeiro', description: 'Mapas causais da perspectiva financeira' },
+    { name: 'Estrutura Comercial', category: 'Comercial', description: 'Mapas de performance e pricing comercial' },
+    { name: 'Estrutura Operacional', category: 'Operacional', description: 'Mapas de eficiência e processos' },
+    { name: 'Estrutura Agro', category: 'Agro', description: 'Mapas do negócio agro cooperativo' },
+  ];
+  const structMap: Record<string, string> = {};
+  for (const def of structureDefs) {
+    const existing = await prisma.mapStructure.findFirst({ where: { name: def.name } });
+    const record = existing ?? (await prisma.mapStructure.create({
+      data: { name: def.name, description: def.description, category: def.category, createdBy: admin.id },
+    }));
+    structMap[def.category] = record.id;
+  }
+
   // ── Indicator Maps ─────────────────────────────────────────────────────────
   const mapDefs = [
     {
@@ -432,6 +448,7 @@ async function main() {
           name: def.name,
           description: def.description,
           categoryId: catMap[def.category],
+          structureId: structMap[def.category],
           userId: admin.id,
         },
       });

@@ -14,6 +14,34 @@ const WRITE_ROLES = ['ADMIN', 'CONTROLADORIA'] as const;
 export class MapsController {
   constructor(private readonly service: MapsService) {}
 
+  // ── Structures (containers/pastas) ──────────────────────────────────────────
+  @Get('structures')
+  getStructures() { return this.service.getStructures(); }
+
+  @Get('structures/:id')
+  getStructure(@Param('id') id: string) { return this.service.getStructure(id); }
+
+  @Roles(...WRITE_ROLES)
+  @Post('structures')
+  createStructure(
+    @Body() body: { name: string; description?: string; category?: string },
+    @Request() req: any,
+  ) {
+    return this.service.createStructure(body, req.user.id);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Patch('structures/:id')
+  updateStructure(@Param('id') id: string, @Body() body: any) {
+    return this.service.updateStructure(id, body);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Delete('structures/:id')
+  deleteStructure(@Param('id') id: string, @Query('deleteMaps') deleteMaps?: string) {
+    return this.service.deleteStructure(id, deleteMaps === 'true' || deleteMaps === '1');
+  }
+
   // ── Categories ─────────────────────────────────────────────────────────────
   @Get('categories')
   getCategories() { return this.service.getCategories(); }
@@ -38,8 +66,11 @@ export class MapsController {
 
   // ── Maps ───────────────────────────────────────────────────────────────────
   @Get()
-  findAll(@Query('categoryId') categoryId?: string) {
-    return this.service.findAll(categoryId);
+  findAll(
+    @Query('categoryId') categoryId?: string,
+    @Query('structureId') structureId?: string,
+  ) {
+    return this.service.findAll({ categoryId, structureId });
   }
 
   @Get(':id')
@@ -54,8 +85,17 @@ export class MapsController {
 
   @Roles(...WRITE_ROLES)
   @Post()
-  create(@Body() body: { name: string; description?: string; categoryId: string }, @Request() req: any) {
+  create(
+    @Body() body: { name: string; description?: string; categoryId: string; structureId?: string },
+    @Request() req: any,
+  ) {
     return this.service.create(body, req.user.id);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Post(':id/duplicate')
+  duplicate(@Param('id') id: string, @Request() req: any) {
+    return this.service.duplicate(id, req.user.id);
   }
 
   @Roles(...WRITE_ROLES)

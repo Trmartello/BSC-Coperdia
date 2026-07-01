@@ -6,11 +6,24 @@ export interface MapCategory {
   sortOrder: number;
 }
 
+export interface MapStructure {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  createdBy: string;
+  createdAt: string;
+  creator?: { id: string; name: string };
+  _count?: { maps: number };
+  maps?: IndicatorMap[];
+}
+
 export interface IndicatorMap {
   id: string;
   name: string;
   description: string | null;
   categoryId: string;
+  structureId: string | null;
   flowData: any | null;
   createdAt: string;
   category: MapCategory;

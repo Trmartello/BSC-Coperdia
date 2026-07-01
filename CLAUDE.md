@@ -87,6 +87,14 @@ apps/
 - Núcleo: `CalcEngineService.getAccumulatedValues(targetPeriod)` → `Map<id, {realized, forecast, goal}>`. Consumido por `DashboardService.getExecutiveDashboard(period, scenarioId, accumulated)` e `MapsService.findOne(id, period, accumulated)` (injeta o acumulado nas arrays `realizedValues/forecastValues/goals` que o front já lê). Query param `accumulated=true`.
 - Defaults: migration `20260624120000_add_indicator_accumulation` (AVERAGE p/ DAYS/PERCENTAGE/INDEX; LAST p/ saldos por código) + `seed.ts` (`acc` por indicador).
 
+### Estruturas de Mapas (containers/pastas) — `app/dashboard/maps/page.tsx`
+- Camada hierárquica acima dos mapas: **`MapStructure` → `IndicatorMap` → `IndicatorMapEntry`**. Modelo `MapStructure` (nome, descrição, `category` texto livre/área, `createdBy`, timestamps); `IndicatorMap.structureId` (FK `onDelete: Cascade`). Migration `20260701120000_add_map_structures` cria a tabela + faz backfill (uma estrutura por categoria existente, vincula os mapas). Seed cria 4 estruturas (`structMap` por categoria).
+- **Galeria em 2 níveis (mesma página, estado `openStructure`)**: lista de estruturas ↔ mapas da estrutura. Clique no mapa → editor `/dashboard/maps/[id]` (rota inalterada).
+- **RBAC**: `canManage = role ∈ {ADMIN, CONTROLADORIA}` esconde botões no front; backend valida com `@Roles(...WRITE_ROLES)` + `RolesGuard` em **todas** as rotas de escrita. Usuários comuns só visualizam.
+- **Endpoints** (`maps.controller.ts`, rotas `structures` **antes** de `:id`): `GET/POST /maps/structures`, `GET/PATCH/DELETE /maps/structures/:id`, `POST /maps/:id/duplicate`, `GET /maps?structureId=`. Excluir estrutura com mapas exige `?deleteMaps=true` (senão `409`); a UI oferece **mover mapas** p/ outra estrutura (PATCH `structureId` de cada + delete) OU **cascata**.
+- **Duplicar mapa**: `MapsService.duplicate` copia nome+" (cópia)", descrição, categoria, estrutura, `flowData` e todos os `entries` (posições). Não afeta o original nem os demais.
+- Componentes na page: `ActionMenu` (⋮ com backdrop p/ fechar), `Modal` genérico, `StructureModal`, `MapModal`, `DeleteStructureModal`, `StructureCard`, `MapCard`, `AddCard`.
+
 ### Editor de Mapas (`app/dashboard/maps/[id]/page.tsx`)
 Arquivo grande e central — abaixo o mapa mental para evitar re-leitura:
 - **Persistência**: auto-save (debounce 800ms via `useEffect` + `dirtyRef`). **Não há botão "Salvar"** — `dirtyRef.current = true` em qualquer mudança de posição/edge dispara o save. `dirtyRef` evita save espúrio no mount inicial.

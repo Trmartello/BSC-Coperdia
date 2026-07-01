@@ -133,16 +133,25 @@ export const actionPlansApi = {
 
 // ─── Maps ────────────────────────────────────────────────────────────────────
 export const mapsApi = {
+  // structures (containers/pastas)
+  getStructures: () => api.get('/maps/structures'),
+  getStructure: (id: string) => api.get(`/maps/structures/${id}`),
+  createStructure: (data: { name: string; description?: string; category?: string }) =>
+    api.post('/maps/structures', data),
+  updateStructure: (id: string, data: any) => api.patch(`/maps/structures/${id}`, data),
+  deleteStructure: (id: string, deleteMaps?: boolean) =>
+    api.delete(`/maps/structures/${id}`, { params: deleteMaps ? { deleteMaps: 'true' } : {} }),
   // categories
   getCategories: () => api.get('/maps/categories'),
   createCategory: (data: { name: string; color?: string }) => api.post('/maps/categories', data),
   updateCategory: (id: string, data: any) => api.patch(`/maps/categories/${id}`, data),
   deleteCategory: (id: string) => api.delete(`/maps/categories/${id}`),
   // maps
-  list: (categoryId?: string) => api.get('/maps', { params: { categoryId } }),
+  list: (params?: { categoryId?: string; structureId?: string }) => api.get('/maps', { params }),
   get: (id: string, period?: string, accumulated?: boolean) =>
     api.get(`/maps/${id}`, { params: { ...(period ? { period } : {}), ...(accumulated ? { accumulated: 'true' } : {}) } }),
-  create: (data: { name: string; description?: string; categoryId: string }) => api.post('/maps', data),
+  create: (data: { name: string; description?: string; categoryId: string; structureId?: string }) => api.post('/maps', data),
+  duplicate: (id: string) => api.post(`/maps/${id}/duplicate`),
   update: (id: string, data: any) => api.patch(`/maps/${id}`, data),
   delete: (id: string) => api.delete(`/maps/${id}`),
   saveLayout: (id: string, data: { nodes: any[]; edges: any[] }) => api.post(`/maps/${id}/layout`, data),
