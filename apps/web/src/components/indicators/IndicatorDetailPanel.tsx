@@ -798,17 +798,11 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                       Composição do indicador
                     </button>
                     {showComposicao && (
-                      <div className="mt-2.5 pl-1 space-y-2">
-                        <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                          <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">Fórmula</p>
-                          <code className="text-[13px] text-purple-200 font-mono">{formulaExpr}</code>
+                      <div className="mt-2.5 pl-1">
+                        <div className="p-3 rounded-xl bg-purple-500/[0.06] border border-purple-500/15">
+                          <p className="text-[10px] text-purple-300/70 uppercase tracking-wider mb-1">Leitura</p>
+                          <p className="text-[13px] text-white/80 leading-snug">{formulaReading || formulaExpr}</p>
                         </div>
-                        {formulaReading && (
-                          <div className="p-3 rounded-xl bg-purple-500/[0.06] border border-purple-500/15">
-                            <p className="text-[10px] text-purple-300/70 uppercase tracking-wider mb-1">Leitura</p>
-                            <p className="text-[13px] text-white/80 leading-snug">{formulaReading}</p>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
