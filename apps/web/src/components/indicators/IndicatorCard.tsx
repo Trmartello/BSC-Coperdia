@@ -29,6 +29,25 @@ interface Props {
   onUpdated?: () => void;
 }
 
+// ── Máscara pt-BR do campo de estimativa ─────────────────────────────────────
+// Exibe milhar com "." e decimal com "," limitado às casas do indicador.
+function maskBR(raw: string, dp: number): string {
+  const neg = raw.trim().startsWith('-');
+  const parts = raw.replace(/[^\d,]/g, '').split(',');
+  const int = parts[0].replace(/^0+(?=\d)/, '');
+  const dec = parts.slice(1).join('').slice(0, dp);
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  let out = (neg ? '-' : '') + grouped;
+  if (parts.length > 1 && dp > 0) out += ',' + dec;
+  return out;
+}
+function formatBR(n: number, dp: number): string {
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+function parseBR(s: string): number {
+  return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+}
+
 // "Estimativa efetiva": se o usuário não lançou estimativa → usa realizado (sem diferença)
 function effectiveEstimate(realized: number | null, estimate: number | null): number | null {
   if (estimate !== null) return estimate;
@@ -80,7 +99,7 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
   const canEdit = showEstimate && indicator.type === 'INPUT';
 
   async function handleSave() {
-    const value = parseFloat(inputValue);
+    const value = parseBR(inputValue);
     if (Number.isNaN(value)) { toast.error('Informe um valor numérico'); return; }
     setSaving(true);
     try {
@@ -126,7 +145,11 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
             label="Estimativa"
             value={formatNumber(effective, indicator.unit, dp)}
             editable={canEdit}
-            onEdit={() => { setInputValue(String(estimate ?? realized ?? '')); setEditing(true); }}
+            onEdit={() => {
+              const base = estimate ?? realized;
+              setInputValue(base != null ? formatBR(base, dp) : '');
+              setEditing(true);
+            }}
           />
         )}
       </div>
@@ -135,9 +158,11 @@ export function IndicatorCard({ data, showEstimate = true, onOpenActionPlan, onU
       {editing && (
         <div className="nodrag px-4 pb-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={(e) => setInputValue(maskBR(e.target.value, dp))}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
             autoFocus
             className="nodrag flex-1 bg-white/5 border border-white/20 rounded text-xs text-white px-2 py-1 focus:outline-none focus:border-purple-500"
           />
