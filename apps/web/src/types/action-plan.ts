@@ -6,7 +6,6 @@ export type ActionItemStatus =
   | 'DONE'
   | 'OVERDUE' // "Atrasada" — automático (data-limite vencida)
   | 'CANCELLED'
-  | 'BLOCKED'
   | 'PAUSED'
   | 'AWAITING_VALIDATION';
 export type ActionItemPriority = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -113,7 +112,6 @@ export const ACTION_STATUS_LABEL: Record<ActionItemStatus, string> = {
   DONE: 'Concluída',
   OVERDUE: 'Atrasada',
   CANCELLED: 'Cancelada',
-  BLOCKED: 'Bloqueada',
   PAUSED: 'Pausada',
   AWAITING_VALIDATION: 'Aguardando validação',
 };
@@ -142,7 +140,6 @@ export const ACTION_STATUS_COLOR: Record<ActionItemStatus, string> = {
   DONE: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
   OVERDUE: 'bg-red-500/20 text-red-300 border-red-500/30',
   CANCELLED: 'bg-slate-700/20 text-slate-500 border-slate-700/30',
-  BLOCKED: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
   PAUSED: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
   AWAITING_VALIDATION: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
 };

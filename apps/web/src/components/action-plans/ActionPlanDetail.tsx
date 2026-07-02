@@ -24,7 +24,6 @@ const STATUS_FILTER_OPTS = [
   { value: 'PENDING',             label: 'No prazo',             dot: 'bg-sky-400',     valueClass: 'text-sky-300' },
   { value: 'OVERDUE',             label: 'Atrasada',             dot: 'bg-red-400',     valueClass: 'text-red-300' },
   { value: 'IN_PROGRESS',         label: 'Em andamento',         dot: 'bg-amber-400',   valueClass: 'text-amber-300' },
-  { value: 'BLOCKED',             label: 'Bloqueada',            dot: 'bg-orange-400',  valueClass: 'text-orange-300' },
   { value: 'PAUSED',              label: 'Pausada',              dot: 'bg-slate-400',   valueClass: 'text-slate-300' },
   { value: 'AWAITING_VALIDATION', label: 'Aguardando validação', dot: 'bg-purple-400',  valueClass: 'text-purple-300' },
   { value: 'DONE',                label: 'Concluída',            dot: 'bg-emerald-400', valueClass: 'text-emerald-300' },

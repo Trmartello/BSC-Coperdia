@@ -30,17 +30,9 @@ interface Props {
 }
 
 const PRIORITIES: ActionItemPriority[] = ['HIGH', 'MEDIUM', 'LOW'];
-// "No prazo"/"Atrasada" são automáticos pela data-limite (valor PENDING = automático;
-// o backend converte para OVERDUE quando a data está vencida).
-const STATUS_OPTIONS: { value: ActionItemStatus; label: string }[] = [
-  { value: 'PENDING', label: 'Automático (No prazo / Atrasada)' },
-  { value: 'IN_PROGRESS', label: 'Em andamento' },
-  { value: 'BLOCKED', label: 'Bloqueada' },
-  { value: 'PAUSED', label: 'Pausada' },
-  { value: 'AWAITING_VALIDATION', label: 'Aguardando validação' },
-  { value: 'DONE', label: 'Concluída' },
-  { value: 'CANCELLED', label: 'Cancelada' },
-];
+// "No prazo"/"Atrasada" são automáticos pela data-limite: não são selecionáveis
+// (o vigente aparece como item desabilitado). "Retomar automático" envia PENDING
+// e o backend converte para OVERDUE se a data estiver vencida.
 
 const PRIORITY_BTN_STYLE: Record<ActionItemPriority, string> = {
   HIGH: 'bg-red-600 text-white border-red-600',
@@ -272,7 +264,20 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose, as
                     onChange={(e) => setAction((a) => ({ ...a, status: e.target.value as ActionItemStatus }))}
                     className="input-dark appearance-none"
                   >
-                    {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    {(action.status === 'PENDING' || action.status === 'OVERDUE') && (
+                      <option value="PENDING" disabled>
+                        {action.status === 'OVERDUE' ? 'Atrasada (automático)' : 'No prazo (automático)'}
+                      </option>
+                    )}
+                    <option value="IN_PROGRESS">Em andamento</option>
+                    <option value="DONE">Concluída</option>
+                    <option value="CANCELLED">Cancelada</option>
+                    <option disabled>──────────</option>
+                    <option value="PAUSED">Pausada</option>
+                    <option value="AWAITING_VALIDATION">Aguardando validação</option>
+                    {action.status !== 'PENDING' && action.status !== 'OVERDUE' && (
+                      <option value="PENDING">Retomar automático (No prazo/Atrasada)</option>
+                    )}
                   </select>
                   <p className="text-[10px] text-white/30 mt-1">No prazo/Atrasada são definidos pela data-limite</p>
                 </FormRow>

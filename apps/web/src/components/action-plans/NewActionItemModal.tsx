@@ -23,16 +23,8 @@ interface Props {
 }
 
 const PRIORITIES: ActionItemPriority[] = ['HIGH', 'MEDIUM', 'LOW'];
-// "No prazo"/"Atrasada" são automáticos pela data-limite (valor PENDING = automático).
-const STATUS_OPTIONS: { value: ActionItemStatus; label: string }[] = [
-  { value: 'PENDING', label: 'Automático (No prazo / Atrasada)' },
-  { value: 'IN_PROGRESS', label: 'Em andamento' },
-  { value: 'BLOCKED', label: 'Bloqueada' },
-  { value: 'PAUSED', label: 'Pausada' },
-  { value: 'AWAITING_VALIDATION', label: 'Aguardando validação' },
-  { value: 'DONE', label: 'Concluída' },
-  { value: 'CANCELLED', label: 'Cancelada' },
-];
+// "No prazo"/"Atrasada" são automáticos pela data-limite: não são selecionáveis.
+// No create a ação nasce PENDING (automático), exibido como item desabilitado.
 
 export function NewActionItemModal({ initiativeId, planId, onClose, asRightPanel }: Props) {
   const qc = useQueryClient();
@@ -134,7 +126,13 @@ export function NewActionItemModal({ initiativeId, planId, onClose, asRightPanel
                 onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as ActionItemStatus }))}
                 className="w-full appearance-none bg-[#0d0f17] border border-white/10 focus:border-purple-500 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none transition-colors"
               >
-                {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <option value="PENDING" disabled>No prazo (automático)</option>
+                <option value="IN_PROGRESS">Em andamento</option>
+                <option value="DONE">Concluída</option>
+                <option value="CANCELLED">Cancelada</option>
+                <option disabled>──────────</option>
+                <option value="PAUSED">Pausada</option>
+                <option value="AWAITING_VALIDATION">Aguardando validação</option>
               </select>
               <p className="text-[10px] text-white/30 mt-1">No prazo/Atrasada são definidos pela data-limite</p>
             </div>
