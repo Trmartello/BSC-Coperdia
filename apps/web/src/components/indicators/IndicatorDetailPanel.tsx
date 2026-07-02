@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { indicatorsApi, actionPlansApi, settingsApi } from '../../lib/api';
 import { ActionPlanDetail } from '../action-plans/ActionPlanDetail';
-import { cn, formatValue } from '../../lib/utils';
+import { cn, formatValue, humanizeExpression } from '../../lib/utils';
 import { useEscClose } from '../../lib/useEscClose';
 import { toast } from 'sonner';
 
@@ -494,6 +494,8 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   const [autoNewInitiative, setAutoNewInitiative] = useState(false);
   // Rodapé expansível com as frentes de trabalho (monitoringPoints) — fechado por padrão.
   const [showFrentes, setShowFrentes] = useState(false);
+  // Rodapé expansível com a composição (fórmula + leitura) — só p/ CALCULATED.
+  const [showComposicao, setShowComposicao] = useState(false);
 
   // ESC via pilha global (useEscClose): fecha sempre a camada mais recente.
   // O modal do gráfico registra primeiro; o painel do Plano de Ação registra
@@ -540,6 +542,24 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   const unit = ind?.unit ?? 'NUMBER';
   const dp = ind?.decimalPlaces ?? 2; // casas decimais configuradas no indicador
   const monitoringPoints: string[] = ind?.monitoringPoints ?? []; // frentes de trabalho cadastradas
+
+  // ── Composição do indicador (fórmula + leitura amigável) ────────────────────
+  const formulaExpr: string | null = ind?.formula?.expression ?? null;
+  const { data: allInds = [] } = useQuery({
+    queryKey: ['indicators'],
+    queryFn: () => indicatorsApi.list().then((r) => r.data),
+    enabled: !!formulaExpr, // só busca quando há fórmula para humanizar
+  });
+  const formulaReading = (() => {
+    const variables: Record<string, string> = ind?.formula?.variables ?? {};
+    if (!formulaExpr || Object.keys(variables).length === 0) return '';
+    const byId = new Map((allInds as any[]).map((i) => [i.id, i.name]));
+    const tokenToName: Record<string, string> = {};
+    for (const [alias, indId] of Object.entries(variables)) {
+      tokenToName[alias] = byId.get(indId as string) ?? alias;
+    }
+    return humanizeExpression(formulaExpr, tokenToName);
+  })();
 
   // ── Período de referência selecionado (mês de análise) ──────────────────────
   const refDate = new Date(period);
@@ -754,6 +774,33 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
                   <Legend swatch="bg-indigo-400/50" label="Mesmo período ano anterior" />
                   <Legend line="border-white/40" label="Meta do período atual" />
                 </div>
+
+                {/* Rodapé: composição do indicador (fórmula + leitura) — sempre antes das frentes */}
+                {formulaExpr && (
+                  <div className="mt-3 border-t border-white/5 pt-2.5">
+                    <button
+                      onClick={() => setShowComposicao((s) => !s)}
+                      className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-white/45 hover:text-white/75 uppercase tracking-wider transition-colors"
+                    >
+                      {showComposicao ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                      Composição do indicador
+                    </button>
+                    {showComposicao && (
+                      <div className="mt-2.5 pl-1 space-y-2">
+                        <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                          <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">Fórmula</p>
+                          <code className="text-[13px] text-purple-200 font-mono">{formulaExpr}</code>
+                        </div>
+                        {formulaReading && (
+                          <div className="p-3 rounded-xl bg-purple-500/[0.06] border border-purple-500/15">
+                            <p className="text-[10px] text-purple-300/70 uppercase tracking-wider mb-1">Leitura</p>
+                            <p className="text-[13px] text-white/80 leading-snug">{formulaReading}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Rodapé: frentes de trabalho (expander fechado por padrão) */}
                 <div className="mt-3 border-t border-white/5 pt-2.5">
