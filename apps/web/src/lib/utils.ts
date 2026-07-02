@@ -15,6 +15,13 @@ function clampDecimals(d: number): number {
   return Math.min(Math.max(n, 0), 6);
 }
 
+// Números "puros" (%/Dias/Índice) até 1000 saem com toFixed; acima disso usam a
+// notação compacta pt-BR (mil/mi/bi) para não estourar a largura de cards e KPIs.
+function compactIfLarge(value: number, d: number): string {
+  if (Math.abs(value) < 1000) return value.toFixed(d);
+  return new Intl.NumberFormat('pt-BR', { notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
+}
+
 export function formatValue(value: number | null, unit: MeasureUnit, decimals: number = DEFAULT_DECIMALS): string {
   if (value === null || value === undefined) return '—';
   const d = clampDecimals(decimals);
@@ -23,11 +30,11 @@ export function formatValue(value: number | null, unit: MeasureUnit, decimals: n
     case 'CURRENCY':
       return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
     case 'PERCENTAGE':
-      return `${value.toFixed(d)}%`;
+      return `${compactIfLarge(value, d)}%`;
     case 'DAYS':
-      return `${value.toFixed(d)} dias`;
+      return `${compactIfLarge(value, d)} dias`;
     case 'INDEX':
-      return value.toFixed(d);
+      return compactIfLarge(value, d);
     default:
       return new Intl.NumberFormat('pt-BR', { notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
   }
@@ -50,11 +57,20 @@ export function formatNumberParts(value: number | null, unit: MeasureUnit, decim
 
   switch (unit) {
     case 'PERCENTAGE':
-      return { num: value.toFixed(d), scale: '' };
     case 'DAYS':
-      return { num: value.toFixed(d), scale: '' };
-    case 'INDEX':
-      return { num: value.toFixed(d), scale: '' };
+    case 'INDEX': {
+      // Valores pequenos: número puro. Valores grandes (ex.: % distorcida por
+      // insumo ainda sem lançamento) ganham a mesma escala compacta dos demais
+      // cards (142731.43 → "142,73 mil") para não estourar a largura do card.
+      if (Math.abs(value) < 1000) return { num: value.toFixed(d), scale: '' };
+      const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
+      const parts = formatted.split(/\s+/);
+      const last = parts[parts.length - 1];
+      if (parts.length > 1 && /^[a-zà-ÿ]+$/i.test(last)) {
+        return { num: parts.slice(0, -1).join(''), scale: last };
+      }
+      return { num: formatted, scale: '' };
+    }
     default: {
       const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
       // Split on any whitespace (including   used by Intl)
