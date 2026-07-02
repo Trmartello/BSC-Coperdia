@@ -63,6 +63,31 @@ export interface CreateAttachmentDto {
 export class ActionPlansService {
   constructor(private prisma: PrismaService) {}
 
+  // ── Status automático (No prazo / Atrasada) ────────────────────────────────
+  // PENDING = "No prazo". Atraso é derivado da data-limite: PENDING/IN_PROGRESS
+  // vencidas viram OVERDUE; OVERDUE com data prorrogada (ou sem data) volta a
+  // PENDING. Status manuais (DONE/CANCELLED/BLOCKED/PAUSED/AWAITING_VALIDATION)
+  // nunca são sobrescritos.
+  private async syncOverdue() {
+    const now = new Date();
+    await this.prisma.actionItem.updateMany({
+      where: { status: { in: ['PENDING', 'IN_PROGRESS'] }, dueDate: { lt: now } },
+      data: { status: 'OVERDUE' },
+    });
+    await this.prisma.actionItem.updateMany({
+      where: { status: 'OVERDUE', OR: [{ dueDate: { gte: now } }, { dueDate: null }] },
+      data: { status: 'PENDING' },
+    });
+  }
+
+  // Aplica a regra de atraso a um único item (create/update).
+  private resolveStatus(status: string, dueDate: Date | null | undefined): string {
+    const overdue = !!dueDate && dueDate < new Date();
+    if ((status === 'PENDING' || status === 'IN_PROGRESS') && overdue) return 'OVERDUE';
+    if (status === 'OVERDUE' && !overdue) return 'PENDING';
+    return status;
+  }
+
   // ── Plans ──────────────────────────────────────────────────────────────────
 
   async findAll(filters: {
@@ -74,6 +99,7 @@ export class ActionPlansService {
     statuses?: string[];
     ownerOrCreatorIds?: string[];
   }) {
+    await this.syncOverdue();
     const planWhere: any = {};
     if (filters.indicatorId) planWhere.indicatorId = filters.indicatorId;
     if (filters.userId) planWhere.userId = filters.userId;
@@ -130,6 +156,7 @@ export class ActionPlansService {
   }
 
   async findOne(id: string) {
+    await this.syncOverdue();
     const plan = await this.prisma.actionPlan.findUnique({
       where: { id },
       include: {
@@ -324,7 +351,7 @@ export class ActionPlansService {
         title: dto.title,
         description: dto.description,
         priority: (dto.priority as any) ?? 'MEDIUM',
-        status: (dto.status as any) ?? 'PENDING',
+        status: this.resolveStatus(dto.status ?? 'PENDING', dto.dueDate ? new Date(dto.dueDate) : null) as any,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         ownerName: dto.ownerName,
         ownerId: dto.ownerId,
@@ -343,12 +370,9 @@ export class ActionPlansService {
     const before = await this.prisma.actionItem.findUnique({ where: { id: itemId }, include: { initiative: true } });
     if (!before) throw new NotFoundException();
 
-    // Auto-detect overdue
+    // Status automático: No prazo/Atrasada derivados da data-limite
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : before.dueDate;
-    let status = dto.status ?? before.status;
-    if (dueDate && new Date(dueDate) < new Date() && status === 'PENDING') {
-      status = 'OVERDUE';
-    }
+    const status = this.resolveStatus(dto.status ?? before.status, dueDate);
 
     const completedAt = status === 'DONE' && before.status !== 'DONE' ? new Date() : before.completedAt;
 

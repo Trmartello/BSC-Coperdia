@@ -30,7 +30,17 @@ interface Props {
 }
 
 const PRIORITIES: ActionItemPriority[] = ['HIGH', 'MEDIUM', 'LOW'];
-const STATUSES: ActionItemStatus[] = ['PENDING', 'IN_PROGRESS', 'DONE', 'OVERDUE', 'CANCELLED'];
+// "No prazo"/"Atrasada" são automáticos pela data-limite (valor PENDING = automático;
+// o backend converte para OVERDUE quando a data está vencida).
+const STATUS_OPTIONS: { value: ActionItemStatus; label: string }[] = [
+  { value: 'PENDING', label: 'Automático (No prazo / Atrasada)' },
+  { value: 'IN_PROGRESS', label: 'Em andamento' },
+  { value: 'BLOCKED', label: 'Bloqueada' },
+  { value: 'PAUSED', label: 'Pausada' },
+  { value: 'AWAITING_VALIDATION', label: 'Aguardando validação' },
+  { value: 'DONE', label: 'Concluída' },
+  { value: 'CANCELLED', label: 'Cancelada' },
+];
 
 const PRIORITY_BTN_STYLE: Record<ActionItemPriority, string> = {
   HIGH: 'bg-red-600 text-white border-red-600',
@@ -258,12 +268,13 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose, as
                 </FormRow>
                 <FormRow label="STATUS">
                   <select
-                    value={action.status}
+                    value={action.status === 'OVERDUE' ? 'PENDING' : action.status}
                     onChange={(e) => setAction((a) => ({ ...a, status: e.target.value as ActionItemStatus }))}
                     className="input-dark appearance-none"
                   >
-                    {STATUSES.map((s) => <option key={s} value={s}>{ACTION_STATUS_LABEL[s]}</option>)}
+                    {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
+                  <p className="text-[10px] text-white/30 mt-1">No prazo/Atrasada são definidos pela data-limite</p>
                 </FormRow>
               </div>
 

@@ -95,6 +95,9 @@ enum ActionItemStatus {
   DONE
   OVERDUE
   CANCELLED
+  BLOCKED
+  PAUSED
+  AWAITING_VALIDATION
 }
 
 enum ActionItemPriority {

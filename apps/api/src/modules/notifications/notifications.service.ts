@@ -139,7 +139,7 @@ export class NotificationsService {
   async refreshOverdueNotifications(): Promise<void> {
     const now = new Date();
     const overdue = await this.prisma.actionItem.findMany({
-      where: { status: { notIn: ['DONE', 'CANCELLED'] }, dueDate: { lt: now } },
+      where: { status: { notIn: ['DONE', 'CANCELLED', 'AWAITING_VALIDATION'] }, dueDate: { lt: now } },
       include: {
         owner: { select: { id: true, name: true } },
         initiative: {
@@ -282,7 +282,7 @@ export class NotificationsService {
 
     const now = new Date();
     const overdueItems = await this.prisma.actionItem.findMany({
-      where: { status: { notIn: ['DONE', 'CANCELLED'] }, dueDate: { lt: now } },
+      where: { status: { notIn: ['DONE', 'CANCELLED', 'AWAITING_VALIDATION'] }, dueDate: { lt: now } },
       include: {
         owner: { select: { id: true, name: true, email: true } },
         initiative: {

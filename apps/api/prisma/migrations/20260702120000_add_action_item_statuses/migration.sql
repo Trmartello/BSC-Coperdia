@@ -1,0 +1,4 @@
+-- Novos status manuais de ação
+ALTER TYPE "ActionItemStatus" ADD VALUE IF NOT EXISTS 'BLOCKED';
+ALTER TYPE "ActionItemStatus" ADD VALUE IF NOT EXISTS 'PAUSED';
+ALTER TYPE "ActionItemStatus" ADD VALUE IF NOT EXISTS 'AWAITING_VALIDATION';

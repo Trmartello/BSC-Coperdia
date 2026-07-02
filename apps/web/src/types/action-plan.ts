@@ -1,6 +1,14 @@
 export type PlanStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';
 export type InitiativeStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE';
-export type ActionItemStatus = 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'OVERDUE' | 'CANCELLED';
+export type ActionItemStatus =
+  | 'PENDING' // "No prazo" — automático (data-limite no futuro)
+  | 'IN_PROGRESS'
+  | 'DONE'
+  | 'OVERDUE' // "Atrasada" — automático (data-limite vencida)
+  | 'CANCELLED'
+  | 'BLOCKED'
+  | 'PAUSED'
+  | 'AWAITING_VALIDATION';
 export type ActionItemPriority = 'HIGH' | 'MEDIUM' | 'LOW';
 
 export interface ActionPlan {
@@ -100,11 +108,14 @@ export const INITIATIVE_STATUS_LABEL: Record<InitiativeStatus, string> = {
 };
 
 export const ACTION_STATUS_LABEL: Record<ActionItemStatus, string> = {
-  PENDING: 'Pendente',
+  PENDING: 'No prazo',
   IN_PROGRESS: 'Em andamento',
   DONE: 'Concluída',
   OVERDUE: 'Atrasada',
   CANCELLED: 'Cancelada',
+  BLOCKED: 'Bloqueada',
+  PAUSED: 'Pausada',
+  AWAITING_VALIDATION: 'Aguardando validação',
 };
 
 export const PRIORITY_LABEL: Record<ActionItemPriority, string> = {
@@ -126,9 +137,12 @@ export const PLAN_STATUS_COLOR: Record<PlanStatus, string> = {
 };
 
 export const ACTION_STATUS_COLOR: Record<ActionItemStatus, string> = {
-  PENDING: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  PENDING: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
   IN_PROGRESS: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
   DONE: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
   OVERDUE: 'bg-red-500/20 text-red-300 border-red-500/30',
   CANCELLED: 'bg-slate-700/20 text-slate-500 border-slate-700/30',
+  BLOCKED: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  PAUSED: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  AWAITING_VALIDATION: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
 };
