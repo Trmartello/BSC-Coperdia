@@ -15,11 +15,18 @@ function clampDecimals(d: number): number {
   return Math.min(Math.max(n, 0), 6);
 }
 
-// Números "puros" (%/Dias/Índice) até 1000 saem com toFixed; acima disso usam a
+// Números "puros" (Dias/Índice) até 1000 saem com toFixed; acima disso usam a
 // notação compacta pt-BR (mil/mi/bi) para não estourar a largura de cards e KPIs.
 function compactIfLarge(value: number, d: number): string {
   if (Math.abs(value) < 1000) return value.toFixed(d);
   return new Intl.NumberFormat('pt-BR', { notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
+}
+
+// Percentuais grandes NÃO abreviam ("442,7 mil %" confunde com a unidade):
+// acima de 1000 saem agrupados e sem decimais (ex.: "142.731").
+function groupedIfLargePct(value: number, d: number): string {
+  if (Math.abs(value) < 1000) return value.toFixed(d);
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(value);
 }
 
 export function formatValue(value: number | null, unit: MeasureUnit, decimals: number = DEFAULT_DECIMALS): string {
@@ -30,7 +37,7 @@ export function formatValue(value: number | null, unit: MeasureUnit, decimals: n
     case 'CURRENCY':
       return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
     case 'PERCENTAGE':
-      return `${compactIfLarge(value, d)}%`;
+      return `${groupedIfLargePct(value, d)}%`;
     case 'DAYS':
       return `${compactIfLarge(value, d)} dias`;
     case 'INDEX':
@@ -57,11 +64,13 @@ export function formatNumberParts(value: number | null, unit: MeasureUnit, decim
 
   switch (unit) {
     case 'PERCENTAGE':
+      // % nunca abrevia (o "mil" confunde com a unidade): grande sai agrupado
+      // e sem decimais (142731.43 → "142.731").
+      return { num: groupedIfLargePct(value, d), scale: '' };
     case 'DAYS':
     case 'INDEX': {
-      // Valores pequenos: número puro. Valores grandes (ex.: % distorcida por
-      // insumo ainda sem lançamento) ganham a mesma escala compacta dos demais
-      // cards (142731.43 → "142,73 mil") para não estourar a largura do card.
+      // Valores pequenos: número puro. Valores grandes ganham a mesma escala
+      // compacta dos demais cards para não estourar a largura.
       if (Math.abs(value) < 1000) return { num: value.toFixed(d), scale: '' };
       const formatted = new Intl.NumberFormat('pt-BR', { notation: 'compact', minimumFractionDigits: d, maximumFractionDigits: d }).format(value);
       const parts = formatted.split(/\s+/);

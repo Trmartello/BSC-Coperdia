@@ -28,24 +28,30 @@ function fmtMonthCompact(d: Date) {
 
 // Valor curto para rótulo sobre as barras do gráfico. `decimals` = casas
 // configuradas no indicador (aplicado nos valores não abreviados; M/k mantêm 1).
-// %/Dias/Índice grandes (ex.: % distorcida por insumo sem lançamento) também
-// abreviam (k/M) para não estourar o layout — mesmos limites dos demais valores.
+// Dias/Índice grandes abreviam (k/M) para não estourar o layout.
 function fmtPlain(v: number, decimals: number): string {
   if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
   if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
   return v.toFixed(decimals);
 }
 
+// % nunca abrevia ("442,7k%" confunde escala com unidade): valores grandes saem
+// agrupados e sem decimais (142731.43 → "142.731%").
+function fmtPct(v: number, decimals: number): string {
+  if (Math.abs(v) < 1000) return `${v.toFixed(decimals)}%`;
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v)}%`;
+}
+
 function fmtBar(v: number | null | undefined, unit: string, decimals = 2): string {
   if (v == null) return '';
-  if (unit === 'PERCENTAGE') return `${fmtPlain(v, decimals)}%`;
+  if (unit === 'PERCENTAGE') return fmtPct(v, decimals);
   if (unit === 'DAYS') return fmtPlain(v, decimals);
   return fmtPlain(v, decimals);
 }
 
 function fmtLarge(v: number | null | undefined, unit: string, decimals = 2): string {
   if (v == null) return '—';
-  if (unit === 'PERCENTAGE') return `${fmtPlain(v, decimals)}%`;
+  if (unit === 'PERCENTAGE') return fmtPct(v, decimals);
   if (unit === 'CURRENCY') {
     if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)} M`;
     if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(1)} k`;
