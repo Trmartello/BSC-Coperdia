@@ -17,6 +17,7 @@ import {
 } from '../../types/action-plan';
 import { MultiFilter, toggleSet } from './MultiFilter';
 import { cn } from '../../lib/utils';
+import { useEscClose } from '../../lib/useEscClose';
 
 // Opções dos filtros de ação (mesmas cores/dots da página de Planos de Ação).
 const STATUS_FILTER_OPTS = [
@@ -58,6 +59,9 @@ export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewIn
   const [fStatuses, setFStatuses] = useState<Set<string>>(new Set());
   const [fPriorities, setFPriorities] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  // ESC fecha o drawer (página de Planos). No modo embedded quem registra o
+  // fechamento do painel é o IndicatorDetailPanel (showActionPlan).
+  useEscClose(() => onClose?.(), !embedded && !!onClose);
   // Confirmação de exclusão (ação / iniciativa / plano)
   const [confirm, setConfirm] = useState<null | { message: string; confirmLabel: string; onConfirm: () => void }>(null);
 
@@ -376,6 +380,7 @@ export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewIn
           initiativeId={newActionFor}
           planId={planId}
           onClose={() => setNewActionFor(null)}
+          asRightPanel={embedded}
         />
       )}
       {selectedAction && plan && (
@@ -383,6 +388,7 @@ export function ActionPlanDetail({ planId, onClose, asPanel, embedded, autoNewIn
           plan={plan}
           action={selectedAction}
           onClose={() => setSelectedAction(null)}
+          asRightPanel={embedded}
         />
       )}
 

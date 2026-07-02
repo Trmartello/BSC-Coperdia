@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, Target, ClipboardList, Sigma, Crosshair } from 'lucide-react';
 import { indicatorsApi } from '../../lib/api';
 import { humanizeExpression } from '../../lib/utils';
+import { useEscClose } from '../../lib/useEscClose';
 
 interface Props {
   indicatorId: string;
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function IndicatorDetailModal({ indicatorId, onClose, onOpenActionPlan }: Props) {
+  useEscClose(onClose); // ESC fecha esta camada (a mais recente da pilha)
   const { data: indicator, isLoading } = useQuery({
     queryKey: ['indicator', indicatorId],
     queryFn: () => indicatorsApi.get(indicatorId).then((r) => r.data),

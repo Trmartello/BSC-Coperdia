@@ -47,3 +47,13 @@
 .map-node-in {
   animation: mapNodeIn 0.18s ease-out;
 }
+
+/* Modal-camada que desliza sobre o painel de Plano de Ação (contexto do indicador),
+   sem ofuscar o gráfico à esquerda. */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.slide-in-right {
+  animation: slideInRight 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}

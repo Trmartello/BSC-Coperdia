@@ -7,6 +7,7 @@ import { actionPlansApi } from '../../lib/api';
 import { PLAN_STATUS_LABEL, PlanStatus } from '../../types/action-plan';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { useEscClose } from '../../lib/useEscClose';
 
 interface Props {
   indicatorId?: string;
@@ -18,6 +19,7 @@ const STATUSES: PlanStatus[] = ['OPEN', 'IN_PROGRESS', 'DONE'];
 
 export function NewActionPlanModal({ indicatorId, onClose, onCreated }: Props) {
   const qc = useQueryClient();
+  useEscClose(onClose); // ESC fecha esta camada (a mais recente da pilha)
   const [form, setForm] = useState({ problem: '', description: '', status: 'OPEN' as PlanStatus });
 
   const mutation = useMutation({

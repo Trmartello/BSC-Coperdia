@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { actionPlansApi } from '../../lib/api';
 import { toast } from 'sonner';
+import { useEscClose } from '../../lib/useEscClose';
 
 interface Props {
   planId: string;
@@ -13,6 +14,7 @@ interface Props {
 
 export function NewInitiativeModal({ planId, onClose }: Props) {
   const qc = useQueryClient();
+  useEscClose(onClose); // ESC fecha esta camada (a mais recente da pilha)
   const [form, setForm] = useState({ title: '', description: '' });
 
   const mutation = useMutation({

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsApi, formulasApi, indicatorsApi, mapsApi } from '../../lib/api';
 import { cn, toVarName, humanizeExpression, replaceVarToken } from '../../lib/utils';
+import { useEscClose } from '../../lib/useEscClose';
 import { toast } from 'sonner';
 import { X, Trash2 } from 'lucide-react';
 import { UserSelector } from '../ui/UserSelector';
@@ -25,6 +26,7 @@ interface Props {
 
 export function IndicatorFormPanel({ mapId, editIndicatorId, onClose, onSaved }: Props) {
   const qc = useQueryClient();
+  useEscClose(onClose); // ESC fecha esta camada (a mais recente da pilha)
   const isEdit = !!editIndicatorId;
   const period = new Date().toISOString().slice(0, 7) + '-01';
 

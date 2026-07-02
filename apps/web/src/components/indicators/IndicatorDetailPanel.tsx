@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X, TrendingUp, TrendingDown,
@@ -10,6 +10,7 @@ import {
 import { indicatorsApi, actionPlansApi, settingsApi } from '../../lib/api';
 import { ActionPlanDetail } from '../action-plans/ActionPlanDetail';
 import { cn, formatValue } from '../../lib/utils';
+import { useEscClose } from '../../lib/useEscClose';
 import { toast } from 'sonner';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -494,21 +495,11 @@ export function IndicatorDetailPanel({ indicatorId, period, scenarioId, onClose 
   // Rodapé expansível com as frentes de trabalho (monitoringPoints) — fechado por padrão.
   const [showFrentes, setShowFrentes] = useState(false);
 
-  // ESC em dois estágios: 1º fecha o painel do Plano de Ação (se aberto),
-  // 2º fecha o modal do indicador (gráfico).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (showActionPlan) {
-        e.stopPropagation();
-        setShowActionPlan(false);
-      } else {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [showActionPlan, onClose]);
+  // ESC via pilha global (useEscClose): fecha sempre a camada mais recente.
+  // O modal do gráfico registra primeiro; o painel do Plano de Ação registra
+  // por cima quando aberto — então ESC fecha 1º o plano, depois o gráfico.
+  useEscClose(onClose);
+  useEscClose(() => setShowActionPlan(false), showActionPlan);
 
   const { data: indicator, isLoading, refetch } = useQuery({
     queryKey: ['indicator-detail', indicatorId, period],

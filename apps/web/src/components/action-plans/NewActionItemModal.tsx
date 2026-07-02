@@ -10,19 +10,25 @@ import {
 } from '../../types/action-plan';
 import { toast } from 'sonner';
 import { UserSelector } from '../ui/UserSelector';
+import { useEscClose } from '../../lib/useEscClose';
+import { cn } from '../../lib/utils';
 
 interface Props {
   initiativeId: string;
   planId: string;
   onClose: () => void;
+  // Camada lateral direita (contexto do indicador): sobrepõe o painel de Plano
+  // de Ação SEM backdrop — o gráfico à esquerda continua visível.
+  asRightPanel?: boolean;
 }
 
 const PRIORITIES: ActionItemPriority[] = ['HIGH', 'MEDIUM', 'LOW'];
 const STATUSES: ActionItemStatus[] = ['PENDING', 'IN_PROGRESS', 'DONE', 'CANCELLED'];
 
-export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
+export function NewActionItemModal({ initiativeId, planId, onClose, asRightPanel }: Props) {
   const qc = useQueryClient();
   const dateRef = useRef<HTMLInputElement>(null);
+  useEscClose(onClose); // ESC fecha esta camada (a mais recente da pilha)
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -58,8 +64,18 @@ export function NewActionItemModal({ initiativeId, planId, onClose }: Props) {
     : '';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1a1f2e] border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-2xl max-h-[90vh] flex flex-col">
+    <div className={cn(
+      asRightPanel
+        // Camada 2 do lado direito: sem overlay/backdrop, gráfico visível à esquerda
+        ? 'fixed inset-y-0 right-0 z-50 w-[50vw] min-w-[420px] max-w-[760px] slide-in-right'
+        : 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm',
+    )}>
+      <div className={cn(
+        'bg-[#1a1f2e] border-white/10 shadow-2xl flex flex-col',
+        asRightPanel
+          ? 'h-full w-full border-l'
+          : 'border rounded-2xl w-full max-w-md mx-4 max-h-[90vh]',
+      )}>
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/5 flex-shrink-0">
           <h2 className="text-white font-semibold">Nova Ação</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white/80 transition-colors"><X size={18} /></button>

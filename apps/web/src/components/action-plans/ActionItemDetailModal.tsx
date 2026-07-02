@@ -16,6 +16,7 @@ import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useEscClose } from '../../lib/useEscClose';
 
 type Tab = 'edit' | 'comments';
 
@@ -23,6 +24,9 @@ interface Props {
   plan: ActionPlan;
   action: ActionItem;
   onClose: () => void;
+  // Camada lateral direita (contexto do indicador): sobrepõe o painel de Plano
+  // de Ação SEM backdrop — o gráfico à esquerda continua visível.
+  asRightPanel?: boolean;
 }
 
 const PRIORITIES: ActionItemPriority[] = ['HIGH', 'MEDIUM', 'LOW'];
@@ -34,8 +38,9 @@ const PRIORITY_BTN_STYLE: Record<ActionItemPriority, string> = {
   LOW: 'bg-transparent text-white/60 border-white/15 hover:border-white/30',
 };
 
-export function ActionItemDetailModal({ plan, action: initialAction, onClose }: Props) {
+export function ActionItemDetailModal({ plan, action: initialAction, onClose, asRightPanel }: Props) {
   const qc = useQueryClient();
+  useEscClose(onClose); // ESC fecha esta camada (a mais recente da pilha)
   const [tab, setTab] = useState<Tab>('edit');
   const [action, setAction] = useState(initialAction);
   const [comment, setComment] = useState('');
@@ -116,8 +121,18 @@ export function ActionItemDetailModal({ plan, action: initialAction, onClose }: 
   const statusBadge = ACTION_STATUS_COLOR[action.status as ActionItemStatus] ?? '';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1a1f2e] border border-white/10 rounded-2xl w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] flex flex-col">
+    <div className={cn(
+      asRightPanel
+        // Camada 2 do lado direito: sem overlay/backdrop, gráfico visível à esquerda
+        ? 'fixed inset-y-0 right-0 z-50 w-[50vw] min-w-[420px] max-w-[760px] slide-in-right'
+        : 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm',
+    )}>
+      <div className={cn(
+        'bg-[#1a1f2e] border-white/10 shadow-2xl flex flex-col',
+        asRightPanel
+          ? 'h-full w-full border-l'
+          : 'border rounded-2xl w-full max-w-lg mx-4 max-h-[90vh]',
+      )}>
 
         {/* ── Modal Header ── */}
         <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-white/5 flex-shrink-0">

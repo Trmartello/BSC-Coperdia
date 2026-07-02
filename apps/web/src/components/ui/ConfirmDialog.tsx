@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { useEscClose } from '../../lib/useEscClose';
 
 interface Props {
   title?: string;
@@ -23,6 +24,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
+  useEscClose(onCancel); // ESC cancela a confirmação (camada mais recente da pilha)
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm"
